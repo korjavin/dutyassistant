@@ -18,10 +18,10 @@ services:
     # if it stops unexpectedly or if the Docker daemon restarts.
     restart: always
 
-    # Maps port 8080 on the host to port 8080 in the container,
-    # allowing external access to the web server.
-    ports:
-      - "8080:8080"
+    # Port 8080 is exposed internally for Traefik to route to.
+    # No need to publish to host since Traefik handles external access.
+    expose:
+      - "8080"
 
     # This section defines how persistent data is handled.
     volumes:
@@ -47,6 +47,7 @@ services:
       - "traefik.http.routers.roster.rule=Host(`${DNS_NAME}`)"
       - "traefik.http.routers.roster.entrypoints=websecure"
       - "traefik.http.routers.roster.tls.certresolver=myresolver"
+      - "traefik.http.services.roster.loadbalancer.server.port=8080"
 
 # Defines the named volumes used by the services.
 volumes:
