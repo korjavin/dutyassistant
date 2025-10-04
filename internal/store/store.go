@@ -44,14 +44,23 @@ type RoundRobinState struct {
 	LastAssignedTimestamp time.Time
 }
 
+// UserStats holds aggregated statistics for a user.
+type UserStats struct {
+	TotalDuties     int
+	DutiesThisMonth int
+	NextDutyDate    string // YYYY-MM-DD, or empty if none
+}
+
 // Store defines the interface for all data operations.
 type Store interface {
 	// User methods
 	GetUserByTelegramID(ctx context.Context, id int64) (*User, error)
+	GetUserByName(ctx context.Context, name string) (*User, error)
 	ListActiveUsers(ctx context.Context) ([]*User, error)
+	ListAllUsers(ctx context.Context) ([]*User, error)
 	CreateUser(ctx context.Context, user *User) error
 	UpdateUser(ctx context.Context, user *User) error
-	FindUserByName(ctx context.Context, name string) (*User, error)
+	GetUserStats(ctx context.Context, userID int64) (*UserStats, error)
 
 	// Duty methods
 	CreateDuty(ctx context.Context, duty *Duty) error

@@ -117,8 +117,8 @@ func (s *SQLiteStore) ListActiveUsers(ctx context.Context) ([]*store.User, error
 	return users, nil
 }
 
-// FindUserByName retrieves a user by their first name.
-func (s *SQLiteStore) FindUserByName(ctx context.Context, name string) (*store.User, error) {
+// GetUserByName retrieves a user by their first name.
+func (s *SQLiteStore) GetUserByName(ctx context.Context, name string) (*store.User, error) {
 	query := `SELECT id, telegram_user_id, first_name, is_admin, is_active FROM users WHERE first_name = ?`
 	row := s.db.QueryRowContext(ctx, query, name)
 	user := &store.User{}
@@ -130,6 +130,60 @@ func (s *SQLiteStore) FindUserByName(ctx context.Context, name string) (*store.U
 		return nil, fmt.Errorf("could not query user by name: %w", err)
 	}
 	return user, nil
+}
+
+// ListAllUsers retrieves all users (both active and inactive).
+func (s *SQLiteStore) ListAllUsers(ctx context.Context) ([]*store.User, error) {
+	query := `SELECT id, telegram_user_id, first_name, is_admin, is_active FROM users ORDER BY first_name`
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("could not query all users: %w", err)
+	}
+	defer rows.Close()
+
+	var users []*store.User
+	for rows.Next() {
+		user := &store.User{}
+		if err := rows.Scan(&user.ID, &user.TelegramUserID, &user.FirstName, &user.IsAdmin, &user.IsActive); err != nil {
+			return nil, fmt.Errorf("could not scan user row: %w", err)
+		}
+		users = append(users, user)
+	}
+	return users, nil
+}
+
+// GetUserStats retrieves aggregated statistics for a user.
+func (s *SQLiteStore) GetUserStats(ctx context.Context, userID int64) (*store.UserStats, error) {
+	stats := &store.UserStats{}
+
+	// Get total duties
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM duties WHERE user_id = ?`, userID).Scan(&stats.TotalDuties)
+	if err != nil {
+		return nil, fmt.Errorf("could not count total duties: %w", err)
+	}
+
+	// Get duties this month
+	now := time.Now()
+	start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	end := start.AddDate(0, 1, 0)
+	err = s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM duties WHERE user_id = ? AND duty_date >= ? AND duty_date < ?`,
+		userID, start.Format("2006-01-02"), end.Format("2006-01-02")).Scan(&stats.DutiesThisMonth)
+	if err != nil {
+		return nil, fmt.Errorf("could not count duties this month: %w", err)
+	}
+
+	// Get next duty date
+	var nextDate string
+	err = s.db.QueryRowContext(ctx,
+		`SELECT duty_date FROM duties WHERE user_id = ? AND duty_date >= ? ORDER BY duty_date LIMIT 1`,
+		userID, time.Now().Format("2006-01-02")).Scan(&nextDate)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, fmt.Errorf("could not get next duty date: %w", err)
+	}
+	stats.NextDutyDate = nextDate
+
+	return stats, nil
 }
 
 // UpdateUser updates a user's details.

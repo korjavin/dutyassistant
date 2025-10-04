@@ -105,8 +105,25 @@ func (m *mockStore) CreateUser(ctx context.Context, user *store.User) error {
 	return nil
 }
 
+func (m *mockStore) GetUserByName(ctx context.Context, name string) (*store.User, error) {
+	for _, u := range m.users {
+		if u.FirstName == name {
+			return u, nil
+		}
+	}
+	return nil, errors.New("user not found")
+}
+
+func (m *mockStore) ListAllUsers(ctx context.Context) ([]*store.User, error) {
+	return m.users, nil
+}
+
 func (m *mockStore) UpdateUser(ctx context.Context, user *store.User) error {
 	return nil
+}
+
+func (m *mockStore) GetUserStats(ctx context.Context, userID int64) (*store.UserStats, error) {
+	return &store.UserStats{}, nil
 }
 
 func (m *mockStore) DeleteDuty(ctx context.Context, date time.Time) error {
