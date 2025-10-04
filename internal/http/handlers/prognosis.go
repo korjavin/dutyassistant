@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/korjavin/dutyassistant/internal/scheduler"
 	"github.com/korjavin/dutyassistant/internal/store"
 )
 
@@ -27,7 +26,6 @@ func GetPrognosis(s store.Store) gin.HandlerFunc {
 			return
 		}
 
-		sched := scheduler.NewScheduler(s)
 		ctx := context.Background()
 
 		// Get existing duties for the month
