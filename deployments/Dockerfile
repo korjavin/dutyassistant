@@ -29,7 +29,8 @@ COPY vendor/ ./vendor/
 
 # Copy the rest of the application's source code.
 # A .dockerignore file should be used to exclude unnecessary files and directories.
-COPY . .
+COPY cmd/ ./cmd/
+COPY internal/ ./internal/
 
 # Compile the Go application to a static, CGo-free binary using vendored dependencies.
 # The -w and -s flags strip debugging information, reducing the binary size.
