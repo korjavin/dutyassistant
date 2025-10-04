@@ -1,8 +1,7 @@
-package scheduler
+package store
 
 import (
 	"context"
-	"time"
 )
 
 // AssignmentType defines the type of duty assignment.
@@ -19,7 +18,7 @@ const (
 
 // User represents a user in the system.
 type User struct {
-	ID             int
+	ID             int64
 	TelegramUserID int64
 	FirstName      string
 	IsAdmin        bool
@@ -28,21 +27,18 @@ type User struct {
 
 // Duty represents a duty assignment for a specific date.
 type Duty struct {
-	ID             int
-	UserID         int
-	DutyDate       time.Time
+	ID             int64
+	UserID         int64
+	DutyDate       string // Stored as "YYYY-MM-DD"
 	AssignmentType AssignmentType
-	CreatedAt      time.Time
+	CreatedAt      string // Stored as ISO 8601
 }
 
 // Store defines the interface for data persistence that the scheduler relies on.
-// This allows the scheduler to be tested independently of the database implementation.
 type Store interface {
-	// GetDutyByDate retrieves a duty for a specific date.
-	GetDutyByDate(ctx context.Context, date time.Time) (*Duty, error)
+	// GetDutyByDate retrieves a duty for a specific date (format "YYYY-MM-DD").
+	GetDutyByDate(ctx context.Context, date string) (*Duty, error)
 	// GetNextRoundRobinUser retrieves the next user for a round-robin assignment.
-	// The implementation should handle the logic of finding the user with the
-	// minimum assignment_count and use last_assigned_timestamp as a tie-breaker.
 	GetNextRoundRobinUser(ctx context.Context) (*User, error)
 	// CreateDuty creates a new duty assignment.
 	CreateDuty(ctx context.Context, duty *Duty) error
@@ -51,5 +47,5 @@ type Store interface {
 	// FindUserByName retrieves a user by their first name.
 	FindUserByName(ctx context.Context, name string) (*User, error)
 	// IncrementAssignmentCount increments the round-robin assignment count for a user.
-	IncrementAssignmentCount(ctx context.Context, userID int) error
+	IncrementAssignmentCount(ctx context.Context, userID int64) error
 }

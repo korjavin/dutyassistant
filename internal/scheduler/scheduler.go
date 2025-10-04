@@ -4,50 +4,56 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/korjavin/dutyassistant/internal/store"
 )
+
+const dateLayout = "2006-01-02"
 
 // Scheduler handles the business logic for duty assignments.
 type Scheduler struct {
-	store Store
+	store store.Store
 }
 
 // NewScheduler creates a new Scheduler with the given data store.
-func NewScheduler(store Store) *Scheduler {
-	return &Scheduler{store: store}
+func NewScheduler(s store.Store) *Scheduler {
+	return &Scheduler{store: s}
 }
 
 // AssignDutyAdmin assigns a duty to a user on a specific date as an administrator.
 // This has the highest priority and will override any existing assignment.
-func (s *Scheduler) AssignDutyAdmin(ctx context.Context, user *User, date time.Time) (*Duty, error) {
-	return s.assignDuty(ctx, user, date, AssignmentTypeAdmin)
+func (s *Scheduler) AssignDutyAdmin(ctx context.Context, user *store.User, date time.Time) (*store.Duty, error) {
+	return s.assignDuty(ctx, user, date, store.AssignmentTypeAdmin)
 }
 
 // AssignDutyVoluntary allows a user to volunteer for a duty on a specific date.
 // This cannot override an administrative assignment.
-func (s *Scheduler) AssignDutyVoluntary(ctx context.Context, user *User, date time.Time) (*Duty, error) {
-	existingDuty, err := s.store.GetDutyByDate(ctx, date)
+func (s *Scheduler) AssignDutyVoluntary(ctx context.Context, user *store.User, date time.Time) (*store.Duty, error) {
+	dateStr := date.Format(dateLayout)
+	existingDuty, err := s.store.GetDutyByDate(ctx, dateStr)
 	if err != nil {
-		// Assuming an error means no duty exists, which is fine.
-		// A proper implementation would distinguish between "not found" and other errors.
+		// Assuming an error means no duty exists, which is fine for this operation.
+		// A real implementation would check for specific "not found" errors.
 	}
 
-	if existingDuty != nil && existingDuty.AssignmentType == AssignmentTypeAdmin {
+	if existingDuty != nil && existingDuty.AssignmentType == store.AssignmentTypeAdmin {
 		return nil, fmt.Errorf("cannot override an administrative assignment")
 	}
 
-	return s.assignDuty(ctx, user, date, AssignmentTypeVoluntary)
+	return s.assignDuty(ctx, user, date, store.AssignmentTypeVoluntary)
 }
 
 // AssignDutyRoundRobin automatically assigns a duty to the next eligible user.
-// This is the lowest priority assignment.
-func (s *Scheduler) AssignDutyRoundRobin(ctx context.Context, date time.Time) (*Duty, error) {
-	existingDuty, err := s.store.GetDutyByDate(ctx, date)
+// This is the lowest priority assignment and will not run if a duty already exists.
+func (s *Scheduler) AssignDutyRoundRobin(ctx context.Context, date time.Time) (*store.Duty, error) {
+	dateStr := date.Format(dateLayout)
+	existingDuty, err := s.store.GetDutyByDate(ctx, dateStr)
 	if err != nil {
 		// Assuming "not found" is the common case here.
 	}
 
 	if existingDuty != nil {
-		// A duty already exists, do nothing.
+		// A duty already exists, so do nothing.
 		return existingDuty, nil
 	}
 
@@ -56,15 +62,15 @@ func (s *Scheduler) AssignDutyRoundRobin(ctx context.Context, date time.Time) (*
 		return nil, fmt.Errorf("failed to get next round-robin user: %w", err)
 	}
 
-	duty, err := s.assignDuty(ctx, user, date, AssignmentTypeRoundRobin)
+	duty, err := s.assignDuty(ctx, user, date, store.AssignmentTypeRoundRobin)
 	if err != nil {
 		return nil, err
 	}
 
-	// Only increment count for successful round-robin assignments
+	// Only increment count for successful round-robin assignments.
 	if err := s.store.IncrementAssignmentCount(ctx, user.ID); err != nil {
-		// This is a problem. The duty is created, but the count failed to increment.
-		// A real implementation would need transactional logic or compensation.
+		// In a real system, this would require transactional logic or compensation
+		// to avoid an inconsistent state (duty created but count not incremented).
 		return duty, fmt.Errorf("duty created, but failed to increment assignment count: %w", err)
 	}
 
@@ -73,17 +79,18 @@ func (s *Scheduler) AssignDutyRoundRobin(ctx context.Context, date time.Time) (*
 
 // assignDuty is a helper function to handle the creation or update of a duty.
 // It encapsulates the state transition logic based on assignment priority.
-func (s *Scheduler) assignDuty(ctx context.Context, user *User, date time.Time, assignType AssignmentType) (*Duty, error) {
-	existingDuty, err := s.store.GetDutyByDate(ctx, date)
+func (s *Scheduler) assignDuty(ctx context.Context, user *store.User, date time.Time, assignType store.AssignmentType) (*store.Duty, error) {
+	dateStr := date.Format(dateLayout)
+	existingDuty, err := s.store.GetDutyByDate(ctx, dateStr)
 	if err != nil {
 		// Again, assuming error means not found for simplicity.
 	}
 
 	if existingDuty != nil {
-		// If an admin is assigning, they can override anything.
-		// If a volunteer is signing up, they can override round-robin or another volunteer.
-		if assignType == AssignmentTypeAdmin || existingDuty.AssignmentType != AssignmentTypeAdmin {
-			// Update existing duty
+		// Admin assignments can override anything.
+		// Voluntary assignments can override round-robin or another voluntary.
+		if assignType == store.AssignmentTypeAdmin || existingDuty.AssignmentType != store.AssignmentTypeAdmin {
+			// Update the existing duty.
 			existingDuty.UserID = user.ID
 			existingDuty.AssignmentType = assignType
 			err := s.store.UpdateDuty(ctx, existingDuty)
@@ -95,12 +102,12 @@ func (s *Scheduler) assignDuty(ctx context.Context, user *User, date time.Time, 
 		return nil, fmt.Errorf("assignment failed due to priority conflict")
 	}
 
-	// Create new duty
-	newDuty := &Duty{
+	// Create a new duty.
+	newDuty := &store.Duty{
 		UserID:         user.ID,
-		DutyDate:       date,
+		DutyDate:       dateStr,
 		AssignmentType: assignType,
-		CreatedAt:      time.Now().UTC(),
+		CreatedAt:      time.Now().UTC().Format(time.RFC3339),
 	}
 
 	err = s.store.CreateDuty(ctx, newDuty)
