@@ -55,6 +55,10 @@ func Calendar(t time.Time, duties []*store.Duty) tgbotapi.InlineKeyboardMarkup {
 		offset-- // Monday is 0
 	}
 
+	// Get today for marking
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+
 	row := make([]tgbotapi.InlineKeyboardButton, 7)
 	day := 1
 	for day <= lastDay.Day() {
@@ -63,9 +67,11 @@ func Calendar(t time.Time, duties []*store.Duty) tgbotapi.InlineKeyboardMarkup {
 				row[i] = tgbotapi.NewInlineKeyboardButtonData(" ", ActionIgnore)
 			} else {
 				date := time.Date(year, month, day, 0, 0, 0, 0, t.Location())
-				dayText := fmt.Sprintf("%d", day)
+
+				// Format: just emoji + 3 letters, or day number with marker for today
+				var dayText string
 				if duty, ok := dutyMap[day]; ok {
-					// Add emoji and first 3 letters based on assignment type
+					// Show emoji and first 3 letters
 					emoji := ""
 					switch duty.AssignmentType {
 					case store.AssignmentTypeVoluntary:
@@ -79,8 +85,22 @@ func Calendar(t time.Time, duties []*store.Duty) tgbotapi.InlineKeyboardMarkup {
 					if len(shortName) > 3 {
 						shortName = shortName[:3]
 					}
-					dayText = fmt.Sprintf("%s%s %s", dayText, emoji, shortName)
+
+					// Mark today with [brackets]
+					if date.Year() == today.Year() && date.Month() == today.Month() && date.Day() == today.Day() {
+						dayText = fmt.Sprintf("[%s%s]", emoji, shortName)
+					} else {
+						dayText = fmt.Sprintf("%s%s", emoji, shortName)
+					}
+				} else {
+					// No duty - show day number, mark today
+					if date.Year() == today.Year() && date.Month() == today.Month() && date.Day() == today.Day() {
+						dayText = fmt.Sprintf("[%d]", day)
+					} else {
+						dayText = fmt.Sprintf("%d", day)
+					}
 				}
+
 				row[i] = tgbotapi.NewInlineKeyboardButtonData(
 					dayText,
 					fmt.Sprintf("%s:%s", ActionSelectDay, date.Format("2006-01-02")),
