@@ -319,7 +319,7 @@ func (s *SQLiteStore) GetNextRoundRobinUser(ctx context.Context) (*store.User, e
 		SELECT u.id, u.telegram_user_id, u.first_name, u.is_admin, u.is_active
 		FROM users u
 		LEFT JOIN round_robin_state rrs ON u.id = rrs.user_id
-		WHERE u.is_active = 1
+		WHERE u.is_active = 1 AND u.is_admin = 0
 		ORDER BY rrs.assignment_count ASC, rrs.last_assigned_timestamp ASC
 		LIMIT 1
 	`

@@ -8,6 +8,17 @@
     <link href="/dist/output.css?v=BUILD_TIME" rel="stylesheet">
     <!-- Vanilla Calendar Pro CSS -->
     <link href="/vendor/vanilla-calendar/vanilla-calendar.min.css?v=BUILD_TIME" rel="stylesheet">
+    <style>
+        /* Make calendar popups always visible */
+        .vanilla-calendar-day__popup {
+            display: block !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+            position: relative !important;
+            transform: none !important;
+            margin-top: 2px;
+        }
+    </style>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body class="bg-gray-100">

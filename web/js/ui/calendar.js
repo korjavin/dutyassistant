@@ -156,6 +156,7 @@ function renderCalendar(scheduleData = {}, prognosisData = {}) {
     };
 
     // Add HTML content directly to calendar days showing assignee names with colors
+    // Using popups with modifier to make them always visible
     Object.keys(dutiesByDate).forEach(date => {
         const duties = dutiesByDate[date];
         const html = duties.map(duty => {
