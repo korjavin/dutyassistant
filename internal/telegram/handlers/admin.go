@@ -22,12 +22,17 @@ const (
 )
 
 // checkAdmin is a helper function to verify if a user is an admin.
+// Admin is determined by matching the Telegram user ID against the ADMIN_ID env var.
 func (h *Handlers) checkAdmin(telegramUserID int64) (bool, error) {
-	user, err := h.Store.GetUserByTelegramID(context.Background(), telegramUserID)
-	if err != nil || user == nil {
-		return false, err
+	if h.AdminID == 0 {
+		// Fallback to database flag if AdminID is not configured
+		user, err := h.Store.GetUserByTelegramID(context.Background(), telegramUserID)
+		if err != nil || user == nil {
+			return false, err
+		}
+		return user.IsAdmin, nil
 	}
-	return user.IsAdmin, nil
+	return telegramUserID == h.AdminID, nil
 }
 
 // HandleAssign handles the /assign command for admins. Format: /assign <username> <date>

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -25,6 +26,8 @@ func main() {
 	if telegramToken == "" {
 		log.Fatal("TELEGRAM_APITOKEN environment variable is required")
 	}
+	adminIDStr := getEnv("ADMIN_ID", "0")
+	adminID := parseInt64(adminIDStr, 0)
 
 	// Initialize database
 	log.Println("Initializing database at", dbPath)
@@ -40,7 +43,13 @@ func main() {
 
 	// Initialize Telegram handlers
 	log.Println("Initializing Telegram handlers...")
-	telegramHandlers := handlers.New(store, sched)
+	var telegramHandlers *handlers.Handlers
+	if adminID != 0 {
+		log.Printf("Admin ID configured: %d", adminID)
+		telegramHandlers = handlers.NewWithAdminID(store, sched, adminID)
+	} else {
+		telegramHandlers = handlers.New(store, sched)
+	}
 
 	// Initialize and start Telegram bot
 	log.Println("Initializing Telegram bot...")
@@ -101,4 +110,12 @@ func getEnv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+func parseInt64(s string, defaultValue int64) int64 {
+	var result int64
+	if _, err := fmt.Sscanf(s, "%d", &result); err != nil {
+		return defaultValue
+	}
+	return result
 }

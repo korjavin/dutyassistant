@@ -27,8 +27,17 @@ func (s *Scheduler) AssignDutyAdmin(ctx context.Context, user *store.User, date 
 }
 
 // AssignDutyVoluntary allows a user to volunteer for a duty on a specific date.
-// This cannot override an administrative assignment.
+// This cannot override an administrative assignment, and cannot be used for past dates.
 func (s *Scheduler) AssignDutyVoluntary(ctx context.Context, user *store.User, date time.Time) (*store.Duty, error) {
+	// Prevent volunteering for past dates
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	dutyDate := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC)
+
+	if dutyDate.Before(today) {
+		return nil, fmt.Errorf("cannot volunteer for past dates")
+	}
+
 	existingDuty, err := s.store.GetDutyByDate(ctx, date)
 	if err != nil {
 		// Assuming an error means no duty exists, which is fine for this operation.
@@ -36,7 +45,10 @@ func (s *Scheduler) AssignDutyVoluntary(ctx context.Context, user *store.User, d
 	}
 
 	if existingDuty != nil && existingDuty.AssignmentType == store.AssignmentTypeAdmin {
-		return nil, fmt.Errorf("cannot override an administrative assignment")
+		// When volunteering for an admin-assigned day, reassign the admin assignment to next available day
+		if err := s.reassignAdminToNextDay(ctx, existingDuty); err != nil {
+			return nil, fmt.Errorf("failed to reassign admin duty: %w", err)
+		}
 	}
 
 	return s.assignDuty(ctx, user, date, store.AssignmentTypeVoluntary)
@@ -73,6 +85,37 @@ func (s *Scheduler) AssignDutyRoundRobin(ctx context.Context, date time.Time) (*
 	}
 
 	return duty, nil
+}
+
+// reassignAdminToNextDay finds the next unassigned day and assigns the admin duty there.
+func (s *Scheduler) reassignAdminToNextDay(ctx context.Context, existingDuty *store.Duty) error {
+	// Find the next unassigned day for round-robin
+	currentDate := existingDuty.DutyDate.AddDate(0, 0, 1)
+	maxDays := 90 // Search up to 90 days ahead
+
+	for i := 0; i < maxDays; i++ {
+		duty, err := s.store.GetDutyByDate(ctx, currentDate)
+		if err != nil {
+			// Assuming error means no duty exists
+		}
+
+		if duty == nil {
+			// Found an unassigned day - assign the admin duty here
+			_, err := s.AssignDutyAdmin(ctx, existingDuty.User, currentDate)
+			return err
+		}
+
+		// Check if it's a round-robin assignment we can override
+		if duty.AssignmentType == store.AssignmentTypeRoundRobin {
+			// Override this round-robin with admin assignment
+			_, err := s.AssignDutyAdmin(ctx, existingDuty.User, currentDate)
+			return err
+		}
+
+		currentDate = currentDate.AddDate(0, 0, 1)
+	}
+
+	return fmt.Errorf("could not find available day within %d days", maxDays)
 }
 
 // assignDuty is a helper function to handle the creation or update of a duty.

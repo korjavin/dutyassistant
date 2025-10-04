@@ -10,6 +10,7 @@ import (
 type Handlers struct {
 	Store     store.Store
 	Scheduler scheduler.SchedulerInterface
+	AdminID   int64 // Telegram user ID of the admin from ADMIN_ID env var
 }
 
 // New creates a new Handlers instance with the provided dependencies.
@@ -17,5 +18,14 @@ func New(s store.Store, sch scheduler.SchedulerInterface) *Handlers {
 	return &Handlers{
 		Store:     s,
 		Scheduler: sch,
+	}
+}
+
+// NewWithAdminID creates a new Handlers instance with admin ID configured.
+func NewWithAdminID(s store.Store, sch scheduler.SchedulerInterface, adminID int64) *Handlers {
+	return &Handlers{
+		Store:     s,
+		Scheduler: sch,
+		AdminID:   adminID,
 	}
 }

@@ -122,14 +122,14 @@ func (b *Bot) handleCallbackQuery(q *tgbotapi.CallbackQuery) (tgbotapi.Chattable
 	switch action {
 	case keyboard.ActionPrevMonth, keyboard.ActionNextMonth:
 		// These callbacks can come from either the /schedule or /volunteer calendars.
-		// We can try to guess the context from the message text.
-		if strings.Contains(q.Message.Text, "volunteer") {
-			// It's a volunteer calendar, we don't need to show duties.
-			return b.handlers.HandleCalendarCallback(q) // Simplified version for volunteer
-		}
 		return b.handlers.HandleCalendarCallback(q)
 	case keyboard.ActionSelectDay:
-		return b.handlers.HandleVolunteerCallback(q)
+		// Only handle day selection for /volunteer command, not /schedule (read-only)
+		if strings.Contains(q.Message.Text, "volunteer") {
+			return b.handlers.HandleVolunteerCallback(q)
+		}
+		// If it's from /schedule, do nothing (read-only calendar)
+		return nil, nil
 	case keyboard.ActionIgnore:
 		return nil, nil // Do nothing for ignore actions
 	default:
