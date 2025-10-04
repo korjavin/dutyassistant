@@ -27,6 +27,9 @@ COPY go.mod go.sum ./
 # Copy all source code and vendor dependencies in one layer
 COPY . .
 
+# Debug: Show directory structure
+RUN echo "=== Contents of /app ===" && ls -la && echo "=== Contents of /app/cmd ===" && ls -la cmd/ || echo "ERROR: cmd directory not found!"
+
 # Compile the Go application to a static, CGo-free binary using vendored dependencies.
 # The -w and -s flags strip debugging information, reducing the binary size.
 # The -mod=vendor flag ensures we use vendored dependencies.
