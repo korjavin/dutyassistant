@@ -1,4 +1,4 @@
-import VanillaCalendar from '../../node_modules/vanilla-calendar-pro/build/vanilla-calendar.min.js';
+import VanillaCalendar from 'https://cdn.jsdelivr.net/npm/vanilla-calendar-pro@2.9.0/build/vanilla-calendar.min.js';
 import { getSchedule, volunteerForDuty, withdrawFromDuty } from '../api.js';
 import { getState, setState } from '../store.js';
 import { createDutyCard, createModal, showModal, createLoadingSpinner, createErrorMessage, hideModal } from './components.js';
