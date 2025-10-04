@@ -36,11 +36,30 @@ func GetSchedule(s store.Store) gin.HandlerFunc {
 			return
 		}
 
-		// To avoid returning `null` for an empty slice, we initialize it.
-		if duties == nil {
-			duties = []*store.Duty{}
+		// Transform to frontend-friendly format
+		type dutyResponse struct {
+			ID             int64  `json:"id"`
+			Date           string `json:"date"`
+			UserID         int64  `json:"user_id"`
+			UserName       string `json:"user_name"`
+			AssignmentType string `json:"assignment_type"`
 		}
 
-		c.JSON(http.StatusOK, duties)
+		response := make([]dutyResponse, 0, len(duties))
+		for _, duty := range duties {
+			userName := ""
+			if duty.User != nil {
+				userName = duty.User.FirstName
+			}
+			response = append(response, dutyResponse{
+				ID:             duty.ID,
+				Date:           duty.DutyDate.Format(time.RFC3339),
+				UserID:         duty.UserID,
+				UserName:       userName,
+				AssignmentType: string(duty.AssignmentType),
+			})
+		}
+
+		c.JSON(http.StatusOK, gin.H{"duties": response})
 	}
 }

@@ -41,6 +41,10 @@ function renderCalendar(scheduleData = {}) {
             if (!dutiesByDate[date]) {
                 dutiesByDate[date] = [];
             }
+            // Add user name and assignment type style
+            duty.displayName = duty.user_name || 'Unassigned';
+            duty.typeClass = duty.assignment_type === 'voluntary' ? 'text-green-600' :
+                            duty.assignment_type === 'admin' ? 'text-blue-600' : 'text-gray-600';
             dutiesByDate[date].push(duty);
         });
     }
@@ -64,7 +68,12 @@ function renderCalendar(scheduleData = {}) {
                 const date = self.selectedDates[0];
                 if (dutiesByDate[date]) {
                     const duties = dutiesByDate[date];
-                    const content = duties.map(duty => createDutyCard(duty, currentUser)).join('');
+                    const content = duties.map(duty => `
+                        <div class="p-3 mb-2 border rounded ${duty.typeClass}">
+                            <div class="font-bold">${duty.displayName}</div>
+                            <div class="text-sm text-gray-600">${duty.assignment_type}</div>
+                        </div>
+                    `).join('');
                     const modalId = 'duty-details-modal';
 
                     const existingModal = document.getElementById(modalId);
