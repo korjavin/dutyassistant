@@ -25,7 +25,9 @@ RUN cd web && npm run build && cd ..
 COPY go.mod go.sum ./
 
 # Copy all source code and vendor dependencies in one layer
+RUN pwd && ls -la
 COPY . .
+RUN pwd && ls -la
 
 
 # Compile the Go application to a static, CGo-free binary using vendored dependencies.
