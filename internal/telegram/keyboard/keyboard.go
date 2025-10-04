@@ -68,10 +68,12 @@ func Calendar(t time.Time, duties []*store.Duty) tgbotapi.InlineKeyboardMarkup {
 			} else {
 				date := time.Date(year, month, day, 0, 0, 0, 0, t.Location())
 
-				// Format: just emoji + 3 letters, or day number with marker for today
+				// Format: day number + emoji (compact for Telegram button width limits)
 				var dayText string
+				isToday := date.Year() == today.Year() && date.Month() == today.Month() && date.Day() == today.Day()
+
 				if duty, ok := dutyMap[day]; ok {
-					// Show emoji and first 3 letters
+					// Show day number and emoji only
 					emoji := ""
 					switch duty.AssignmentType {
 					case store.AssignmentTypeVoluntary:
@@ -81,21 +83,16 @@ func Calendar(t time.Time, duties []*store.Duty) tgbotapi.InlineKeyboardMarkup {
 					case store.AssignmentTypeRoundRobin:
 						emoji = "⚪"
 					}
-					shortName := duty.User.FirstName
-					if len(shortName) > 3 {
-						shortName = shortName[:3]
-					}
 
-					// Mark today with [brackets]
-					if date.Year() == today.Year() && date.Month() == today.Month() && date.Day() == today.Day() {
-						dayText = fmt.Sprintf("[%s%s]", emoji, shortName)
+					if isToday {
+						dayText = fmt.Sprintf("·%d%s", day, emoji)
 					} else {
-						dayText = fmt.Sprintf("%s%s", emoji, shortName)
+						dayText = fmt.Sprintf("%d%s", day, emoji)
 					}
 				} else {
-					// No duty - show day number, mark today
-					if date.Year() == today.Year() && date.Month() == today.Month() && date.Day() == today.Day() {
-						dayText = fmt.Sprintf("[%d]", day)
+					// No duty - show day number, mark today with dot prefix
+					if isToday {
+						dayText = fmt.Sprintf("·%d", day)
 					} else {
 						dayText = fmt.Sprintf("%d", day)
 					}
