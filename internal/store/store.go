@@ -30,6 +30,8 @@ type Store interface {
 	GetUserByTelegramID(ctx context.Context, id int64) (*User, error)
 	ListActiveUsers(ctx context.Context) ([]*User, error)
 	ListAllUsers(ctx context.Context) ([]*User, error)
+	CreateUser(ctx context.Context, user *User) error
+	UpdateUser(ctx context.Context, user *User) error
 
 	// Duty methods
 	CreateDuty(ctx context.Context, duty *Duty) error

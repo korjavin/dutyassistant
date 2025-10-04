@@ -40,6 +40,18 @@ func (m *MockStore) ListAllUsers(ctx context.Context) ([]*store.User, error) {
 	return args.Get(0).([]*store.User), args.Error(1)
 }
 
+// CreateUser mocks the CreateUser method.
+func (m *MockStore) CreateUser(ctx context.Context, user *store.User) error {
+	args := m.Called(ctx, user)
+	return args.Error(0)
+}
+
+// UpdateUser mocks the UpdateUser method.
+func (m *MockStore) UpdateUser(ctx context.Context, user *store.User) error {
+	args := m.Called(ctx, user)
+	return args.Error(0)
+}
+
 // CreateDuty mocks the CreateDuty method.
 func (m *MockStore) CreateDuty(ctx context.Context, duty *store.Duty) error {
 	args := m.Called(ctx, duty)
