@@ -42,6 +42,25 @@ export async function getSchedule(year, month) {
 }
 
 /**
+ * Fetches the round-robin prognosis for a given month.
+ * @param {number} year - The year.
+ * @param {number} month - The month.
+ * @returns {Promise<any>} The prognosis data.
+ */
+export async function getPrognosis(year, month) {
+    try {
+        const response = await fetch(`/api/v1/prognosis/${year}/${month}`);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return await response.json();
+    } catch (error) {
+        console.error("Failed to fetch prognosis:", error);
+        return null;
+    }
+}
+
+/**
  * Fetches all users.
  * @returns {Promise<any>} A list of users.
  */

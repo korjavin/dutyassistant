@@ -1,5 +1,5 @@
 import VanillaCalendar from '/vendor/vanilla-calendar/vanilla-calendar.min.js';
-import { getSchedule, volunteerForDuty, withdrawFromDuty } from '../api.js';
+import { getSchedule, getPrognosis, volunteerForDuty, withdrawFromDuty } from '../api.js';
 import { getState, setState } from '../store.js';
 import { createDutyCard, createModal, showModal, createLoadingSpinner, createErrorMessage, hideModal } from './components.js';
 
@@ -14,10 +14,14 @@ async function loadAndDisplaySchedule() {
     calendarContainer.innerHTML = createLoadingSpinner();
 
     try {
-        const scheduleData = await getSchedule(currentYear, currentMonth);
+        const [scheduleData, prognosisData] = await Promise.all([
+            getSchedule(currentYear, currentMonth),
+            getPrognosis(currentYear, currentMonth)
+        ]);
+
         if (scheduleData) {
             setState({ schedule: { [`${currentYear}-${currentMonth}`]: scheduleData } });
-            renderCalendar(scheduleData);
+            renderCalendar(scheduleData, prognosisData);
         } else {
             calendarContainer.innerHTML = createErrorMessage('Could not load schedule.');
         }
@@ -30,11 +34,13 @@ async function loadAndDisplaySchedule() {
 /**
  * Renders the calendar with the given schedule data.
  * @param {object} scheduleData - The schedule data for the current month.
+ * @param {object} prognosisData - The prognosis data for unassigned days.
  */
-function renderCalendar(scheduleData = {}) {
+function renderCalendar(scheduleData = {}, prognosisData = {}) {
     const { currentYear, currentMonth, currentUser } = getState();
     const dutiesByDate = {};
 
+    // Add actual duties
     if (scheduleData.duties) {
         scheduleData.duties.forEach(duty => {
             const date = duty.date.split('T')[0];
@@ -45,7 +51,24 @@ function renderCalendar(scheduleData = {}) {
             duty.displayName = duty.user_name || 'Unassigned';
             duty.typeClass = duty.assignment_type === 'voluntary' ? 'text-green-600' :
                             duty.assignment_type === 'admin' ? 'text-blue-600' : 'text-gray-600';
+            duty.isPrognosis = false;
             dutiesByDate[date].push(duty);
+        });
+    }
+
+    // Add prognosis for unassigned days
+    if (prognosisData.prognosis) {
+        prognosisData.prognosis.forEach(prog => {
+            if (!dutiesByDate[prog.date]) {
+                dutiesByDate[prog.date] = [];
+            }
+            dutiesByDate[prog.date].push({
+                displayName: prog.user_name,
+                typeClass: 'text-gray-400 italic',
+                assignment_type: 'prognosis (round-robin)',
+                isPrognosis: true,
+                date: prog.date
+            });
         });
     }
 
