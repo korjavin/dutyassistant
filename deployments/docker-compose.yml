@@ -1,0 +1,50 @@
+version: '3.8'
+
+# This Docker Compose file defines the services, networks, and volumes
+# for the Roster Bot application in a production-like environment.
+
+services:
+  # The main application service.
+  roster-bot:
+    # The image to use. It should be built and pushed to the specified registry,
+    # for example, GitHub Container Registry (ghcr.io).
+    # The ':latest' tag points to the most recent build from the main branch.
+    image: ghcr.io/korjavin/dutyassistant:latest
+
+    # A friendly name for the container.
+    container_name: roster-bot
+
+    # The 'always' restart policy ensures the container restarts automatically
+    # if it stops unexpectedly or if the Docker daemon restarts.
+    restart: always
+
+    # Maps port 8080 on the host to port 8080 in the container,
+    # allowing external access to the web server.
+    ports:
+      - "8080:8080"
+
+    # This section defines how persistent data is handled.
+    volumes:
+      # Mounts the named volume 'roster-data' to the '/app/data' directory
+      # inside the container. This is where the SQLite database file will be stored,
+      # ensuring data persistence across container restarts and updates.
+      - roster-data:/app/data
+
+    # Passes configuration to the application via environment variables.
+    # This is a best practice for separating configuration from the application image.
+    # Values should be provided in a .env file or the environment where 'docker-compose up' is run.
+    environment:
+      # The mode in which the Gin framework should run. 'release' is optimized for production.
+      - GIN_MODE=release
+      # The Telegram Bot API token. This is a secret and must be provided.
+      - TELEGRAM_APITOKEN=${TELEGRAM_APITOKEN}
+      # Add other environment variables as needed (e.g., database path, LLM keys).
+      - DATABASE_PATH=/app/data/roster.db
+
+# Defines the named volumes used by the services.
+volumes:
+  # The 'roster-data' volume is managed by Docker and provides a persistent
+  # storage location for the application's database.
+  roster-data:
+    # An empty driver configuration uses the default local driver.
+    driver: local

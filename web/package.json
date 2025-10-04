@@ -1,0 +1,12 @@
+{
+  "name": "roster-bot-frontend",
+  "version": "1.0.0",
+  "description": "Frontend assets for the Roster Bot",
+  "scripts": {
+    "build": "tailwindcss -i ./css/input.css -o ./dist/output.css --minify",
+    "watch": "tailwindcss -i ./css/input.css -o ./dist/output.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.1"
+  }
+}
