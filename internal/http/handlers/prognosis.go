@@ -43,7 +43,7 @@ func GetPrognosis(s store.Store) gin.HandlerFunc {
 			existingDatesMap[dateStr] = true
 		}
 
-		// Generate prognosis for each day of the month
+		// Generate prognosis for only the next unassigned day
 		type prognosisItem struct {
 			Date     string `json:"date"`
 			UserName string `json:"user_name"`
@@ -52,27 +52,38 @@ func GetPrognosis(s store.Store) gin.HandlerFunc {
 
 		var prognoses []prognosisItem
 		daysInMonth := time.Date(year, time.Month(month+1), 0, 0, 0, 0, 0, time.UTC).Day()
+		now := time.Now()
+		today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 
+		// Find only the next unassigned day (don't store it, just predict)
 		for day := 1; day <= daysInMonth; day++ {
 			date := time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.UTC)
 			dateStr := date.Format("2006-01-02")
+
+			// Skip past dates
+			if date.Before(today) {
+				continue
+			}
 
 			// Skip if already assigned
 			if existingDatesMap[dateStr] {
 				continue
 			}
 
-			// Get round-robin prediction
-			duty, err := sched.AssignDutyRoundRobin(ctx, date)
-			if err != nil || duty == nil || duty.User == nil {
+			// Get round-robin prediction for just this one day (without storing it)
+			nextUser, err := s.GetNextRoundRobinUser(ctx)
+			if err != nil || nextUser == nil {
 				continue
 			}
 
 			prognoses = append(prognoses, prognosisItem{
 				Date:     dateStr,
-				UserName: duty.User.FirstName,
-				UserID:   duty.UserID,
+				UserName: nextUser.FirstName,
+				UserID:   nextUser.ID,
 			})
+
+			// Only show one day of prognosis
+			break
 		}
 
 		c.JSON(http.StatusOK, gin.H{"prognosis": prognoses})
