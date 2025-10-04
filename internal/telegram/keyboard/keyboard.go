@@ -16,11 +16,11 @@ const (
 )
 
 // Calendar creates an inline keyboard markup for a given month and year.
-// It marks days with duties with a special character.
+// It marks days with duties with emoji indicators and first 3 letters of name.
 func Calendar(t time.Time, duties []*store.Duty) tgbotapi.InlineKeyboardMarkup {
-	dutyMap := make(map[int]string)
+	dutyMap := make(map[int]*store.Duty)
 	for _, duty := range duties {
-		dutyMap[duty.DutyDate.Day()] = duty.User.FirstName
+		dutyMap[duty.DutyDate.Day()] = duty
 	}
 
 	year, month, _ := t.Date()
@@ -64,9 +64,22 @@ func Calendar(t time.Time, duties []*store.Duty) tgbotapi.InlineKeyboardMarkup {
 			} else {
 				date := time.Date(year, month, day, 0, 0, 0, 0, t.Location())
 				dayText := fmt.Sprintf("%d", day)
-				if name, ok := dutyMap[day]; ok {
-					// Mark day with the first initial of the person on duty
-					dayText = fmt.Sprintf("%s (%c)", dayText, name[0])
+				if duty, ok := dutyMap[day]; ok {
+					// Add emoji and first 3 letters based on assignment type
+					emoji := ""
+					switch duty.AssignmentType {
+					case store.AssignmentTypeVoluntary:
+						emoji = "🟢"
+					case store.AssignmentTypeAdmin:
+						emoji = "🔵"
+					case store.AssignmentTypeRoundRobin:
+						emoji = "⚪"
+					}
+					shortName := duty.User.FirstName
+					if len(shortName) > 3 {
+						shortName = shortName[:3]
+					}
+					dayText = fmt.Sprintf("%s%s %s", dayText, emoji, shortName)
 				}
 				row[i] = tgbotapi.NewInlineKeyboardButtonData(
 					dayText,
@@ -78,6 +91,12 @@ func Calendar(t time.Time, duties []*store.Duty) tgbotapi.InlineKeyboardMarkup {
 		keyboard = append(keyboard, row)
 		row = make([]tgbotapi.InlineKeyboardButton, 7)
 	}
+
+	// Add legend footer
+	legend := []tgbotapi.InlineKeyboardButton{
+		tgbotapi.NewInlineKeyboardButtonData("🟢=Volunteer 🔵=Admin ⚪=Auto", ActionIgnore),
+	}
+	keyboard = append(keyboard, legend)
 
 	return tgbotapi.NewInlineKeyboardMarkup(keyboard...)
 }
