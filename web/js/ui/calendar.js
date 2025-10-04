@@ -1,31 +1,156 @@
-// This module will be responsible for rendering and managing the calendar UI component.
-import { getSchedule } from '../api.js';
-import { getState, setSchedule } from '../store.js';
+import VanillaCalendar from '../../node_modules/vanilla-calendar-pro/build/vanilla-calendar.min.js';
+import { getSchedule, volunteerForDuty, withdrawFromDuty } from '../api.js';
+import { getState, setState } from '../store.js';
+import { createDutyCard, createModal, showModal, createLoadingSpinner, createErrorMessage, hideModal } from './components.js';
 
 const calendarContainer = document.getElementById('calendar-container');
+let calendar;
 
-export function renderCalendar() {
+/**
+ * Fetches and displays the schedule for the current month.
+ */
+async function loadAndDisplaySchedule() {
     const { currentYear, currentMonth } = getState();
-    console.log(`Rendering calendar for ${currentYear}-${currentMonth}`);
+    calendarContainer.innerHTML = createLoadingSpinner();
 
-    // Placeholder for calendar rendering logic.
-    // This will be replaced with the actual calendar library integration.
-    calendarContainer.innerHTML = `
-        <div class="p-4 bg-white rounded shadow">
-            <h2 class="text-xl font-bold mb-4">Calendar for ${currentYear}-${currentMonth}</h2>
-            <p>Calendar UI will be implemented here.</p>
-        </div>
-    `;
-
-    // Example of fetching data for the current month.
-    getSchedule(currentYear, currentMonth).then(data => {
-        if (data) {
-            setSchedule(currentYear, currentMonth, data);
-            console.log("Schedule data loaded:", data);
-            // Re-render the calendar with the new data.
+    try {
+        const scheduleData = await getSchedule(currentYear, currentMonth);
+        if (scheduleData) {
+            setState({ schedule: { [`${currentYear}-${currentMonth}`]: scheduleData } });
+            renderCalendar(scheduleData);
+        } else {
+            calendarContainer.innerHTML = createErrorMessage('Could not load schedule.');
         }
-    });
+    } catch (error) {
+        console.error('Error loading schedule:', error);
+        calendarContainer.innerHTML = createErrorMessage('Error loading schedule. Please try again later.');
+    }
 }
 
-// Initial render
-renderCalendar();
+/**
+ * Renders the calendar with the given schedule data.
+ * @param {object} scheduleData - The schedule data for the current month.
+ */
+function renderCalendar(scheduleData = {}) {
+    const { currentYear, currentMonth, currentUser } = getState();
+    const dutiesByDate = {};
+
+    if (scheduleData.duties) {
+        scheduleData.duties.forEach(duty => {
+            const date = duty.date.split('T')[0];
+            if (!dutiesByDate[date]) {
+                dutiesByDate[date] = [];
+            }
+            dutiesByDate[date].push(duty);
+        });
+    }
+
+    const dates = Object.keys(dutiesByDate).map(dateStr => ({
+        date: dateStr,
+        CSSClasses: ['has-duty'],
+    }));
+
+    const options = {
+        type: 'default',
+        settings: {
+            lang: 'en',
+            iso8601: true,
+            selection: { day: 'single' },
+            visibility: { theme: 'light', weekend: true, today: true },
+            selected: { dates: dates.map(d => d.date) },
+        },
+        actions: {
+            clickDay(event, self) {
+                const date = self.selectedDates[0];
+                if (dutiesByDate[date]) {
+                    const duties = dutiesByDate[date];
+                    const content = duties.map(duty => createDutyCard(duty, currentUser)).join('');
+                    const modalId = 'duty-details-modal';
+
+                    const existingModal = document.getElementById(modalId);
+                    if (existingModal) existingModal.remove();
+
+                    document.body.insertAdjacentHTML('beforeend', createModal(`Duties for ${date}`, content, modalId));
+                    showModal(modalId);
+
+                    const modalElement = document.getElementById(modalId);
+                    modalElement.addEventListener('click', async (e) => {
+                        const target = e.target;
+                        if (target.tagName === 'BUTTON' && target.dataset.dutyId) {
+                            const dutyId = target.dataset.dutyId;
+                            const action = target.dataset.action;
+
+                            const errorContainer = modalElement.querySelector('.error-container');
+                            if(errorContainer) errorContainer.remove();
+
+                            try {
+                                target.disabled = true;
+                                target.textContent = 'Processing...';
+
+                                if (action === 'volunteer') {
+                                    await volunteerForDuty(dutyId);
+                                } else if (action === 'withdraw') {
+                                    await withdrawFromDuty(dutyId);
+                                }
+
+                                hideModal(modalId);
+                                loadAndDisplaySchedule();
+                            } catch (error) {
+                                console.error(`Failed to ${action}:`, error);
+                                target.disabled = false;
+                                target.textContent = action.charAt(0).toUpperCase() + action.slice(1);
+
+                                const msg = createErrorMessage(`Failed to ${action}. Please try again.`);
+                                target.insertAdjacentHTML('afterend', `<div class="error-container mt-2">${msg}</div>`);
+                            }
+                        }
+                    });
+                }
+            },
+            arrowPrev() {
+                const { currentYear, currentMonth } = getState();
+                const newDate = new Date(currentYear, currentMonth - 2);
+                setState({ currentYear: newDate.getFullYear(), currentMonth: newDate.getMonth() + 1 });
+                loadAndDisplaySchedule();
+            },
+            arrowNext() {
+                const { currentYear, currentMonth } = getState();
+                const newDate = new Date(currentYear, currentMonth);
+                setState({ currentYear: newDate.getFullYear(), currentMonth: newDate.getMonth() + 1 });
+                loadAndDisplaySchedule();
+            },
+        },
+        popups: {},
+    };
+
+    Object.keys(dutiesByDate).forEach(date => {
+        options.popups[date] = {
+            html: `${dutiesByDate[date].length} duties`,
+        };
+    });
+
+    if (calendar) {
+        calendar.options = options;
+        calendar.update();
+    } else {
+        calendar = new VanillaCalendar(calendarContainer, options);
+        calendar.init();
+    }
+}
+
+/**
+ * Initializes the calendar view.
+ */
+export function initializeCalendar() {
+    const today = new Date();
+    setState({
+        currentYear: today.getFullYear(),
+        currentMonth: today.getMonth() + 1,
+    });
+
+    if (!document.getElementById('calendar')) {
+        calendarContainer.innerHTML = '<div id="calendar"></div>';
+    }
+
+    loadAndDisplaySchedule();
+}

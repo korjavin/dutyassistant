@@ -11,11 +11,19 @@ const state = {
 
 // Functions to update and access the state will go here.
 export function getState() {
-    return state;
+    return { ...state };
+}
+
+export function setState(newState) {
+    Object.assign(state, newState);
 }
 
 export function setSchedule(year, month, data) {
-    state.schedule[`${year}-${month}`] = data;
+    const key = `${year}-${month}`;
+    if (!state.schedule) {
+        state.schedule = {};
+    }
+    state.schedule[key] = data;
 }
 
 // Add other state management functions as needed.

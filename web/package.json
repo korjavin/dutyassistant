@@ -8,5 +8,8 @@
   },
   "devDependencies": {
     "tailwindcss": "^3.4.1"
+  },
+  "dependencies": {
+    "vanilla-calendar-pro": "^3.0.5"
   }
 }
