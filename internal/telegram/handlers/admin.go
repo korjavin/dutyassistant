@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -25,14 +26,19 @@ const (
 // Admin is determined by matching the Telegram user ID against the ADMIN_ID env var.
 func (h *Handlers) checkAdmin(telegramUserID int64) (bool, error) {
 	if h.AdminID == 0 {
+		log.Printf("[checkAdmin] AdminID not configured (0), falling back to database flag for user %d", telegramUserID)
 		// Fallback to database flag if AdminID is not configured
 		user, err := h.Store.GetUserByTelegramID(context.Background(), telegramUserID)
 		if err != nil || user == nil {
+			log.Printf("[checkAdmin] User %d not found in database or error: %v", telegramUserID, err)
 			return false, err
 		}
+		log.Printf("[checkAdmin] User %d IsAdmin flag from database: %v", telegramUserID, user.IsAdmin)
 		return user.IsAdmin, nil
 	}
-	return telegramUserID == h.AdminID, nil
+	isAdmin := telegramUserID == h.AdminID
+	log.Printf("[checkAdmin] Configured AdminID=%d, User=%d, isAdmin=%v", h.AdminID, telegramUserID, isAdmin)
+	return isAdmin, nil
 }
 
 // HandleAssign handles the /assign command for admins. Format: /assign <username> <date>

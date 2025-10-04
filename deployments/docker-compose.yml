@@ -42,6 +42,8 @@ services:
       - GIN_MODE=release
       # The Telegram Bot API token. This is a secret and must be provided.
       - TELEGRAM_APITOKEN=${TELEGRAM_APITOKEN}
+      # The Telegram user ID of the admin (from Portainer or .env)
+      - ADMIN_ID=${ADMIN_ID}
       # Add other environment variables as needed (e.g., database path, LLM keys).
       - DATABASE_PATH=/app/data/roster.db
 
