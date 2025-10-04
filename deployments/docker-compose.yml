@@ -41,6 +41,13 @@ services:
       # Add other environment variables as needed (e.g., database path, LLM keys).
       - DATABASE_PATH=/app/data/roster.db
 
+    # Traefik reverse proxy labels for automatic SSL and routing
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.roster.rule=Host(`${DNS_NAME}`)"
+      - "traefik.http.routers.roster.entrypoints=websecure"
+      - "traefik.http.routers.roster.tls.certresolver=myresolver"
+
 # Defines the named volumes used by the services.
 volumes:
   # The 'roster-data' volume is managed by Docker and provides a persistent
