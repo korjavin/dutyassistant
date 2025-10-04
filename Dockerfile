@@ -46,7 +46,9 @@ WORKDIR /app
 COPY --from=builder /roster-bot /roster-bot
 
 # Copy the built frontend assets from the builder stage.
-# The application will need to be configured to serve files from this directory.
+# Copy the entire web directory structure (index.html, js/, dist/)
+COPY --from=builder /app/web/index.html ./web/index.html
+COPY --from=builder /app/web/js ./web/js
 COPY --from=builder /app/web/dist ./web/dist
 
 # The application will store its persistent data (e.g., SQLite database) in /app/data.

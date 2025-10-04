@@ -19,10 +19,11 @@ func NewServer(s store.Store, botToken string) *gin.Engine {
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
 
-	// Serve static files from web/dist directory
-	router.Static("/assets", "./web/dist/assets")
-	router.StaticFile("/", "./web/dist/index.html")
-	router.StaticFile("/index.html", "./web/dist/index.html")
+	// Serve static files from web directory
+	router.Static("/dist", "./web/dist")
+	router.Static("/js", "./web/js")
+	router.StaticFile("/", "./web/index.html")
+	router.StaticFile("/index.html", "./web/index.html")
 
 	// Create an instance of the authentication middleware.
 	authMiddleware := middleware.Authenticate(s, botToken)
