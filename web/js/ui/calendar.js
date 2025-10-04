@@ -155,9 +155,19 @@ function renderCalendar(scheduleData = {}, prognosisData = {}) {
         popups: {},
     };
 
+    // Add HTML content directly to calendar days showing assignee names with colors
     Object.keys(dutiesByDate).forEach(date => {
+        const duties = dutiesByDate[date];
+        const html = duties.map(duty => {
+            const bgColor = duty.isPrognosis ? 'bg-gray-200' :
+                           duty.assignment_type === 'voluntary' ? 'bg-green-100' :
+                           duty.assignment_type === 'admin' ? 'bg-blue-100' : 'bg-gray-100';
+            const textColor = duty.isPrognosis ? 'text-gray-500' : duty.typeClass;
+            return `<div class="${bgColor} ${textColor} px-1 py-0.5 rounded text-xs mt-1">${duty.displayName}</div>`;
+        }).join('');
+
         options.popups[date] = {
-            html: `${dutiesByDate[date].length} duties`,
+            html: html,
         };
     });
 
