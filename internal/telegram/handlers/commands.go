@@ -48,17 +48,21 @@ func (h *Handlers) HandleStart(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 	if user == nil {
 		// User doesn't exist, create them
 		log.Printf("[HandleStart] User %d not found, creating new user", m.From.ID)
+
+		// Check if this user is the admin
+		isAdmin := h.AdminID != 0 && m.From.ID == h.AdminID
+
 		newUser := &store.User{
 			TelegramUserID: m.From.ID,
 			FirstName:      m.From.FirstName,
-			IsActive:       true,
-			IsAdmin:        false,
+			IsActive:       !isAdmin, // Admin should be inactive by default
+			IsAdmin:        isAdmin,
 		}
 		if createErr := h.Store.CreateUser(context.Background(), newUser); createErr != nil {
 			log.Printf("[HandleStart] FAILED to create user %d: %v", m.From.ID, createErr)
 			return tgbotapi.MessageConfig{}, fmt.Errorf("failed to create user: %w", createErr)
 		}
-		log.Printf("[HandleStart] Successfully created user %d with ID %d", m.From.ID, newUser.ID)
+		log.Printf("[HandleStart] Successfully created user %d with ID %d (IsAdmin=%v, IsActive=%v)", m.From.ID, newUser.ID, newUser.IsAdmin, newUser.IsActive)
 	} else if user.FirstName != m.From.FirstName {
 		// User exists, update their name if it's different
 		log.Printf("[HandleStart] Updating user %d name from '%s' to '%s'", m.From.ID, user.FirstName, m.From.FirstName)

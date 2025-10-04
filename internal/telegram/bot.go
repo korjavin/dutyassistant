@@ -101,7 +101,7 @@ func (b *Bot) handleCommand(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 		return b.handlers.HandleModify(m)
 	case "users":
 		return b.handlers.HandleUsers(m)
-	case "toggle_active":
+	case "toggle_active", "toggleactive":
 		return b.handlers.HandleToggleActive(m)
 	default:
 		msg := tgbotapi.NewMessage(m.Chat.ID, "Unknown command. Use /help for a list of commands.")
