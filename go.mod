@@ -1,3 +1,3 @@
-module github.com/your-username/roster-bot
+module github.com/korjavin/dutyassistant
 
 go 1.22
