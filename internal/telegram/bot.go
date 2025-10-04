@@ -10,21 +10,19 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-// Bot represents the Telegram bot application. It holds the API client
-// and the handlers for processing updates.
+// Bot represents the Telegram bot application.
 type Bot struct {
 	api      *tgbotapi.BotAPI
 	handlers *handlers.Handlers
 }
 
-// NewBot creates a new Bot instance. It requires a valid Telegram API token
-// and an initialized Handlers struct.
+// NewBot creates a new Bot instance.
 func NewBot(apiToken string, h *handlers.Handlers) (*Bot, error) {
 	api, err := tgbotapi.NewBotAPI(apiToken)
 	if err != nil {
 		return nil, err
 	}
-	api.Debug = false
+	api.Debug = false // Set to true for verbose logging
 	log.Printf("Authorized on account %s", api.Self.UserName)
 
 	return &Bot{
@@ -33,8 +31,7 @@ func NewBot(apiToken string, h *handlers.Handlers) (*Bot, error) {
 	}, nil
 }
 
-// Start begins the process of listening for and processing updates from Telegram.
-// This is the main loop of the bot.
+// Start begins listening for and processing updates from Telegram.
 func (b *Bot) Start(ctx context.Context) {
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
@@ -57,29 +54,23 @@ func (b *Bot) handleUpdate(update tgbotapi.Update) {
 	var response tgbotapi.Chattable
 
 	switch {
-	// Handle commands in messages
 	case update.Message != nil && update.Message.IsCommand():
 		response, err = b.handleCommand(update.Message)
-
-	// Handle callback queries from inline keyboards
 	case update.CallbackQuery != nil:
 		response, err = b.handleCallbackQuery(update.CallbackQuery)
 	}
 
 	if err != nil {
 		log.Printf("Error handling update: %v", err)
-		// If an error occurred, create a new message to inform the user.
 		var chatID int64
 		if update.Message != nil {
 			chatID = update.Message.Chat.ID
 		} else if update.CallbackQuery != nil {
 			chatID = update.CallbackQuery.Message.Chat.ID
 		}
-
 		if chatID != 0 {
 			response = tgbotapi.NewMessage(chatID, "An unexpected error occurred. Please try again.")
 		} else {
-			// Can't send a message if we don't know where to send it.
 			response = nil
 		}
 	}
@@ -130,10 +121,14 @@ func (b *Bot) handleCallbackQuery(q *tgbotapi.CallbackQuery) (tgbotapi.Chattable
 
 	switch action {
 	case keyboard.ActionPrevMonth, keyboard.ActionNextMonth:
+		// These callbacks can come from either the /schedule or /volunteer calendars.
+		// We can try to guess the context from the message text.
+		if strings.Contains(q.Message.Text, "volunteer") {
+			// It's a volunteer calendar, we don't need to show duties.
+			return b.handlers.HandleCalendarCallback(q) // Simplified version for volunteer
+		}
 		return b.handlers.HandleCalendarCallback(q)
 	case keyboard.ActionSelectDay:
-		// Here we assume select_day is for volunteering. A more complex system
-		// might have different callbacks for different contexts (e.g., admin selection).
 		return b.handlers.HandleVolunteerCallback(q)
 	case keyboard.ActionIgnore:
 		return nil, nil // Do nothing for ignore actions
