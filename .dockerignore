@@ -1,0 +1,15 @@
+# Exclude development files
+.git
+.github
+*.md
+.gitignore
+
+# Exclude build artifacts
+roster-bot
+
+# Exclude IDE files
+.idea
+.vscode
+.claude
+
+# Don't exclude anything else - we need cmd, internal, vendor, web, etc.
