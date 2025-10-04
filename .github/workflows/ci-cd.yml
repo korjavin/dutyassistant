@@ -3,10 +3,10 @@
 name: CI/CD Pipeline
 
 # --- Trigger Conditions ---
-# The workflow runs automatically on every push to the 'main' branch.
+# The workflow runs automatically on every push to the 'master' branch.
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "master" ]
   # Allows the workflow to be run manually from the Actions tab in GitHub.
   workflow_dispatch:
 
