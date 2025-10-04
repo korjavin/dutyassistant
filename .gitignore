@@ -1,0 +1,32 @@
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+roster-bot
+
+# Dependency directories
+vendor/
+node_modules/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*~
+
+# Environment configuration
+.env
+.env.*
+!/.env.example
+
+# Log files
+*.log
+
+# Frontend build artifacts
+/web/dist/
+
+# Test coverage
+coverage.out
+coverage.html
