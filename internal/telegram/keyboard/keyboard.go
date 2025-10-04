@@ -2,6 +2,7 @@ package keyboard
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/korjavin/dutyassistant/internal/store"
@@ -16,11 +17,19 @@ const (
 )
 
 // Calendar creates an inline keyboard markup for a given month and year.
-// It marks days with duties with emoji indicators and first 3 letters of name.
+// It marks days with duties with emoji indicators and builds a user legend.
 func Calendar(t time.Time, duties []*store.Duty) tgbotapi.InlineKeyboardMarkup {
 	dutyMap := make(map[int]*store.Duty)
+	userAssignments := make(map[int64]map[store.AssignmentType]bool) // Track user->assignment types
+
 	for _, duty := range duties {
 		dutyMap[duty.DutyDate.Day()] = duty
+
+		// Track which assignment types each user has
+		if userAssignments[duty.UserID] == nil {
+			userAssignments[duty.UserID] = make(map[store.AssignmentType]bool)
+		}
+		userAssignments[duty.UserID][duty.AssignmentType] = true
 	}
 
 	year, month, _ := t.Date()
@@ -109,11 +118,48 @@ func Calendar(t time.Time, duties []*store.Duty) tgbotapi.InlineKeyboardMarkup {
 		row = make([]tgbotapi.InlineKeyboardButton, 7)
 	}
 
-	// Add legend footer
-	legend := []tgbotapi.InlineKeyboardButton{
-		tgbotapi.NewInlineKeyboardButtonData("🟢=Volunteer 🔵=Admin ⚪=Auto", ActionIgnore),
+	// Build user legend showing who has duties and with which assignment types
+	var userLegend []string
+	usersSeen := make(map[int64]bool)
+
+	for _, duty := range duties {
+		if usersSeen[duty.UserID] {
+			continue
+		}
+		usersSeen[duty.UserID] = true
+
+		// Collect all emojis for this user
+		var emojis []string
+		if userAssignments[duty.UserID][store.AssignmentTypeVoluntary] {
+			emojis = append(emojis, "🟢")
+		}
+		if userAssignments[duty.UserID][store.AssignmentTypeAdmin] {
+			emojis = append(emojis, "🔵")
+		}
+		if userAssignments[duty.UserID][store.AssignmentTypeRoundRobin] {
+			emojis = append(emojis, "⚪")
+		}
+
+		// Build legend entry: "🟢🔵Name" or "🟢Name"
+		legendEntry := fmt.Sprintf("%s%s", strings.Join(emojis, ""), duty.User.FirstName)
+		userLegend = append(userLegend, legendEntry)
 	}
-	keyboard = append(keyboard, legend)
+
+	// Add legend type explanation
+	legendType := tgbotapi.NewInlineKeyboardButtonData("🟢=Volunteer 🔵=Admin ⚪=Auto", ActionIgnore)
+	keyboard = append(keyboard, []tgbotapi.InlineKeyboardButton{legendType})
+
+	// Add user legend rows (2 users per row to fit)
+	if len(userLegend) > 0 {
+		for i := 0; i < len(userLegend); i += 2 {
+			var row []tgbotapi.InlineKeyboardButton
+			row = append(row, tgbotapi.NewInlineKeyboardButtonData(userLegend[i], ActionIgnore))
+			if i+1 < len(userLegend) {
+				row = append(row, tgbotapi.NewInlineKeyboardButtonData(userLegend[i+1], ActionIgnore))
+			}
+			keyboard = append(keyboard, row)
+		}
+	}
 
 	return tgbotapi.NewInlineKeyboardMarkup(keyboard...)
 }
