@@ -12,23 +12,20 @@ WORKDIR /app
 # This step assumes package.json and package-lock.json will exist in the /web directory.
 COPY web/package.json ./web/
 COPY web/package-lock.json* ./web/
-RUN cd web && npm install && cd ..
+RUN cd web && npm install
 
 # Copy the rest of the frontend source code
 COPY web/ /app/web/
 
 # Build the frontend assets. This script should be defined in package.json.
-RUN cd web && npm run build && cd ..
+RUN cd web && npm run build
 
 # --- Backend Build ---
 # Copy Go module files first for better caching
 COPY go.mod go.sum ./
 
 # Copy all source code and vendor dependencies in one layer
-RUN pwd && ls -la
 COPY . .
-RUN pwd && ls -la
-
 
 # Compile the Go application to a static, CGo-free binary using vendored dependencies.
 # The -w and -s flags strip debugging information, reducing the binary size.
