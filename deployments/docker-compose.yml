@@ -23,6 +23,10 @@ services:
     expose:
       - "8080"
 
+    # Connect to Traefik network
+    networks:
+      - traefik
+
     # This section defines how persistent data is handled.
     volumes:
       # Mounts the named volume 'roster-data' to the '/app/data' directory
@@ -56,3 +60,8 @@ volumes:
   roster-data:
     # An empty driver configuration uses the default local driver.
     driver: local
+
+# Network configuration - using external Traefik network
+networks:
+  traefik:
+    external: true
