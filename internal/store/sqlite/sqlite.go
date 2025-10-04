@@ -117,6 +117,21 @@ func (s *SQLiteStore) ListActiveUsers(ctx context.Context) ([]*store.User, error
 	return users, nil
 }
 
+// FindUserByName retrieves a user by their first name.
+func (s *SQLiteStore) FindUserByName(ctx context.Context, name string) (*store.User, error) {
+	query := `SELECT id, telegram_user_id, first_name, is_admin, is_active FROM users WHERE first_name = ?`
+	row := s.db.QueryRowContext(ctx, query, name)
+	user := &store.User{}
+	err := row.Scan(&user.ID, &user.TelegramUserID, &user.FirstName, &user.IsAdmin, &user.IsActive)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil // Not found is not an error
+		}
+		return nil, fmt.Errorf("could not query user by name: %w", err)
+	}
+	return user, nil
+}
+
 // UpdateUser updates a user's details.
 func (s *SQLiteStore) UpdateUser(ctx context.Context, user *store.User) error {
 	query := `UPDATE users SET first_name = ?, is_admin = ?, is_active = ? WHERE id = ?`
@@ -130,7 +145,7 @@ func (s *SQLiteStore) UpdateUser(ctx context.Context, user *store.User) error {
 // CreateDuty creates a new duty assignment.
 func (s *SQLiteStore) CreateDuty(ctx context.Context, duty *store.Duty) error {
 	query := `INSERT INTO duties (user_id, duty_date, assignment_type, created_at) VALUES (?, ?, ?, ?)`
-	res, err := s.db.ExecContext(ctx, query, duty.UserID, duty.DutyDate.Format("2006-01-02"), duty.AssignmentType, duty.CreatedAt.UTC().Format(time.RFC3339))
+	res, err := s.db.ExecContext(ctx, query, duty.UserID, duty.DutyDate.Format("2006-01-02"), string(duty.AssignmentType), duty.CreatedAt.UTC().Format(time.RFC3339))
 	if err != nil {
 		return fmt.Errorf("could not insert duty: %w", err)
 	}
@@ -153,10 +168,10 @@ func (s *SQLiteStore) GetDutyByDate(ctx context.Context, date time.Time) (*store
 	`
 	row := s.db.QueryRowContext(ctx, query, date.Format("2006-01-02"))
 	duty := &store.Duty{User: &store.User{}}
-	var dutyDateStr, createdAtStr string
+	var dutyDateStr, assignmentTypeStr, createdAtStr string
 
 	err := row.Scan(
-		&duty.ID, &duty.UserID, &dutyDateStr, &duty.AssignmentType, &createdAtStr,
+		&duty.ID, &duty.UserID, &dutyDateStr, &assignmentTypeStr, &createdAtStr,
 		&duty.User.ID, &duty.User.TelegramUserID, &duty.User.FirstName, &duty.User.IsAdmin, &duty.User.IsActive,
 	)
 	if err != nil {
@@ -174,6 +189,7 @@ func (s *SQLiteStore) GetDutyByDate(ctx context.Context, date time.Time) (*store
 	if err != nil {
 		return nil, fmt.Errorf("could not parse created at: %w", err)
 	}
+	duty.AssignmentType = store.AssignmentType(assignmentTypeStr)
 
 	return duty, nil
 }
@@ -181,7 +197,7 @@ func (s *SQLiteStore) GetDutyByDate(ctx context.Context, date time.Time) (*store
 // UpdateDuty updates an existing duty.
 func (s *SQLiteStore) UpdateDuty(ctx context.Context, duty *store.Duty) error {
 	query := `UPDATE duties SET user_id = ?, assignment_type = ? WHERE duty_date = ?`
-	_, err := s.db.ExecContext(ctx, query, duty.UserID, duty.AssignmentType, duty.DutyDate.Format("2006-01-02"))
+	_, err := s.db.ExecContext(ctx, query, duty.UserID, string(duty.AssignmentType), duty.DutyDate.Format("2006-01-02"))
 	if err != nil {
 		return fmt.Errorf("could not update duty: %w", err)
 	}
@@ -220,9 +236,9 @@ func (s *SQLiteStore) GetDutiesByMonth(ctx context.Context, year int, month time
 	var duties []*store.Duty
 	for rows.Next() {
 		duty := &store.Duty{User: &store.User{}}
-		var dutyDateStr, createdAtStr string
+		var dutyDateStr, assignmentTypeStr, createdAtStr string
 		err := rows.Scan(
-			&duty.ID, &duty.UserID, &dutyDateStr, &duty.AssignmentType, &createdAtStr,
+			&duty.ID, &duty.UserID, &dutyDateStr, &assignmentTypeStr, &createdAtStr,
 			&duty.User.ID, &duty.User.TelegramUserID, &duty.User.FirstName, &duty.User.IsAdmin, &duty.User.IsActive,
 		)
 		if err != nil {
@@ -236,6 +252,7 @@ func (s *SQLiteStore) GetDutiesByMonth(ctx context.Context, year int, month time
 		if err != nil {
 			return nil, fmt.Errorf("could not parse created at from month query: %w", err)
 		}
+		duty.AssignmentType = store.AssignmentType(assignmentTypeStr)
 		duties = append(duties, duty)
 	}
 	return duties, nil

@@ -6,6 +6,18 @@ import (
 	"time"
 )
 
+// AssignmentType defines the type of duty assignment.
+type AssignmentType string
+
+const (
+	// AssignmentTypeRoundRobin is for duties assigned automatically by fair round-robin.
+	AssignmentTypeRoundRobin AssignmentType = "round_robin"
+	// AssignmentTypeVoluntary is for duties taken voluntarily by a user.
+	AssignmentTypeVoluntary AssignmentType = "voluntary"
+	// AssignmentTypeAdmin is for duties assigned by an administrator.
+	AssignmentTypeAdmin AssignmentType = "admin"
+)
+
 // User represents a user in the system.
 type User struct {
 	ID             int64
@@ -20,7 +32,7 @@ type Duty struct {
 	ID             int64
 	UserID         int64
 	DutyDate       time.Time
-	AssignmentType string
+	AssignmentType AssignmentType
 	CreatedAt      time.Time
 	User           *User // Used to join user data
 }
@@ -39,6 +51,7 @@ type Store interface {
 	ListActiveUsers(ctx context.Context) ([]*User, error)
 	CreateUser(ctx context.Context, user *User) error
 	UpdateUser(ctx context.Context, user *User) error
+	FindUserByName(ctx context.Context, name string) (*User, error)
 
 	// Duty methods
 	CreateDuty(ctx context.Context, duty *Duty) error
