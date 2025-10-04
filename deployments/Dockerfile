@@ -21,12 +21,11 @@ COPY web/ /app/web/
 RUN cd web && npm run build
 
 # --- Backend Build ---
-# Copy Go module files, vendor directory, and source code.
-# This is done after the frontend build to leverage Docker's layer caching.
+# Copy Go module files first for better caching
 COPY go.mod go.sum ./
-COPY vendor ./vendor
-COPY cmd ./cmd
-COPY internal ./internal
+
+# Copy all source code and vendor dependencies in one layer
+COPY . .
 
 # Compile the Go application to a static, CGo-free binary using vendored dependencies.
 # The -w and -s flags strip debugging information, reducing the binary size.
