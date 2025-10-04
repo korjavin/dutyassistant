@@ -7,7 +7,7 @@
 roster-bot
 
 # Dependency directories
-vendor/
+# vendor/ is now committed to the repository for reproducible builds
 node_modules/
 
 # IDE and editor files

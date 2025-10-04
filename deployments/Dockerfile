@@ -1,6 +1,6 @@
 # Stage 1: Build environment
 # Use a specific version of golang-alpine for reproducibility
-FROM golang:1.22-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 # Install frontend build dependencies (Node.js, npm for Tailwind CSS)
 RUN apk add --no-cache nodejs npm
@@ -21,19 +21,20 @@ COPY web/ /app/web/
 RUN cd web && npm run build
 
 # --- Backend Build ---
-# Copy Go module files and download dependencies.
+# Copy Go module files and vendor directory.
 # This is done after the frontend build to ensure that backend dependency
-# downloads are only re-run if go.mod or go.sum change.
+# changes only invalidate this layer if go.mod, go.sum, or vendor change.
 COPY go.mod go.sum ./
-RUN go mod download
+COPY vendor/ ./vendor/
 
 # Copy the rest of the application's source code.
 # A .dockerignore file should be used to exclude unnecessary files and directories.
 COPY . .
 
-# Compile the Go application to a static, CGo-free binary.
+# Compile the Go application to a static, CGo-free binary using vendored dependencies.
 # The -w and -s flags strip debugging information, reducing the binary size.
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /roster-bot ./cmd/roster-bot/
+# The -mod=vendor flag ensures we use vendored dependencies.
+RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -ldflags="-w -s" -o /roster-bot ./cmd/roster-bot/
 
 # Stage 2: Final production image
 # Use the 'scratch' image, which is completely empty, for a minimal attack surface.
