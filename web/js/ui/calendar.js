@@ -164,7 +164,8 @@ function renderCalendar(scheduleData = {}, prognosisData = {}) {
                            duty.assignment_type === 'voluntary' ? 'bg-green-100' :
                            duty.assignment_type === 'admin' ? 'bg-blue-100' : 'bg-gray-100';
             const textColor = duty.isPrognosis ? 'text-gray-500' : duty.typeClass;
-            return `<div class="${bgColor} ${textColor} px-1 py-0.5 rounded text-xs mt-1">${duty.displayName}</div>`;
+            const shortName = duty.displayName.substring(0, 3);
+            return `<div class="${bgColor} ${textColor} px-1 rounded text-xs">${shortName}</div>`;
         }).join('');
 
         options.popups[date] = {
