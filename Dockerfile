@@ -46,10 +46,11 @@ WORKDIR /app
 COPY --from=builder /roster-bot /roster-bot
 
 # Copy the built frontend assets from the builder stage.
-# Copy the entire web directory structure (index.html, js/, dist/)
+# Copy the entire web directory structure (index.html, js/, dist/, vendor/)
 COPY --from=builder /app/web/index.html ./web/index.html
 COPY --from=builder /app/web/js ./web/js
 COPY --from=builder /app/web/dist ./web/dist
+COPY --from=builder /app/web/vendor ./web/vendor
 
 # The application will store its persistent data (e.g., SQLite database) in /app/data.
 # This path will be targeted by a volume mount defined in docker-compose.yml.

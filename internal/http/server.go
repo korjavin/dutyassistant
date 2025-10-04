@@ -22,6 +22,7 @@ func NewServer(s store.Store, botToken string) *gin.Engine {
 	// Serve static files from web directory
 	router.Static("/dist", "./web/dist")
 	router.Static("/js", "./web/js")
+	router.Static("/vendor", "./web/vendor")
 	router.StaticFile("/", "./web/index.html")
 	router.StaticFile("/index.html", "./web/index.html")
 
