@@ -17,11 +17,15 @@ const (
 )
 
 // Calendar creates an inline keyboard markup for a given month and year.
-// It marks days with duties with emoji indicators and builds a user legend.
+// Assigns each user a number and shows number+emoji on calendar days.
 func Calendar(t time.Time, duties []*store.Duty) tgbotapi.InlineKeyboardMarkup {
 	dutyMap := make(map[int]*store.Duty)
 	userAssignments := make(map[int64]map[store.AssignmentType]bool) // Track user->assignment types
+	userNumbers := make(map[int64]int)                               // Assign each user a number
+	userList := []*store.User{}                                      // Preserve order
 
+	// Assign numbers to users in order they appear
+	userCounter := 1
 	for _, duty := range duties {
 		dutyMap[duty.DutyDate.Day()] = duty
 
@@ -30,7 +34,17 @@ func Calendar(t time.Time, duties []*store.Duty) tgbotapi.InlineKeyboardMarkup {
 			userAssignments[duty.UserID] = make(map[store.AssignmentType]bool)
 		}
 		userAssignments[duty.UserID][duty.AssignmentType] = true
+
+		// Assign user number if not already assigned
+		if userNumbers[duty.UserID] == 0 {
+			userNumbers[duty.UserID] = userCounter
+			userList = append(userList, duty.User)
+			userCounter++
+		}
 	}
+
+	// Number circles: ① ② ③ ④ ⑤ ⑥ ⑦ ⑧ ⑨
+	numberCircles := []string{"①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨", "⑩"}
 
 	year, month, _ := t.Date()
 
@@ -82,21 +96,19 @@ func Calendar(t time.Time, duties []*store.Duty) tgbotapi.InlineKeyboardMarkup {
 				isToday := date.Year() == today.Year() && date.Month() == today.Month() && date.Day() == today.Day()
 
 				if duty, ok := dutyMap[day]; ok {
-					// Show day number and emoji only
-					emoji := ""
-					switch duty.AssignmentType {
-					case store.AssignmentTypeVoluntary:
-						emoji = "🟢"
-					case store.AssignmentTypeAdmin:
-						emoji = "🔵"
-					case store.AssignmentTypeRoundRobin:
-						emoji = "⚪"
+					// Show day number and user number circle
+					userNum := userNumbers[duty.UserID]
+					var numberCircle string
+					if userNum > 0 && userNum <= len(numberCircles) {
+						numberCircle = numberCircles[userNum-1]
+					} else {
+						numberCircle = fmt.Sprintf("%d", userNum)
 					}
 
 					if isToday {
-						dayText = fmt.Sprintf("·%d%s", day, emoji)
+						dayText = fmt.Sprintf("·%d%s", day, numberCircle)
 					} else {
-						dayText = fmt.Sprintf("%d%s", day, emoji)
+						dayText = fmt.Sprintf("%d%s", day, numberCircle)
 					}
 				} else {
 					// No duty - show day number, mark today with dot prefix
@@ -118,47 +130,36 @@ func Calendar(t time.Time, duties []*store.Duty) tgbotapi.InlineKeyboardMarkup {
 		row = make([]tgbotapi.InlineKeyboardButton, 7)
 	}
 
-	// Build user legend showing who has duties and with which assignment types
-	var userLegend []string
-	usersSeen := make(map[int64]bool)
-
-	for _, duty := range duties {
-		if usersSeen[duty.UserID] {
-			continue
-		}
-		usersSeen[duty.UserID] = true
-
-		// Collect all emojis for this user
-		var emojis []string
-		if userAssignments[duty.UserID][store.AssignmentTypeVoluntary] {
-			emojis = append(emojis, "🟢")
-		}
-		if userAssignments[duty.UserID][store.AssignmentTypeAdmin] {
-			emojis = append(emojis, "🔵")
-		}
-		if userAssignments[duty.UserID][store.AssignmentTypeRoundRobin] {
-			emojis = append(emojis, "⚪")
-		}
-
-		// Build legend entry: "🟢🔵Name" or "🟢Name"
-		legendEntry := fmt.Sprintf("%s%s", strings.Join(emojis, ""), duty.User.FirstName)
-		userLegend = append(userLegend, legendEntry)
-	}
-
 	// Add legend type explanation
 	legendType := tgbotapi.NewInlineKeyboardButtonData("🟢=Volunteer 🔵=Admin ⚪=Auto", ActionIgnore)
 	keyboard = append(keyboard, []tgbotapi.InlineKeyboardButton{legendType})
 
-	// Add user legend rows (2 users per row to fit)
-	if len(userLegend) > 0 {
-		for i := 0; i < len(userLegend); i += 2 {
-			var row []tgbotapi.InlineKeyboardButton
-			row = append(row, tgbotapi.NewInlineKeyboardButtonData(userLegend[i], ActionIgnore))
-			if i+1 < len(userLegend) {
-				row = append(row, tgbotapi.NewInlineKeyboardButtonData(userLegend[i+1], ActionIgnore))
-			}
-			keyboard = append(keyboard, row)
+	// Build user legend showing number -> name + emojis
+	for idx, user := range userList {
+		userNum := idx + 1
+		var numberCircle string
+		if userNum <= len(numberCircles) {
+			numberCircle = numberCircles[userNum-1]
+		} else {
+			numberCircle = fmt.Sprintf("%d", userNum)
 		}
+
+		// Collect all emojis for this user
+		var emojis []string
+		if userAssignments[user.ID][store.AssignmentTypeVoluntary] {
+			emojis = append(emojis, "🟢")
+		}
+		if userAssignments[user.ID][store.AssignmentTypeAdmin] {
+			emojis = append(emojis, "🔵")
+		}
+		if userAssignments[user.ID][store.AssignmentTypeRoundRobin] {
+			emojis = append(emojis, "⚪")
+		}
+
+		// Build legend entry: "① 🟢Name" or "② 🔵🟢Name"
+		legendEntry := fmt.Sprintf("%s %s%s", numberCircle, strings.Join(emojis, ""), user.FirstName)
+		legendButton := tgbotapi.NewInlineKeyboardButtonData(legendEntry, ActionIgnore)
+		keyboard = append(keyboard, []tgbotapi.InlineKeyboardButton{legendButton})
 	}
 
 	return tgbotapi.NewInlineKeyboardMarkup(keyboard...)
