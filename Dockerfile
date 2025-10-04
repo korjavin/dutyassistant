@@ -33,8 +33,11 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -ldflags="-w -s" -o /roster-bot ./cmd/roster-bot/
 
 # Stage 2: Final production image
-# Use the 'scratch' image, which is completely empty, for a minimal attack surface.
-FROM scratch
+# Use alpine instead of scratch to include CA certificates for HTTPS
+FROM alpine:latest
+
+# Install CA certificates for TLS/HTTPS connections
+RUN apk --no-cache add ca-certificates
 
 # Set the working directory for the application.
 WORKDIR /app
