@@ -9,19 +9,22 @@
     <!-- Vanilla Calendar Pro CSS -->
     <link href="/vendor/vanilla-calendar/vanilla-calendar.min.css?v=BUILD_TIME" rel="stylesheet">
     <style>
-        /* Make calendar popups always visible */
-        .vanilla-calendar-day__popup {
-            display: block !important;
-            opacity: 1 !important;
-            visibility: visible !important;
-            position: relative !important;
-            transform: none !important;
-            margin-top: 0;
-            padding: 0;
+        /* Increase day cell height and position names below day number */
+        .vanilla-calendar-day {
+            height: 60px !important;
+            position: relative;
         }
-        .vanilla-calendar-day__popup > div {
-            margin: 0 !important;
-            padding: 1px 2px !important;
+        .vanilla-calendar-day__btn {
+            height: 100% !important;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding-top: 4px !important;
+        }
+        /* Hide popups completely - we'll add names inline instead */
+        .vanilla-calendar-day__popup {
+            display: none !important;
         }
     </style>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>

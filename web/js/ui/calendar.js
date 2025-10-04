@@ -151,27 +151,23 @@ function renderCalendar(scheduleData = {}, prognosisData = {}) {
                 setState({ currentYear: newDate.getFullYear(), currentMonth: newDate.getMonth() + 1 });
                 loadAndDisplaySchedule();
             },
+            getDays(day, date, HTMLElement, HTMLButtonElement, self) {
+                const dateStr = `${self.selectedYear}-${String(self.selectedMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                if (dutiesByDate[dateStr]) {
+                    const duties = dutiesByDate[dateStr];
+                    const namesHTML = duties.map(duty => {
+                        const bgColor = duty.isPrognosis ? 'bg-gray-200' :
+                                       duty.assignment_type === 'voluntary' ? 'bg-green-100' :
+                                       duty.assignment_type === 'admin' ? 'bg-blue-100' : 'bg-gray-100';
+                        const textColor = duty.isPrognosis ? 'text-gray-500' : 'text-gray-800';
+                        const shortName = duty.displayName.substring(0, 3);
+                        return `<span class="${bgColor} ${textColor} px-1 rounded text-[10px]">${shortName}</span>`;
+                    }).join(' ');
+                    HTMLButtonElement.innerHTML = `<span>${day}</span><div style="font-size:10px;margin-top:2px;">${namesHTML}</div>`;
+                }
+            },
         },
-        popups: {},
     };
-
-    // Add HTML content directly to calendar days showing assignee names with colors
-    // Using popups with modifier to make them always visible
-    Object.keys(dutiesByDate).forEach(date => {
-        const duties = dutiesByDate[date];
-        const html = duties.map(duty => {
-            const bgColor = duty.isPrognosis ? 'bg-gray-200' :
-                           duty.assignment_type === 'voluntary' ? 'bg-green-100' :
-                           duty.assignment_type === 'admin' ? 'bg-blue-100' : 'bg-gray-100';
-            const textColor = duty.isPrognosis ? 'text-gray-500' : duty.typeClass;
-            const shortName = duty.displayName.substring(0, 3);
-            return `<div class="${bgColor} ${textColor} px-1 rounded text-xs">${shortName}</div>`;
-        }).join('');
-
-        options.popups[date] = {
-            html: html,
-        };
-    });
 
     if (calendar) {
         calendar.options = options;
