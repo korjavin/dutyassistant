@@ -21,7 +21,6 @@ The diagram below illustrates the main components of the system and their intera
 * **Containerization & Orchestration:** Docker is used to package the application and its dependencies into an isolated container, while Docker Compose manages the container's lifecycle and configuration in development and production environments.  
 * **CI/CD Pipeline:** GitHub Actions automates the processes of building, testing, and publishing the Docker image to the GitHub Container Registry (GHCR), ensuring continuous integration and delivery.
 
-\!(([https://i.imgur.com/vHq0LzY.png](https://i.imgur.com/vHq0LzY.png)))
 
 This model clearly demonstrates the key principles of the system: a single deployment point, separation of interfaces (Telegram and Web), and encapsulation of business logic within the application core.
 
@@ -476,57 +475,3 @@ LLM integration opens up possibilities for implementing more "intelligent" featu
   * The LLM processes the prompt, extracts the necessary information from the provided context, and generates a natural language response, which the bot then sends to the user.
 
 This approach allows users to interact with the system in a more natural and conversational manner, not limited to strict commands.
-
-## **Conclusion**
-
-The presented technical project describes the creation of a reliable, scalable, and maintainable duty schedule management system. The architectural decisions made at each stage, from the choice of technology stack to the design of the CI/CD pipeline, are aimed at achieving a balance between functional requirements and modern engineering practices.
-
-Key architectural principles underlying the system:
-
-* **Modular Monolith** provides ease of deployment while maintaining internal structure and the possibility of parallel development.  
-* **Dependency Isolation** through interfaces (the "Repository" pattern for data, the "Adapter" pattern for LLM) makes the system flexible and ready for future changes.  
-* **DevOps Optimization**, particularly the choice of a CGo-free SQLite driver, allows for an efficient and secure build and deployment process.  
-* **Reliability and Correctness** are ensured by persistent state storage for the rotation algorithm and strict time zone management.
-
-By following this project plan, the development team will be able to create a product that not only fully meets the initial requirements but also has a solid technical foundation for further development and support.
-
-#### **Works cited**
-
-1. Go Telegram Bot API: Getting Started, accessed October 4, 2025, [https://go-telegram-bot-api.dev/](https://go-telegram-bot-api.dev/)  
-2. Golang bindings for the Telegram Bot API \- GitHub, accessed October 4, 2025, [https://github.com/go-telegram-bot-api/telegram-bot-api](https://github.com/go-telegram-bot-api/telegram-bot-api)  
-3. Bot API Library Examples, accessed October 4, 2025, [https://core.telegram.org/bots/samples](https://core.telegram.org/bots/samples)  
-4. gin-gonic/gin: Gin is a high-performance HTTP web framework written in Go. It provides a Martini-like API but with significantly better performance—up to 40 times faster—thanks to httprouter. Gin is designed for building REST APIs, web applications, and microservices. \- GitHub, accessed October 4, 2025, [https://github.com/gin-gonic/gin](https://github.com/gin-gonic/gin)  
-5. Bot Building \- Awesome Go / Golang, accessed October 4, 2025, [https://awesome-go.com/bot-building/](https://awesome-go.com/bot-building/)  
-6. sqlite3 package \- github.com/mattn/go-sqlite3 \- Go Packages, accessed October 4, 2025, [https://pkg.go.dev/github.com/mattn/go-sqlite3](https://pkg.go.dev/github.com/mattn/go-sqlite3)  
-7. How to use SQLite · Build web application with Golang \- astaxie, accessed October 4, 2025, [https://astaxie.gitbooks.io/build-web-application-with-golang/content/en/05.3.html](https://astaxie.gitbooks.io/build-web-application-with-golang/content/en/05.3.html)  
-8. cron package \- github.com/robfig/cron/v3 \- Go Packages, accessed October 4, 2025, [https://pkg.go.dev/github.com/robfig/cron/v3](https://pkg.go.dev/github.com/robfig/cron/v3)  
-9. robfig/cron: a cron library for go \- GitHub, accessed October 4, 2025, [https://github.com/robfig/cron](https://github.com/robfig/cron)  
-10. cron package \- github.com/gdgvda/cron \- Go Packages, accessed October 4, 2025, [https://pkg.go.dev/github.com/gdgvda/cron](https://pkg.go.dev/github.com/gdgvda/cron)  
-11. Vanilla JS: Embracing the Fundamentals for Cleaner Code \- DEV Community, accessed October 4, 2025, [https://dev.to/lumineth/vanilla-js-embracing-the-fundamentals-for-cleaner-code-2o06](https://dev.to/lumineth/vanilla-js-embracing-the-fundamentals-for-cleaner-code-2o06)  
-12. Modules in Vanilla JavaScript \- Medium, accessed October 4, 2025, [https://medium.com/@SLKhadeeja/modules-in-vanilla-javascript-7d05cad5228](https://medium.com/@SLKhadeeja/modules-in-vanilla-javascript-7d05cad5228)  
-13. Tailwind CLI \- Tailwind CSS, accessed October 4, 2025, [https://tailwindcss.com/docs/installation/tailwind-cli](https://tailwindcss.com/docs/installation/tailwind-cli)  
-14. Install & Configure Tailwind CSS and Standalone CLI for your Project \- Tute.io, accessed October 4, 2025, [https://tute.io/install-configure-tailwind-css-standalone-cli](https://tute.io/install-configure-tailwind-css-standalone-cli)  
-15. Build Docker Image and Push to GHCR, Docker Hub, or AWS ECR · Actions \- GitHub, accessed October 4, 2025, [https://github.com/marketplace/actions/build-docker-image-and-push-to-ghcr-docker-hub-or-aws-ecr](https://github.com/marketplace/actions/build-docker-image-and-push-to-ghcr-docker-hub-or-aws-ecr)  
-16. Publishing Docker images \- GitHub Docs, accessed October 4, 2025, [https://docs.github.com/actions/guides/publishing-docker-images](https://docs.github.com/actions/guides/publishing-docker-images)  
-17. golang-standards/project-layout: Standard Go Project Layout \- GitHub, accessed October 4, 2025, [https://github.com/golang-standards/project-layout](https://github.com/golang-standards/project-layout)  
-18. Organizing a Go module \- The Go Programming Language, accessed October 4, 2025, [https://go.dev/doc/modules/layout](https://go.dev/doc/modules/layout)  
-19. Golang project structure. One of the aspects that makes Go (or… | by Gaurang M | Medium, accessed October 4, 2025, [https://medium.com/@gaurang.m/golang-project-structure-13b953fb6117](https://medium.com/@gaurang.m/golang-project-structure-13b953fb6117)  
-20. Round-robin scheduling \- Wikipedia, accessed October 4, 2025, [https://en.wikipedia.org/wiki/Round-robin\_scheduling](https://en.wikipedia.org/wiki/Round-robin_scheduling)  
-21. Round Robin (RR) Scheduling Algorithm \- Tutorials Point, accessed October 4, 2025, [https://www.tutorialspoint.com/operating\_system/os\_round\_robin\_scheduling\_algorithm.htm](https://www.tutorialspoint.com/operating_system/os_round_robin_scheduling_algorithm.htm)  
-22. Fair Round Robin: A Low Complexity Packet Scheduler with Proportional and Worst-Case Fairness ∗ \- CS, FSU, accessed October 4, 2025, [https://www.cs.fsu.edu/\~xyuan/paper/frr\_tr-080201.pdf](https://www.cs.fsu.edu/~xyuan/paper/frr_tr-080201.pdf)  
-23. Vanilla JS \- Writing clean, readable, modularized components with the  
-24. code architecture for vanilla javascript : r/learnjavascript \- Reddit, accessed October 4, 2025, [https://www.reddit.com/r/learnjavascript/comments/116kaks/code\_architecture\_for\_vanilla\_javascript/](https://www.reddit.com/r/learnjavascript/comments/116kaks/code_architecture_for_vanilla_javascript/)  
-25. The Vanilla Calendar Pro is a versatile JavaScript date and time picker component with TypeScript support, making it compatible with any JavaScript frameworks and libraries. It is designed to be lightweight, easy to use, and feature-rich, without relying on external dependencies. \- GitHub, accessed October 4, 2025, [https://github.com/uvarov-frontend/vanilla-calendar-pro](https://github.com/uvarov-frontend/vanilla-calendar-pro)  
-26. Vanilla Calendar Pro \- Lightweight and feature-rich calendar in pure JavaScript, accessed October 4, 2025, [https://vanilla-calendar.pro/](https://vanilla-calendar.pro/)  
-27. Calendarify is a simple and lightweight Vanilla JavaScript datepicker library. \- GitHub, accessed October 4, 2025, [https://github.com/mohamadadithya/calendarify](https://github.com/mohamadadithya/calendarify)  
-28. A vanilla JavaScript remake of bootstrap-datepicker for Bulma and other CSS frameworks \- GitHub, accessed October 4, 2025, [https://github.com/mymth/vanillajs-datepicker](https://github.com/mymth/vanillajs-datepicker)  
-29. Pushing container images to GitHub Container Registry with GitHub Actions, accessed October 4, 2025, [https://dev.to/willvelida/pushing-container-images-to-github-container-registry-with-github-actions-1m6b](https://dev.to/willvelida/pushing-container-images-to-github-container-registry-with-github-actions-1m6b)  
-30. GitHub Action to build and push Docker images with Buildx, accessed October 4, 2025, [https://github.com/docker/build-push-action](https://github.com/docker/build-push-action)  
-31. The official Go library for the OpenAI API \- GitHub, accessed October 4, 2025, [https://github.com/openai/openai-go](https://github.com/openai/openai-go)  
-32. openai package \- github.com/sashabaranov/go-openai \- Go Packages, accessed October 4, 2025, [https://pkg.go.dev/github.com/sashabaranov/go-openai](https://pkg.go.dev/github.com/sashabaranov/go-openai)  
-33. sashabaranov/go-openai: OpenAI ChatGPT, GPT-5, GPT-Image-1, Whisper API clients for Go \- GitHub, accessed October 4, 2025, [https://github.com/sashabaranov/go-openai](https://github.com/sashabaranov/go-openai)  
-34. Authorizing User | Telegram Mini Apps, accessed October 4, 2025, [https://docs.telegram-mini-apps.com/platform/authorizing-user](https://docs.telegram-mini-apps.com/platform/authorizing-user)  
-35. Telegram-Mini-Apps/init-data-golang \- GitHub, accessed October 4, 2025, [https://github.com/Telegram-Mini-Apps/init-data-golang](https://github.com/Telegram-Mini-Apps/init-data-golang)  
-36. initdata package \- github.com/telegram-mini-apps/init-data-golang \- Go Packages, accessed October 4, 2025, [https://pkg.go.dev/github.com/telegram-mini-apps/init-data-golang](https://pkg.go.dev/github.com/telegram-mini-apps/init-data-golang)  
-37. Init Data | Telegram Mini Apps, accessed October 4, 2025, [https://docs.telegram-mini-apps.com/platform/init-data](https://docs.telegram-mini-apps.com/platform/init-data)  
-38. sgzmd/go-telegram-auth \- GitHub, accessed October 4, 2025, [https://github.com/sgzmd/go-telegram-auth](https://github.com/sgzmd/go-telegram-auth)
