@@ -20,6 +20,9 @@ COPY web/ /app/web/
 # Build the frontend assets. This script should be defined in package.json.
 RUN cd web && npm run build
 
+# Add cache busting to HTML
+RUN sed -i "s/BUILD_TIME/$(date +%s)/g" /app/web/index.html
+
 # --- Backend Build ---
 # Copy Go module files first for better caching
 COPY go.mod go.sum ./
