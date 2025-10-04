@@ -37,29 +37,37 @@ const (
 
 // HandleStart creates a new user if they don't exist, or updates their name if it has changed.
 func (h *Handlers) HandleStart(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
+	log.Printf("[HandleStart] User %d (%s) triggered /start", m.From.ID, m.From.FirstName)
+
 	user, err := h.Store.GetUserByTelegramID(context.Background(), m.From.ID)
 	if err != nil {
-		// If there's an error other than "not found", we should return it.
-		// For this implementation, we assume any error means we should try to create the user.
-		log.Printf("Could not get user %d, attempting to create. Error: %v", m.From.ID, err)
+		log.Printf("[HandleStart] Error getting user %d: %v", m.From.ID, err)
+		return tgbotapi.MessageConfig{}, fmt.Errorf("database error: %w", err)
+	}
 
+	if user == nil {
+		// User doesn't exist, create them
+		log.Printf("[HandleStart] User %d not found, creating new user", m.From.ID)
 		newUser := &store.User{
 			TelegramUserID: m.From.ID,
 			FirstName:      m.From.FirstName,
 			IsActive:       true,
-			IsAdmin:        false, // Default to non-admin
+			IsAdmin:        false,
 		}
 		if createErr := h.Store.CreateUser(context.Background(), newUser); createErr != nil {
-			log.Printf("Failed to create user: %v", createErr)
+			log.Printf("[HandleStart] FAILED to create user %d: %v", m.From.ID, createErr)
 			return tgbotapi.MessageConfig{}, fmt.Errorf("failed to create user: %w", createErr)
 		}
-	} else if user != nil && user.FirstName != m.From.FirstName {
-		// User exists, update their name if it's different.
+		log.Printf("[HandleStart] Successfully created user %d with ID %d", m.From.ID, newUser.ID)
+	} else if user.FirstName != m.From.FirstName {
+		// User exists, update their name if it's different
+		log.Printf("[HandleStart] Updating user %d name from '%s' to '%s'", m.From.ID, user.FirstName, m.From.FirstName)
 		user.FirstName = m.From.FirstName
 		if updateErr := h.Store.UpdateUser(context.Background(), user); updateErr != nil {
-			log.Printf("Failed to update user's first name: %v", updateErr)
-			// Non-critical error, so we don't return it to the user.
+			log.Printf("[HandleStart] Failed to update user's first name: %v", updateErr)
 		}
+	} else {
+		log.Printf("[HandleStart] User %d already exists, no changes needed", m.From.ID)
 	}
 
 	msg := tgbotapi.NewMessage(m.Chat.ID, startMessage)
