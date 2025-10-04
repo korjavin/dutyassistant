@@ -4,7 +4,7 @@
 *.dll
 *.so
 *.dylib
-roster-bot
+/roster-bot
 
 # Dependency directories
 # vendor/ is now committed to the repository for reproducible builds
