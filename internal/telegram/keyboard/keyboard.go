@@ -156,8 +156,21 @@ func Calendar(t time.Time, duties []*store.Duty) tgbotapi.InlineKeyboardMarkup {
 			emojis = append(emojis, "⚪")
 		}
 
-		// Build legend entry: "① 🟢Name" or "② 🔵🟢Name"
+		// Build legend entry: "① 🟢Name (V:2 A:1)" with queue counts
 		legendEntry := fmt.Sprintf("%s %s%s", numberCircle, strings.Join(emojis, ""), user.FirstName)
+
+		// Add queue counts if present
+		var queueInfo []string
+		if user.VolunteerQueueDays > 0 {
+			queueInfo = append(queueInfo, fmt.Sprintf("V:%d", user.VolunteerQueueDays))
+		}
+		if user.AdminQueueDays > 0 {
+			queueInfo = append(queueInfo, fmt.Sprintf("A:%d", user.AdminQueueDays))
+		}
+		if len(queueInfo) > 0 {
+			legendEntry += fmt.Sprintf(" (%s)", strings.Join(queueInfo, " "))
+		}
+
 		legendButton := tgbotapi.NewInlineKeyboardButtonData(legendEntry, ActionIgnore)
 		keyboard = append(keyboard, []tgbotapi.InlineKeyboardButton{legendButton})
 	}

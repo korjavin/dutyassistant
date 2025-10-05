@@ -38,25 +38,33 @@ func GetSchedule(s store.Store) gin.HandlerFunc {
 
 		// Transform to frontend-friendly format
 		type dutyResponse struct {
-			ID             int64  `json:"id"`
-			Date           string `json:"date"`
-			UserID         int64  `json:"user_id"`
-			UserName       string `json:"user_name"`
-			AssignmentType string `json:"assignment_type"`
+			ID                 int64  `json:"id"`
+			Date               string `json:"date"`
+			UserID             int64  `json:"user_id"`
+			UserName           string `json:"user_name"`
+			AssignmentType     string `json:"assignment_type"`
+			VolunteerQueueDays int    `json:"volunteer_queue_days"`
+			AdminQueueDays     int    `json:"admin_queue_days"`
 		}
 
 		response := make([]dutyResponse, 0, len(duties))
 		for _, duty := range duties {
 			userName := ""
+			volunteerQueue := 0
+			adminQueue := 0
 			if duty.User != nil {
 				userName = duty.User.FirstName
+				volunteerQueue = duty.User.VolunteerQueueDays
+				adminQueue = duty.User.AdminQueueDays
 			}
 			response = append(response, dutyResponse{
-				ID:             duty.ID,
-				Date:           duty.DutyDate.Format(time.RFC3339),
-				UserID:         duty.UserID,
-				UserName:       userName,
-				AssignmentType: string(duty.AssignmentType),
+				ID:                 duty.ID,
+				Date:               duty.DutyDate.Format(time.RFC3339),
+				UserID:             duty.UserID,
+				UserName:           userName,
+				AssignmentType:     string(duty.AssignmentType),
+				VolunteerQueueDays: volunteerQueue,
+				AdminQueueDays:     adminQueue,
 			})
 		}
 

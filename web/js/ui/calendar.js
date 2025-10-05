@@ -48,7 +48,21 @@ function renderCalendar(scheduleData = {}, prognosisData = {}) {
                 dutiesByDate[date] = [];
             }
             // Add user name and assignment type style
-            duty.displayName = duty.user_name || 'Unassigned';
+            let displayName = duty.user_name || 'Unassigned';
+
+            // Add queue counts to display name if present
+            const queueParts = [];
+            if (duty.volunteer_queue_days > 0) {
+                queueParts.push(`V:${duty.volunteer_queue_days}`);
+            }
+            if (duty.admin_queue_days > 0) {
+                queueParts.push(`A:${duty.admin_queue_days}`);
+            }
+            if (queueParts.length > 0) {
+                displayName += ` (${queueParts.join(' ')})`;
+            }
+
+            duty.displayName = displayName;
             duty.typeClass = duty.assignment_type === 'voluntary' ? 'text-green-600' :
                             duty.assignment_type === 'admin' ? 'text-blue-600' : 'text-gray-600';
             duty.isPrognosis = false;
