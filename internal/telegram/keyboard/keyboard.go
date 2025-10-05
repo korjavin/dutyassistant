@@ -18,13 +18,20 @@ const (
 
 // Calendar creates an inline keyboard markup for a given month and year.
 // Assigns each user a number and shows number+emoji on calendar days.
-func Calendar(t time.Time, duties []*store.Duty) tgbotapi.InlineKeyboardMarkup {
+// The allUsers parameter allows showing queue info even when there are no duties yet.
+func Calendar(t time.Time, duties []*store.Duty, allUsers []*store.User) tgbotapi.InlineKeyboardMarkup {
 	dutyMap := make(map[int]*store.Duty)
 	userAssignments := make(map[int64]map[store.AssignmentType]bool) // Track user->assignment types
 	userNumbers := make(map[int64]int)                               // Assign each user a number
+	userMap := make(map[int64]*store.User)                           // Map user ID to user
 	userList := []*store.User{}                                      // Preserve order
 
-	// Assign numbers to users in order they appear
+	// First, create a map of all active users
+	for _, user := range allUsers {
+		userMap[user.ID] = user
+	}
+
+	// Assign numbers to users in order they appear in duties
 	userCounter := 1
 	for _, duty := range duties {
 		dutyMap[duty.DutyDate.Day()] = duty
@@ -39,6 +46,15 @@ func Calendar(t time.Time, duties []*store.Duty) tgbotapi.InlineKeyboardMarkup {
 		if userNumbers[duty.UserID] == 0 {
 			userNumbers[duty.UserID] = userCounter
 			userList = append(userList, duty.User)
+			userCounter++
+		}
+	}
+
+	// Add remaining active users who have queues but no duties this month
+	for _, user := range allUsers {
+		if userNumbers[user.ID] == 0 && (user.VolunteerQueueDays > 0 || user.AdminQueueDays > 0) {
+			userNumbers[user.ID] = userCounter
+			userList = append(userList, user)
 			userCounter++
 		}
 	}

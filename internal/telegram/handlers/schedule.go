@@ -25,8 +25,15 @@ func (h *Handlers) HandleSchedule(m *tgbotapi.Message) (tgbotapi.MessageConfig, 
 		return tgbotapi.MessageConfig{}, fmt.Errorf("could not get duties for schedule: %w", err)
 	}
 
+	// Also fetch all active users to show queue information
+	users, err := h.Store.ListActiveUsers(context.Background())
+	if err != nil {
+		log.Printf("Warning: could not get active users for schedule: %v", err)
+		users = []*store.User{}
+	}
+
 	text := fmt.Sprintf(scheduleMessage, now.Format("January 2006"))
-	markup := keyboard.Calendar(now, duties)
+	markup := keyboard.Calendar(now, duties, users)
 
 	msg := tgbotapi.NewMessage(m.Chat.ID, text)
 	msg.ReplyMarkup = markup
@@ -62,8 +69,15 @@ func (h *Handlers) HandleCalendarCallback(q *tgbotapi.CallbackQuery) (tgbotapi.E
 		duties = []*store.Duty{} // Send empty slice to render an empty calendar
 	}
 
+	// Also fetch all active users to show queue information
+	users, err := h.Store.ListActiveUsers(context.Background())
+	if err != nil {
+		log.Printf("Warning: could not get active users for schedule refresh: %v", err)
+		users = []*store.User{}
+	}
+
 	text := fmt.Sprintf(scheduleMessage, newTime.Format("January 2006"))
-	newMarkup := keyboard.Calendar(newTime, duties)
+	newMarkup := keyboard.Calendar(newTime, duties, users)
 
 	edit := tgbotapi.NewEditMessageText(
 		q.Message.Chat.ID,

@@ -1,5 +1,5 @@
 import VanillaCalendar from '/vendor/vanilla-calendar/vanilla-calendar.min.js';
-import { getSchedule, getPrognosis, volunteerForDuty, withdrawFromDuty } from '../api.js';
+import { getSchedule, getPrognosis, getUsers, volunteerForDuty, withdrawFromDuty } from '../api.js';
 import { getState, setState } from '../store.js';
 import { createDutyCard, createModal, showModal, createLoadingSpinner, createErrorMessage, hideModal } from './components.js';
 
@@ -14,10 +14,14 @@ async function loadAndDisplaySchedule() {
     calendarContainer.innerHTML = createLoadingSpinner();
 
     try {
-        const [scheduleData, prognosisData] = await Promise.all([
+        const [scheduleData, prognosisData, usersData] = await Promise.all([
             getSchedule(currentYear, currentMonth),
-            getPrognosis(currentYear, currentMonth)
+            getPrognosis(currentYear, currentMonth),
+            getUsers()
         ]);
+
+        // Display queue summary
+        displayQueueSummary(usersData);
 
         if (scheduleData) {
             setState({ schedule: { [`${currentYear}-${currentMonth}`]: scheduleData } });
@@ -190,6 +194,45 @@ function renderCalendar(scheduleData = {}, prognosisData = {}) {
         calendar = new VanillaCalendar(calendarContainer, options);
         calendar.init();
     }
+}
+
+/**
+ * Displays the queue summary for all users with pending queues.
+ * @param {Array} users - Array of user objects with queue information
+ */
+function displayQueueSummary(users) {
+    const queueList = document.getElementById('queue-list');
+    if (!queueList) return;
+
+    if (!users || users.length === 0) {
+        queueList.innerHTML = '<p class="text-gray-500">No users found.</p>';
+        return;
+    }
+
+    // Filter users with queues
+    const usersWithQueues = users.filter(u =>
+        (u.volunteer_queue_days && u.volunteer_queue_days > 0) ||
+        (u.admin_queue_days && u.admin_queue_days > 0)
+    );
+
+    if (usersWithQueues.length === 0) {
+        queueList.innerHTML = '<p class="text-gray-500">No pending queues.</p>';
+        return;
+    }
+
+    // Build queue list HTML
+    const queueHTML = usersWithQueues.map(user => {
+        const parts = [];
+        if (user.volunteer_queue_days > 0) {
+            parts.push(`<span class="text-green-600 font-semibold">V:${user.volunteer_queue_days}</span>`);
+        }
+        if (user.admin_queue_days > 0) {
+            parts.push(`<span class="text-blue-600 font-semibold">A:${user.admin_queue_days}</span>`);
+        }
+        return `<div class="mb-1">👤 <strong>${user.first_name}</strong>: ${parts.join(', ')}</div>`;
+    }).join('');
+
+    queueList.innerHTML = queueHTML;
 }
 
 /**
