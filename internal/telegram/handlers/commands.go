@@ -20,17 +20,23 @@ const (
 		"/help - Show this help message.\n" +
 		"/status - Show your current duty statistics.\n" +
 		"/schedule - View the duty schedule for the current month.\n" +
-		"/volunteer - Volunteer for a duty on a specific date.\n\n" +
+		"/volunteer <days> - Add days to your volunteer queue.\n\n" +
 		"*Admin Commands:*\n" +
-		"/assign <username> <date> - Assign a user to a duty.\n" +
-		"/modify <date> <new_username> - Change the user for a duty.\n" +
+		"/assign <username> <days> - Add days to user's admin queue.\n" +
+		"/change <date> <username> - Change assigned user for a date.\n" +
+		"/offduty <username> <start> <end> - Set off-duty period (YYYY-MM-DD).\n" +
 		"/users - List all users and their status.\n" +
 		"/toggle_active <username> - Toggle a user's participation in the rotation."
 
-	statusMessage = "Duty Status for %s:\n\n" +
-		"Total Duties Assigned: %d\n" +
-		"Duties this month: %d\n" +
-		"Next scheduled duty: %s"
+	statusMessage = "<b>Duty Status for %s:</b>\n\n" +
+		"📊 <b>Statistics:</b>\n" +
+		"  • Total duties: %d\n" +
+		"  • This month: %d\n" +
+		"  • Next duty: %s\n\n" +
+		"📋 <b>Queues:</b>\n" +
+		"  • Volunteer queue: %d day(s)\n" +
+		"  • Admin queue: %d day(s)\n\n" +
+		"%s"
 
 	genericErrorMessage = "Sorry, something went wrong. Please try again later."
 )
@@ -103,7 +109,24 @@ func (h *Handlers) HandleStatus(m *tgbotapi.Message) (tgbotapi.MessageConfig, er
 		nextDuty = "Not scheduled"
 	}
 
-	message := fmt.Sprintf(statusMessage, m.From.FirstName, stats.TotalDuties, stats.DutiesThisMonth, nextDuty)
+	// Check off-duty status
+	offDutyText := ""
+	if user.OffDutyStart != nil && user.OffDutyEnd != nil {
+		offDutyText = fmt.Sprintf("🏖 <b>Off-duty:</b> %s to %s",
+			user.OffDutyStart.Format("2006-01-02"),
+			user.OffDutyEnd.Format("2006-01-02"))
+	}
+
+	message := fmt.Sprintf(statusMessage,
+		m.From.FirstName,
+		stats.TotalDuties,
+		stats.DutiesThisMonth,
+		nextDuty,
+		user.VolunteerQueueDays,
+		user.AdminQueueDays,
+		offDutyText)
+
 	msg := tgbotapi.NewMessage(m.Chat.ID, message)
+	msg.ParseMode = tgbotapi.ModeHTML
 	return msg, nil
 }

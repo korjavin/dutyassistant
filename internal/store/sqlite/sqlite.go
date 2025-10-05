@@ -60,14 +60,6 @@ func (s *SQLiteStore) migrate(ctx context.Context) error {
 			completed_at TEXT,
 			FOREIGN KEY(user_id) REFERENCES users(id)
 		);
-
-		CREATE TABLE IF NOT EXISTS round_robin_state (
-			user_id INTEGER PRIMARY KEY,
-			last_14_days_count INTEGER NOT NULL DEFAULT 0,
-			last_duty_date TEXT,
-			updated_at TEXT,
-			FOREIGN KEY(user_id) REFERENCES users(id)
-		);
 	`
 	if _, err := s.db.ExecContext(ctx, schema); err != nil {
 		return err
@@ -177,7 +169,8 @@ func (s *SQLiteStore) GetUserByTelegramID(ctx context.Context, id int64) (*store
 
 // ListActiveUsers retrieves all users who are currently active.
 func (s *SQLiteStore) ListActiveUsers(ctx context.Context) ([]*store.User, error) {
-	query := `SELECT id, telegram_user_id, first_name, is_admin, is_active FROM users WHERE is_active = 1`
+	query := `SELECT id, telegram_user_id, first_name, is_admin, is_active, volunteer_queue_days, admin_queue_days, off_duty_start, off_duty_end
+	          FROM users WHERE is_active = 1`
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("could not query active users: %w", err)
@@ -186,8 +179,8 @@ func (s *SQLiteStore) ListActiveUsers(ctx context.Context) ([]*store.User, error
 
 	var users []*store.User
 	for rows.Next() {
-		user := &store.User{}
-		if err := rows.Scan(&user.ID, &user.TelegramUserID, &user.FirstName, &user.IsAdmin, &user.IsActive); err != nil {
+		user, err := scanUserRows(rows)
+		if err != nil {
 			return nil, fmt.Errorf("could not scan user row: %w", err)
 		}
 		users = append(users, user)
@@ -197,10 +190,10 @@ func (s *SQLiteStore) ListActiveUsers(ctx context.Context) ([]*store.User, error
 
 // GetUserByName retrieves a user by their first name.
 func (s *SQLiteStore) GetUserByName(ctx context.Context, name string) (*store.User, error) {
-	query := `SELECT id, telegram_user_id, first_name, is_admin, is_active FROM users WHERE first_name = ?`
+	query := `SELECT id, telegram_user_id, first_name, is_admin, is_active, volunteer_queue_days, admin_queue_days, off_duty_start, off_duty_end
+	          FROM users WHERE first_name = ?`
 	row := s.db.QueryRowContext(ctx, query, name)
-	user := &store.User{}
-	err := row.Scan(&user.ID, &user.TelegramUserID, &user.FirstName, &user.IsAdmin, &user.IsActive)
+	user, err := scanUser(row)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil // Not found is not an error
@@ -212,7 +205,8 @@ func (s *SQLiteStore) GetUserByName(ctx context.Context, name string) (*store.Us
 
 // ListAllUsers retrieves all users (both active and inactive).
 func (s *SQLiteStore) ListAllUsers(ctx context.Context) ([]*store.User, error) {
-	query := `SELECT id, telegram_user_id, first_name, is_admin, is_active FROM users ORDER BY first_name`
+	query := `SELECT id, telegram_user_id, first_name, is_admin, is_active, volunteer_queue_days, admin_queue_days, off_duty_start, off_duty_end
+	          FROM users ORDER BY first_name`
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("could not query all users: %w", err)
@@ -221,8 +215,8 @@ func (s *SQLiteStore) ListAllUsers(ctx context.Context) ([]*store.User, error) {
 
 	var users []*store.User
 	for rows.Next() {
-		user := &store.User{}
-		if err := rows.Scan(&user.ID, &user.TelegramUserID, &user.FirstName, &user.IsAdmin, &user.IsActive); err != nil {
+		user, err := scanUserRows(rows)
+		if err != nil {
 			return nil, fmt.Errorf("could not scan user row: %w", err)
 		}
 		users = append(users, user)
@@ -266,8 +260,18 @@ func (s *SQLiteStore) GetUserStats(ctx context.Context, userID int64) (*store.Us
 
 // UpdateUser updates a user's details.
 func (s *SQLiteStore) UpdateUser(ctx context.Context, user *store.User) error {
-	query := `UPDATE users SET first_name = ?, is_admin = ?, is_active = ? WHERE id = ?`
-	_, err := s.db.ExecContext(ctx, query, user.FirstName, user.IsAdmin, user.IsActive, user.ID)
+	query := `UPDATE users SET first_name = ?, is_admin = ?, is_active = ?, volunteer_queue_days = ?, admin_queue_days = ?, off_duty_start = ?, off_duty_end = ? WHERE id = ?`
+
+	var offDutyStart, offDutyEnd interface{}
+	if user.OffDutyStart != nil {
+		offDutyStart = user.OffDutyStart.Format("2006-01-02")
+	}
+	if user.OffDutyEnd != nil {
+		offDutyEnd = user.OffDutyEnd.Format("2006-01-02")
+	}
+
+	_, err := s.db.ExecContext(ctx, query, user.FirstName, user.IsAdmin, user.IsActive,
+		user.VolunteerQueueDays, user.AdminQueueDays, offDutyStart, offDutyEnd, user.ID)
 	if err != nil {
 		return fmt.Errorf("could not update user: %w", err)
 	}
@@ -276,8 +280,14 @@ func (s *SQLiteStore) UpdateUser(ctx context.Context, user *store.User) error {
 
 // CreateDuty creates a new duty assignment.
 func (s *SQLiteStore) CreateDuty(ctx context.Context, duty *store.Duty) error {
-	query := `INSERT INTO duties (user_id, duty_date, assignment_type, created_at) VALUES (?, ?, ?, ?)`
-	res, err := s.db.ExecContext(ctx, query, duty.UserID, duty.DutyDate.Format("2006-01-02"), string(duty.AssignmentType), duty.CreatedAt.UTC().Format(time.RFC3339))
+	query := `INSERT INTO duties (user_id, duty_date, assignment_type, created_at, completed_at) VALUES (?, ?, ?, ?, ?)`
+
+	var completedAt interface{}
+	if duty.CompletedAt != nil {
+		completedAt = duty.CompletedAt.UTC().Format(time.RFC3339)
+	}
+
+	res, err := s.db.ExecContext(ctx, query, duty.UserID, duty.DutyDate.Format("2006-01-02"), string(duty.AssignmentType), duty.CreatedAt.UTC().Format(time.RFC3339), completedAt)
 	if err != nil {
 		return fmt.Errorf("could not insert duty: %w", err)
 	}
@@ -292,7 +302,7 @@ func (s *SQLiteStore) CreateDuty(ctx context.Context, duty *store.Duty) error {
 // GetDutyByDate retrieves a duty by its date, including user info.
 func (s *SQLiteStore) GetDutyByDate(ctx context.Context, date time.Time) (*store.Duty, error) {
 	query := `
-		SELECT d.id, d.user_id, d.duty_date, d.assignment_type, d.created_at,
+		SELECT d.id, d.user_id, d.duty_date, d.assignment_type, d.created_at, d.completed_at,
 		       u.id, u.telegram_user_id, u.first_name, u.is_admin, u.is_active
 		FROM duties d
 		JOIN users u ON d.user_id = u.id
@@ -301,9 +311,10 @@ func (s *SQLiteStore) GetDutyByDate(ctx context.Context, date time.Time) (*store
 	row := s.db.QueryRowContext(ctx, query, date.Format("2006-01-02"))
 	duty := &store.Duty{User: &store.User{}}
 	var dutyDateStr, assignmentTypeStr, createdAtStr string
+	var completedAtStr sql.NullString
 
 	err := row.Scan(
-		&duty.ID, &duty.UserID, &dutyDateStr, &assignmentTypeStr, &createdAtStr,
+		&duty.ID, &duty.UserID, &dutyDateStr, &assignmentTypeStr, &createdAtStr, &completedAtStr,
 		&duty.User.ID, &duty.User.TelegramUserID, &duty.User.FirstName, &duty.User.IsAdmin, &duty.User.IsActive,
 	)
 	if err != nil {
@@ -321,6 +332,13 @@ func (s *SQLiteStore) GetDutyByDate(ctx context.Context, date time.Time) (*store
 	if err != nil {
 		return nil, fmt.Errorf("could not parse created at: %w", err)
 	}
+	if completedAtStr.Valid {
+		t, err := time.Parse(time.RFC3339, completedAtStr.String)
+		if err != nil {
+			return nil, fmt.Errorf("could not parse completed at: %w", err)
+		}
+		duty.CompletedAt = &t
+	}
 	duty.AssignmentType = store.AssignmentType(assignmentTypeStr)
 
 	return duty, nil
@@ -328,8 +346,14 @@ func (s *SQLiteStore) GetDutyByDate(ctx context.Context, date time.Time) (*store
 
 // UpdateDuty updates an existing duty.
 func (s *SQLiteStore) UpdateDuty(ctx context.Context, duty *store.Duty) error {
-	query := `UPDATE duties SET user_id = ?, assignment_type = ? WHERE duty_date = ?`
-	_, err := s.db.ExecContext(ctx, query, duty.UserID, string(duty.AssignmentType), duty.DutyDate.Format("2006-01-02"))
+	query := `UPDATE duties SET user_id = ?, assignment_type = ?, completed_at = ? WHERE duty_date = ?`
+
+	var completedAt interface{}
+	if duty.CompletedAt != nil {
+		completedAt = duty.CompletedAt.UTC().Format(time.RFC3339)
+	}
+
+	_, err := s.db.ExecContext(ctx, query, duty.UserID, string(duty.AssignmentType), completedAt, duty.DutyDate.Format("2006-01-02"))
 	if err != nil {
 		return fmt.Errorf("could not update duty: %w", err)
 	}
@@ -352,7 +376,7 @@ func (s *SQLiteStore) GetDutiesByMonth(ctx context.Context, year int, month time
 	end := start.AddDate(0, 1, 0)
 
 	query := `
-		SELECT d.id, d.user_id, d.duty_date, d.assignment_type, d.created_at,
+		SELECT d.id, d.user_id, d.duty_date, d.assignment_type, d.created_at, d.completed_at,
 		       u.id, u.telegram_user_id, u.first_name, u.is_admin, u.is_active
 		FROM duties d
 		JOIN users u ON d.user_id = u.id
@@ -369,8 +393,9 @@ func (s *SQLiteStore) GetDutiesByMonth(ctx context.Context, year int, month time
 	for rows.Next() {
 		duty := &store.Duty{User: &store.User{}}
 		var dutyDateStr, assignmentTypeStr, createdAtStr string
+		var completedAtStr sql.NullString
 		err := rows.Scan(
-			&duty.ID, &duty.UserID, &dutyDateStr, &assignmentTypeStr, &createdAtStr,
+			&duty.ID, &duty.UserID, &dutyDateStr, &assignmentTypeStr, &createdAtStr, &completedAtStr,
 			&duty.User.ID, &duty.User.TelegramUserID, &duty.User.FirstName, &duty.User.IsAdmin, &duty.User.IsActive,
 		)
 		if err != nil {
@@ -384,48 +409,233 @@ func (s *SQLiteStore) GetDutiesByMonth(ctx context.Context, year int, month time
 		if err != nil {
 			return nil, fmt.Errorf("could not parse created at from month query: %w", err)
 		}
+		if completedAtStr.Valid {
+			t, err := time.Parse(time.RFC3339, completedAtStr.String)
+			if err != nil {
+				return nil, fmt.Errorf("could not parse completed at from month query: %w", err)
+			}
+			duty.CompletedAt = &t
+		}
 		duty.AssignmentType = store.AssignmentType(assignmentTypeStr)
 		duties = append(duties, duty)
 	}
 	return duties, nil
 }
 
-
-// GetNextRoundRobinUser finds the next user for a round-robin assignment.
-func (s *SQLiteStore) GetNextRoundRobinUser(ctx context.Context) (*store.User, error) {
-	query := `
-		SELECT u.id, u.telegram_user_id, u.first_name, u.is_admin, u.is_active
-		FROM users u
-		LEFT JOIN round_robin_state rrs ON u.id = rrs.user_id
-		WHERE u.is_active = 1 AND u.is_admin = 0
-		ORDER BY rrs.assignment_count ASC, rrs.last_assigned_timestamp ASC
-		LIMIT 1
-	`
-	row := s.db.QueryRowContext(ctx, query)
-	user := &store.User{}
-	err := row.Scan(&user.ID, &user.TelegramUserID, &user.FirstName, &user.IsAdmin, &user.IsActive)
+// AddToVolunteerQueue adds days to a user's volunteer queue.
+func (s *SQLiteStore) AddToVolunteerQueue(ctx context.Context, userID int64, days int) error {
+	query := `UPDATE users SET volunteer_queue_days = volunteer_queue_days + ? WHERE id = ?`
+	_, err := s.db.ExecContext(ctx, query, days, userID)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, nil // No active users found
-		}
-		return nil, fmt.Errorf("could not get next round robin user: %w", err)
-	}
-	return user, nil
-}
-
-
-// IncrementAssignmentCount increments the assignment count for a user.
-func (s *SQLiteStore) IncrementAssignmentCount(ctx context.Context, userID int64, lastAssigned time.Time) error {
-	query := `
-		INSERT INTO round_robin_state (user_id, assignment_count, last_assigned_timestamp)
-		VALUES (?, 1, ?)
-		ON CONFLICT(user_id) DO UPDATE SET
-		assignment_count = assignment_count + 1,
-		last_assigned_timestamp = excluded.last_assigned_timestamp;
-	`
-	_, err := s.db.ExecContext(ctx, query, userID, lastAssigned.UTC().Format(time.RFC3339))
-	if err != nil {
-		return fmt.Errorf("could not increment assignment count: %w", err)
+		return fmt.Errorf("could not add to volunteer queue: %w", err)
 	}
 	return nil
+}
+
+// AddToAdminQueue adds days to a user's admin assignment queue.
+func (s *SQLiteStore) AddToAdminQueue(ctx context.Context, userID int64, days int) error {
+	query := `UPDATE users SET admin_queue_days = admin_queue_days + ? WHERE id = ?`
+	_, err := s.db.ExecContext(ctx, query, days, userID)
+	if err != nil {
+		return fmt.Errorf("could not add to admin queue: %w", err)
+	}
+	return nil
+}
+
+// DecrementVolunteerQueue decrements a user's volunteer queue by 1 (minimum 0).
+func (s *SQLiteStore) DecrementVolunteerQueue(ctx context.Context, userID int64) error {
+	query := `UPDATE users SET volunteer_queue_days = MAX(0, volunteer_queue_days - 1) WHERE id = ?`
+	_, err := s.db.ExecContext(ctx, query, userID)
+	if err != nil {
+		return fmt.Errorf("could not decrement volunteer queue: %w", err)
+	}
+	return nil
+}
+
+// DecrementAdminQueue decrements a user's admin queue by 1 (minimum 0).
+func (s *SQLiteStore) DecrementAdminQueue(ctx context.Context, userID int64) error {
+	query := `UPDATE users SET admin_queue_days = MAX(0, admin_queue_days - 1) WHERE id = ?`
+	_, err := s.db.ExecContext(ctx, query, userID)
+	if err != nil {
+		return fmt.Errorf("could not decrement admin queue: %w", err)
+	}
+	return nil
+}
+
+// GetUsersWithVolunteerQueue returns all active users with volunteer queue > 0.
+func (s *SQLiteStore) GetUsersWithVolunteerQueue(ctx context.Context) ([]*store.User, error) {
+	query := `
+		SELECT id, telegram_user_id, first_name, is_admin, is_active,
+		       volunteer_queue_days, admin_queue_days, off_duty_start, off_duty_end
+		FROM users
+		WHERE is_active = 1 AND volunteer_queue_days > 0
+		ORDER BY volunteer_queue_days DESC
+	`
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("could not query users with volunteer queue: %w", err)
+	}
+	defer rows.Close()
+
+	var users []*store.User
+	for rows.Next() {
+		user, err := scanUserRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, user)
+	}
+	return users, nil
+}
+
+// GetUsersWithAdminQueue returns all active users with admin queue > 0.
+func (s *SQLiteStore) GetUsersWithAdminQueue(ctx context.Context) ([]*store.User, error) {
+	query := `
+		SELECT id, telegram_user_id, first_name, is_admin, is_active,
+		       volunteer_queue_days, admin_queue_days, off_duty_start, off_duty_end
+		FROM users
+		WHERE is_active = 1 AND admin_queue_days > 0
+		ORDER BY admin_queue_days DESC
+	`
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("could not query users with admin queue: %w", err)
+	}
+	defer rows.Close()
+
+	var users []*store.User
+	for rows.Next() {
+		user, err := scanUserRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, user)
+	}
+	return users, nil
+}
+
+// SetOffDuty sets a user's off-duty period.
+func (s *SQLiteStore) SetOffDuty(ctx context.Context, userID int64, start, end time.Time) error {
+	query := `UPDATE users SET off_duty_start = ?, off_duty_end = ? WHERE id = ?`
+	_, err := s.db.ExecContext(ctx, query, start.Format("2006-01-02"), end.Format("2006-01-02"), userID)
+	if err != nil {
+		return fmt.Errorf("could not set off-duty: %w", err)
+	}
+	return nil
+}
+
+// ClearOffDuty clears a user's off-duty period.
+func (s *SQLiteStore) ClearOffDuty(ctx context.Context, userID int64) error {
+	query := `UPDATE users SET off_duty_start = NULL, off_duty_end = NULL WHERE id = ?`
+	_, err := s.db.ExecContext(ctx, query, userID)
+	if err != nil {
+		return fmt.Errorf("could not clear off-duty: %w", err)
+	}
+	return nil
+}
+
+// IsUserOffDuty checks if a user is off-duty on a specific date.
+func (s *SQLiteStore) IsUserOffDuty(ctx context.Context, userID int64, date time.Time) (bool, error) {
+	query := `
+		SELECT COUNT(*) FROM users
+		WHERE id = ? AND off_duty_start IS NOT NULL AND off_duty_end IS NOT NULL
+		AND ? >= off_duty_start AND ? <= off_duty_end
+	`
+	dateStr := date.Format("2006-01-02")
+	var count int
+	err := s.db.QueryRowContext(ctx, query, userID, dateStr, dateStr).Scan(&count)
+	if err != nil {
+		return false, fmt.Errorf("could not check off-duty status: %w", err)
+	}
+	return count > 0, nil
+}
+
+// GetOffDutyUsers returns all users who are off-duty on a specific date.
+func (s *SQLiteStore) GetOffDutyUsers(ctx context.Context, date time.Time) ([]*store.User, error) {
+	query := `
+		SELECT id, telegram_user_id, first_name, is_admin, is_active,
+		       volunteer_queue_days, admin_queue_days, off_duty_start, off_duty_end
+		FROM users
+		WHERE off_duty_start IS NOT NULL AND off_duty_end IS NOT NULL
+		AND ? >= off_duty_start AND ? <= off_duty_end
+	`
+	dateStr := date.Format("2006-01-02")
+	rows, err := s.db.QueryContext(ctx, query, dateStr, dateStr)
+	if err != nil {
+		return nil, fmt.Errorf("could not query off-duty users: %w", err)
+	}
+	defer rows.Close()
+
+	var users []*store.User
+	for rows.Next() {
+		user, err := scanUserRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, user)
+	}
+	return users, nil
+}
+
+// CompleteDuty marks a duty as completed by setting completed_at timestamp.
+func (s *SQLiteStore) CompleteDuty(ctx context.Context, date time.Time) error {
+	query := `UPDATE duties SET completed_at = ? WHERE duty_date = ?`
+	_, err := s.db.ExecContext(ctx, query, time.Now().UTC().Format(time.RFC3339), date.Format("2006-01-02"))
+	if err != nil {
+		return fmt.Errorf("could not complete duty: %w", err)
+	}
+	return nil
+}
+
+// GetTodaysDuty retrieves today's duty assignment.
+func (s *SQLiteStore) GetTodaysDuty(ctx context.Context) (*store.Duty, error) {
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	return s.GetDutyByDate(ctx, today)
+}
+
+// GetCompletedDutiesInRange retrieves all completed duties in a date range.
+func (s *SQLiteStore) GetCompletedDutiesInRange(ctx context.Context, start, end time.Time) ([]*store.Duty, error) {
+	query := `
+		SELECT d.id, d.user_id, d.duty_date, d.assignment_type, d.created_at, d.completed_at,
+		       u.id, u.telegram_user_id, u.first_name, u.is_admin, u.is_active
+		FROM duties d
+		JOIN users u ON d.user_id = u.id
+		WHERE d.duty_date >= ? AND d.duty_date < ? AND d.completed_at IS NOT NULL
+		ORDER BY d.duty_date
+	`
+	rows, err := s.db.QueryContext(ctx, query, start.Format("2006-01-02"), end.Format("2006-01-02"))
+	if err != nil {
+		return nil, fmt.Errorf("could not query completed duties: %w", err)
+	}
+	defer rows.Close()
+
+	var duties []*store.Duty
+	for rows.Next() {
+		duty := &store.Duty{User: &store.User{}}
+		var dutyDateStr, assignmentTypeStr, createdAtStr, completedAtStr string
+		err := rows.Scan(
+			&duty.ID, &duty.UserID, &dutyDateStr, &assignmentTypeStr, &createdAtStr, &completedAtStr,
+			&duty.User.ID, &duty.User.TelegramUserID, &duty.User.FirstName, &duty.User.IsAdmin, &duty.User.IsActive,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("could not scan completed duty row: %w", err)
+		}
+		duty.DutyDate, err = time.Parse("2006-01-02", dutyDateStr)
+		if err != nil {
+			return nil, fmt.Errorf("could not parse duty date: %w", err)
+		}
+		duty.CreatedAt, err = time.Parse(time.RFC3339, createdAtStr)
+		if err != nil {
+			return nil, fmt.Errorf("could not parse created at: %w", err)
+		}
+		t, err := time.Parse(time.RFC3339, completedAtStr)
+		if err != nil {
+			return nil, fmt.Errorf("could not parse completed at: %w", err)
+		}
+		duty.CompletedAt = &t
+		duty.AssignmentType = store.AssignmentType(assignmentTypeStr)
+		duties = append(duties, duty)
+	}
+	return duties, nil
 }

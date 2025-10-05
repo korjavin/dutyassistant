@@ -73,8 +73,21 @@ type Store interface {
 	UpdateDuty(ctx context.Context, duty *Duty) error
 	DeleteDuty(ctx context.Context, date time.Time) error
 	GetDutiesByMonth(ctx context.Context, year int, month time.Month) ([]*Duty, error)
+	CompleteDuty(ctx context.Context, date time.Time) error
+	GetTodaysDuty(ctx context.Context) (*Duty, error)
+	GetCompletedDutiesInRange(ctx context.Context, start, end time.Time) ([]*Duty, error)
 
-	// Round-robin methods
-	GetNextRoundRobinUser(ctx context.Context) (*User, error)
-	IncrementAssignmentCount(ctx context.Context, userID int64, lastAssigned time.Time) error
+	// Queue management methods
+	AddToVolunteerQueue(ctx context.Context, userID int64, days int) error
+	AddToAdminQueue(ctx context.Context, userID int64, days int) error
+	DecrementVolunteerQueue(ctx context.Context, userID int64) error
+	DecrementAdminQueue(ctx context.Context, userID int64) error
+	GetUsersWithVolunteerQueue(ctx context.Context) ([]*User, error)
+	GetUsersWithAdminQueue(ctx context.Context) ([]*User, error)
+
+	// Off-duty management methods
+	SetOffDuty(ctx context.Context, userID int64, start, end time.Time) error
+	ClearOffDuty(ctx context.Context, userID int64) error
+	IsUserOffDuty(ctx context.Context, userID int64, date time.Time) (bool, error)
+	GetOffDutyUsers(ctx context.Context, date time.Time) ([]*User, error)
 }

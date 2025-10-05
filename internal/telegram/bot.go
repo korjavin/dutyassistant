@@ -99,6 +99,10 @@ func (b *Bot) handleCommand(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 		return b.handlers.HandleAssign(m)
 	case "modify":
 		return b.handlers.HandleModify(m)
+	case "change":
+		return b.handlers.HandleChange(m)
+	case "offduty":
+		return b.handlers.HandleOffDuty(m)
 	case "users":
 		return b.handlers.HandleUsers(m)
 	case "toggle_active", "toggleactive":
@@ -121,14 +125,10 @@ func (b *Bot) handleCallbackQuery(q *tgbotapi.CallbackQuery) (tgbotapi.Chattable
 
 	switch action {
 	case keyboard.ActionPrevMonth, keyboard.ActionNextMonth:
-		// These callbacks can come from either the /schedule or /volunteer calendars.
+		// Calendar navigation for /schedule command
 		return b.handlers.HandleCalendarCallback(q)
 	case keyboard.ActionSelectDay:
-		// Only handle day selection for /volunteer command, not /schedule (read-only)
-		if strings.Contains(q.Message.Text, "volunteer") {
-			return b.handlers.HandleVolunteerCallback(q)
-		}
-		// If it's from /schedule, do nothing (read-only calendar)
+		// /schedule is read-only, do nothing on day selection
 		return nil, nil
 	case keyboard.ActionIgnore:
 		return nil, nil // Do nothing for ignore actions

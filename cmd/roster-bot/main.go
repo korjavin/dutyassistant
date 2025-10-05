@@ -10,6 +10,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/robfig/cron/v3"
+
 	httpserver "github.com/korjavin/dutyassistant/internal/http"
 	"github.com/korjavin/dutyassistant/internal/scheduler"
 	"github.com/korjavin/dutyassistant/internal/store/sqlite"
@@ -63,6 +65,57 @@ func main() {
 	defer botCancel()
 	go bot.Start(botCtx)
 
+	// Initialize cron scheduler for scheduled jobs (all times in Europe/Berlin)
+	log.Println("Initializing cron scheduler...")
+	berlinLoc, err := time.LoadLocation("Europe/Berlin")
+	if err != nil {
+		log.Fatalf("Failed to load Europe/Berlin timezone: %v", err)
+	}
+	c := cron.New(cron.WithLocation(berlinLoc))
+
+	// Daily at 11:00 AM Berlin - Assign today's duty
+	_, err = c.AddFunc("0 11 * * *", func() {
+		log.Println("[CRON] Running daily duty assignment (11:00 AM Berlin)")
+		duty, err := sched.AssignTodaysDuty(context.Background())
+		if err != nil {
+			log.Printf("[CRON] Error assigning today's duty: %v", err)
+		} else if duty != nil {
+			log.Printf("[CRON] Successfully assigned duty to user %d", duty.UserID)
+			// TODO: Send notification to DISH_GROUP
+		}
+	})
+	if err != nil {
+		log.Fatalf("Failed to schedule daily assignment job: %v", err)
+	}
+
+	// Daily at 21:00 PM Berlin - Mark duty as completed
+	_, err = c.AddFunc("0 21 * * *", func() {
+		log.Println("[CRON] Running daily duty completion (21:00 PM Berlin)")
+		err := sched.CompleteTodaysDuty(context.Background())
+		if err != nil {
+			log.Printf("[CRON] Error completing today's duty: %v", err)
+		} else {
+			log.Printf("[CRON] Successfully marked today's duty as completed")
+		}
+	})
+	if err != nil {
+		log.Fatalf("Failed to schedule daily completion job: %v", err)
+	}
+
+	// Sunday at 21:10 PM Berlin - Send weekly stats
+	_, err = c.AddFunc("10 21 * * 0", func() {
+		log.Println("[CRON] Running weekly stats (Sunday 21:10 PM Berlin)")
+		// TODO: Implement weekly stats gathering and sending to DISH_GROUP
+		log.Printf("[CRON] Weekly stats job executed")
+	})
+	if err != nil {
+		log.Fatalf("Failed to schedule weekly stats job: %v", err)
+	}
+
+	// Start cron scheduler
+	c.Start()
+	log.Println("Cron scheduler started with 3 jobs")
+
 	// Initialize HTTP server with Gin
 	log.Println("Initializing HTTP server on :8080...")
 	router := httpserver.NewServer(store, telegramToken)
@@ -90,6 +143,11 @@ func main() {
 	<-quit
 
 	log.Println("Shutting down gracefully...")
+
+	// Stop cron scheduler
+	log.Println("Stopping cron scheduler...")
+	cronCtx := c.Stop()
+	<-cronCtx.Done()
 
 	// Graceful shutdown of HTTP server
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)

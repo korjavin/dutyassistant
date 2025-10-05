@@ -35,7 +35,6 @@ func NewServer(s store.Store, botToken string) *gin.Engine {
 	{
 		// Public endpoints, accessible to anyone.
 		api.GET("/schedule/:year/:month", handlers.GetSchedule(s))
-		api.GET("/prognosis/:year/:month", handlers.GetPrognosis(s))
 		api.GET("/users", handlers.GetUsers(s))
 
 		// Endpoints requiring user authentication (via Telegram Web App).

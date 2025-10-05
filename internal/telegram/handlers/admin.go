@@ -41,7 +41,7 @@ func (h *Handlers) checkAdmin(telegramUserID int64) (bool, error) {
 	return isAdmin, nil
 }
 
-// HandleAssign handles the /assign command for admins. Format: /assign <username> <date>
+// HandleAssign handles the /assign command for admins. Format: /assign [username] [days]
 func (h *Handlers) HandleAssign(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
 	isAdmin, err := h.checkAdmin(m.From.ID)
 	if err != nil || !isAdmin {
@@ -49,29 +49,69 @@ func (h *Handlers) HandleAssign(m *tgbotapi.Message) (tgbotapi.MessageConfig, er
 	}
 
 	args := strings.Fields(m.CommandArguments())
-	if len(args) != 2 {
-		return tgbotapi.NewMessage(m.Chat.ID, "Invalid command format. Use /assign <username> <YYYY-MM-DD>"), nil
+
+	// If no arguments provided, show helpful prompt with available users
+	if len(args) == 0 {
+		users, err := h.Store.ListActiveUsers(context.Background())
+		if err != nil || len(users) == 0 {
+			msg := tgbotapi.NewMessage(m.Chat.ID, "📋 To assign days to a user:\n\n<code>/assign username days</code>\n\nExample: <code>/assign John 3</code>")
+			msg.ParseMode = tgbotapi.ModeHTML
+			return msg, nil
+		}
+
+		var builder strings.Builder
+		builder.WriteString("📋 <b>Assign days to admin queue</b>\n\n")
+		builder.WriteString("Usage: <code>/assign username days</code>\n\n")
+		builder.WriteString("Available users:\n")
+		for _, u := range users {
+			builder.WriteString(fmt.Sprintf("  • %s\n", u.FirstName))
+		}
+		builder.WriteString(fmt.Sprintf("\nExample: <code>/assign %s 3</code>", users[0].FirstName))
+
+		msg := tgbotapi.NewMessage(m.Chat.ID, builder.String())
+		msg.ParseMode = tgbotapi.ModeHTML
+		return msg, nil
 	}
 
-	userName, dateStr := args[0], args[1]
-	dutyDate, err := time.Parse("2006-01-02", dateStr)
-	if err != nil {
-		return tgbotapi.NewMessage(m.Chat.ID, invalidDateMessage), nil
+	// If only username provided, prompt for days
+	if len(args) == 1 {
+		msg := tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("How many days should I assign to %s?\n\nExample: <code>/assign %s 3</code>", args[0], args[0]))
+		msg.ParseMode = tgbotapi.ModeHTML
+		return msg, nil
+	}
+
+	userName := args[0]
+	var days int
+	_, err = fmt.Sscanf(args[1], "%d", &days)
+	if err != nil || days <= 0 {
+		msg := tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("⚠️ '%s' is not a valid number of days.\n\nPlease use a positive number.\n\nExample: <code>/assign %s 3</code>", args[1], userName))
+		msg.ParseMode = tgbotapi.ModeHTML
+		return msg, nil
 	}
 
 	user, err := h.Store.GetUserByName(context.Background(), userName)
 	if err != nil || user == nil {
-		return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf(userNotFoundMessage, userName)), nil
+		// Get list of users for suggestion
+		users, _ := h.Store.ListActiveUsers(context.Background())
+		suggestions := ""
+		if len(users) > 0 {
+			suggestions = "\n\nAvailable users:\n"
+			for _, u := range users {
+				suggestions += fmt.Sprintf("  • %s\n", u.FirstName)
+			}
+		}
+		return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("❌ User '%s' not found.%s", userName, suggestions)), nil
 	}
 
-	if err := h.Scheduler.AssignDuty(context.Background(), user, dutyDate); err != nil {
-		return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf(assignFailureMessage, userName, dateStr)), nil
+	if err := h.Scheduler.AssignDuty(context.Background(), user, days); err != nil {
+		return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("❌ Failed to assign %d days to %s: %v", days, userName, err)), nil
 	}
 
-	return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf(assignSuccessMessage, userName, dateStr)), nil
+	return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("✅ Successfully added %d day(s) to admin queue for %s.", days, userName)), nil
 }
 
 // HandleModify handles the /modify command. Format: /modify <date> <new_username>
+// This changes the assigned user for today or a future date.
 func (h *Handlers) HandleModify(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
 	isAdmin, err := h.checkAdmin(m.From.ID)
 	if err != nil || !isAdmin {
@@ -94,9 +134,8 @@ func (h *Handlers) HandleModify(m *tgbotapi.Message) (tgbotapi.MessageConfig, er
 		return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf(userNotFoundMessage, userName)), nil
 	}
 
-	// Re-using AssignDuty for modification, as it overwrites the existing duty.
-	if err := h.Scheduler.AssignDuty(context.Background(), user, dutyDate); err != nil {
-		return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf(modifyFailureMessage, dateStr)), nil
+	if _, err := h.Scheduler.ChangeDutyUser(context.Background(), dutyDate, user.ID); err != nil {
+		return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("Failed to change duty for %s: %v", dateStr, err)), nil
 	}
 
 	return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf(modifySuccessMessage, dateStr, userName)), nil
@@ -119,17 +158,31 @@ func (h *Handlers) HandleUsers(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 	}
 
 	var builder strings.Builder
-	builder.WriteString("<b>User List:</b>\n")
+	builder.WriteString("<b>📋 User List</b>\n\n")
 	for _, u := range users {
-		status := "Active"
+		status := "✅ Active"
 		if !u.IsActive {
-			status = "Inactive"
+			status = "❌ Inactive"
 		}
 		adminStatus := ""
 		if u.IsAdmin {
-			adminStatus = " (Admin)"
+			adminStatus = " 👑"
 		}
-		builder.WriteString(fmt.Sprintf("- %s%s: %s\n", u.FirstName, adminStatus, status))
+
+		builder.WriteString(fmt.Sprintf("<b>%s</b>%s: %s\n", u.FirstName, adminStatus, status))
+
+		// Show queues if any
+		if u.VolunteerQueueDays > 0 || u.AdminQueueDays > 0 {
+			builder.WriteString(fmt.Sprintf("  Queues: V:%d A:%d\n", u.VolunteerQueueDays, u.AdminQueueDays))
+		}
+
+		// Show off-duty if set
+		if u.OffDutyStart != nil && u.OffDutyEnd != nil {
+			builder.WriteString(fmt.Sprintf("  🏖 Off-duty: %s to %s\n",
+				u.OffDutyStart.Format("2006-01-02"),
+				u.OffDutyEnd.Format("2006-01-02")))
+		}
+		builder.WriteString("\n")
 	}
 
 	msg := tgbotapi.NewMessage(m.Chat.ID, builder.String())
@@ -164,4 +217,109 @@ func (h *Handlers) HandleToggleActive(m *tgbotapi.Message) (tgbotapi.MessageConf
 		newStatus = "Inactive"
 	}
 	return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf(toggleSuccessMessage, user.FirstName, newStatus)), nil
+}
+
+// HandleOffDuty sets a user's off-duty period. Format: /offduty [username] [start_date] [end_date]
+func (h *Handlers) HandleOffDuty(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
+	isAdmin, err := h.checkAdmin(m.From.ID)
+	if err != nil || !isAdmin {
+		return tgbotapi.NewMessage(m.Chat.ID, adminOnlyMessage), nil
+	}
+
+	args := strings.Fields(m.CommandArguments())
+
+	// If no arguments, show help with user list
+	if len(args) == 0 {
+		users, err := h.Store.ListActiveUsers(context.Background())
+		if err != nil || len(users) == 0 {
+			msg := tgbotapi.NewMessage(m.Chat.ID,
+				"🏖 <b>Set off-duty period</b>\n\n"+
+				"Usage: <code>/offduty username start end</code>\n\n"+
+				"Dates in format: YYYY-MM-DD\n\n"+
+				"Example: <code>/offduty John 2025-10-10 2025-10-15</code>")
+			msg.ParseMode = tgbotapi.ModeHTML
+			return msg, nil
+		}
+
+		var builder strings.Builder
+		builder.WriteString("🏖 <b>Set off-duty period</b>\n\n")
+		builder.WriteString("Usage: <code>/offduty username start end</code>\n\n")
+		builder.WriteString("Available users:\n")
+		for _, u := range users {
+			builder.WriteString(fmt.Sprintf("  • %s\n", u.FirstName))
+		}
+		builder.WriteString(fmt.Sprintf("\nExample: <code>/offduty %s 2025-10-10 2025-10-15</code>", users[0].FirstName))
+
+		msg := tgbotapi.NewMessage(m.Chat.ID, builder.String())
+		msg.ParseMode = tgbotapi.ModeHTML
+		return msg, nil
+	}
+
+	if len(args) == 1 {
+		msg := tgbotapi.NewMessage(m.Chat.ID,
+			fmt.Sprintf("📅 When should %s's off-duty period start and end?\n\n"+
+			"Usage: <code>/offduty %s start end</code>\n\n"+
+			"Example: <code>/offduty %s 2025-10-10 2025-10-15</code>",
+			args[0], args[0], args[0]))
+		msg.ParseMode = tgbotapi.ModeHTML
+		return msg, nil
+	}
+
+	if len(args) == 2 {
+		msg := tgbotapi.NewMessage(m.Chat.ID,
+			fmt.Sprintf("📅 When should %s's off-duty period end?\n\n"+
+			"Usage: <code>/offduty %s %s end_date</code>\n\n"+
+			"Example: <code>/offduty %s %s 2025-10-15</code>",
+			args[0], args[0], args[1], args[0], args[1]))
+		msg.ParseMode = tgbotapi.ModeHTML
+		return msg, nil
+	}
+
+	userName := args[0]
+	startDate, err := time.Parse("2006-01-02", args[1])
+	if err != nil {
+		msg := tgbotapi.NewMessage(m.Chat.ID,
+			fmt.Sprintf("⚠️ Invalid start date '%s'\n\n"+
+			"Please use format: YYYY-MM-DD\n\n"+
+			"Example: <code>/offduty %s 2025-10-10 2025-10-15</code>",
+			args[1], userName))
+		msg.ParseMode = tgbotapi.ModeHTML
+		return msg, nil
+	}
+
+	endDate, err := time.Parse("2006-01-02", args[2])
+	if err != nil {
+		msg := tgbotapi.NewMessage(m.Chat.ID,
+			fmt.Sprintf("⚠️ Invalid end date '%s'\n\n"+
+			"Please use format: YYYY-MM-DD\n\n"+
+			"Example: <code>/offduty %s %s 2025-10-15</code>",
+			args[2], userName, args[1]))
+		msg.ParseMode = tgbotapi.ModeHTML
+		return msg, nil
+	}
+
+	user, err := h.Store.GetUserByName(context.Background(), userName)
+	if err != nil || user == nil {
+		users, _ := h.Store.ListActiveUsers(context.Background())
+		suggestions := ""
+		if len(users) > 0 {
+			suggestions = "\n\nAvailable users:\n"
+			for _, u := range users {
+				suggestions += fmt.Sprintf("  • %s\n", u.FirstName)
+			}
+		}
+		return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("❌ User '%s' not found.%s", userName, suggestions)), nil
+	}
+
+	if err := h.Scheduler.SetOffDuty(context.Background(), user.ID, startDate, endDate); err != nil {
+		return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("❌ Failed to set off-duty period: %v", err)), nil
+	}
+
+	return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("✅ %s is now off-duty from %s to %s.", userName, args[1], args[2])), nil
+}
+
+// HandleChange changes the assigned user for today or a future date. Format: /change <date> <username>
+// This is an alias for /modify
+func (h *Handlers) HandleChange(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
+	return h.HandleModify(m)
 }
