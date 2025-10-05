@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/korjavin/dutyassistant/internal/store"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
@@ -50,26 +51,30 @@ func (h *Handlers) HandleAssign(m *tgbotapi.Message) (tgbotapi.MessageConfig, er
 
 	args := strings.Fields(m.CommandArguments())
 
-	// If no arguments provided, show helpful prompt with available users
+	// If no arguments provided, show user selection buttons
 	if len(args) == 0 {
 		users, err := h.Store.ListActiveUsers(context.Background())
 		if err != nil || len(users) == 0 {
-			msg := tgbotapi.NewMessage(m.Chat.ID, "📋 To assign days to a user:\n\n<code>/assign username days</code>\n\nExample: <code>/assign John 3</code>")
-			msg.ParseMode = tgbotapi.ModeHTML
+			msg := tgbotapi.NewMessage(m.Chat.ID, "No active users found.")
 			return msg, nil
 		}
 
-		var builder strings.Builder
-		builder.WriteString("📋 <b>Assign days to admin queue</b>\n\n")
-		builder.WriteString("Usage: <code>/assign username days</code>\n\n")
-		builder.WriteString("Available users:\n")
+		// Create inline keyboard with user buttons
+		var buttons [][]tgbotapi.InlineKeyboardButton
 		for _, u := range users {
-			builder.WriteString(fmt.Sprintf("  • %s\n", u.FirstName))
+			row := []tgbotapi.InlineKeyboardButton{
+				tgbotapi.NewInlineKeyboardButtonData(
+					fmt.Sprintf("👤 %s", u.FirstName),
+					fmt.Sprintf("assign_user:%d", u.ID),
+				),
+			}
+			buttons = append(buttons, row)
 		}
-		builder.WriteString(fmt.Sprintf("\nExample: <code>/assign %s 3</code>", users[0].FirstName))
 
-		msg := tgbotapi.NewMessage(m.Chat.ID, builder.String())
+		keyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
+		msg := tgbotapi.NewMessage(m.Chat.ID, "📋 <b>Assign days to admin queue</b>\n\nSelect a user:")
 		msg.ParseMode = tgbotapi.ModeHTML
+		msg.ReplyMarkup = keyboard
 		return msg, nil
 	}
 
@@ -322,4 +327,142 @@ func (h *Handlers) HandleOffDuty(m *tgbotapi.Message) (tgbotapi.MessageConfig, e
 // This is an alias for /modify
 func (h *Handlers) HandleChange(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
 	return h.HandleModify(m)
+}
+
+// HandleAssignUserCallback handles the callback when a user is selected from inline keyboard
+func (h *Handlers) HandleAssignUserCallback(q *tgbotapi.CallbackQuery) (tgbotapi.EditMessageTextConfig, error) {
+	parts := strings.Split(q.Data, ":")
+	if len(parts) != 2 {
+		return tgbotapi.EditMessageTextConfig{}, fmt.Errorf("invalid callback data")
+	}
+
+	userID := parts[1]
+
+	// Get user info
+	var id int64
+	fmt.Sscanf(userID, "%d", &id)
+	user, err := h.Store.GetUserByTelegramID(context.Background(), id)
+	if err != nil || user == nil {
+		// Try by ID directly
+		users, _ := h.Store.ListAllUsers(context.Background())
+		for _, u := range users {
+			if u.ID == id {
+				user = u
+				break
+			}
+		}
+	}
+
+	if user == nil {
+		edit := tgbotapi.NewEditMessageText(q.Message.Chat.ID, q.Message.MessageID, "❌ User not found")
+		return edit, nil
+	}
+
+	// Create number selection keyboard (1-7 days)
+	var buttons [][]tgbotapi.InlineKeyboardButton
+	row := []tgbotapi.InlineKeyboardButton{}
+	for days := 1; days <= 7; days++ {
+		row = append(row, tgbotapi.NewInlineKeyboardButtonData(
+			fmt.Sprintf("%d", days),
+			fmt.Sprintf("assign_days:%d:%d", user.ID, days),
+		))
+		if days%4 == 0 || days == 7 {
+			buttons = append(buttons, row)
+			row = []tgbotapi.InlineKeyboardButton{}
+		}
+	}
+	// Add custom option
+	buttons = append(buttons, []tgbotapi.InlineKeyboardButton{
+		tgbotapi.NewInlineKeyboardButtonData("✏️ Custom", fmt.Sprintf("assign_custom:%d", user.ID)),
+	})
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
+	edit := tgbotapi.NewEditMessageText(
+		q.Message.Chat.ID,
+		q.Message.MessageID,
+		fmt.Sprintf("👤 <b>%s</b>\n\nHow many days to assign?", user.FirstName),
+	)
+	edit.ParseMode = tgbotapi.ModeHTML
+	edit.ReplyMarkup = &keyboard
+	return edit, nil
+}
+
+// HandleAssignDaysCallback handles the final confirmation when days are selected
+func (h *Handlers) HandleAssignDaysCallback(q *tgbotapi.CallbackQuery) (tgbotapi.EditMessageTextConfig, error) {
+	parts := strings.Split(q.Data, ":")
+	if len(parts) != 3 {
+		return tgbotapi.EditMessageTextConfig{}, fmt.Errorf("invalid callback data")
+	}
+
+	var userID, days int64
+	fmt.Sscanf(parts[1], "%d", &userID)
+	fmt.Sscanf(parts[2], "%d", &days)
+
+	// Get user
+	users, _ := h.Store.ListAllUsers(context.Background())
+	var user *store.User
+	for _, u := range users {
+		if u.ID == userID {
+			user = u
+			break
+		}
+	}
+
+	if user == nil {
+		edit := tgbotapi.NewEditMessageText(q.Message.Chat.ID, q.Message.MessageID, "❌ User not found")
+		return edit, nil
+	}
+
+	// Assign the days
+	err := h.Scheduler.AssignDuty(context.Background(), user, int(days))
+	if err != nil {
+		edit := tgbotapi.NewEditMessageText(
+			q.Message.Chat.ID,
+			q.Message.MessageID,
+			fmt.Sprintf("❌ Failed to assign: %v", err),
+		)
+		return edit, nil
+	}
+
+	edit := tgbotapi.NewEditMessageText(
+		q.Message.Chat.ID,
+		q.Message.MessageID,
+		fmt.Sprintf("✅ Added %d day(s) to admin queue for <b>%s</b>", days, user.FirstName),
+	)
+	edit.ParseMode = tgbotapi.ModeHTML
+	return edit, nil
+}
+
+// HandleAssignCustomCallback handles custom day input request
+func (h *Handlers) HandleAssignCustomCallback(q *tgbotapi.CallbackQuery) (tgbotapi.EditMessageTextConfig, error) {
+	parts := strings.Split(q.Data, ":")
+	if len(parts) != 2 {
+		return tgbotapi.EditMessageTextConfig{}, fmt.Errorf("invalid callback data")
+	}
+
+	var userID int64
+	fmt.Sscanf(parts[1], "%d", &userID)
+
+	// Get user
+	users, _ := h.Store.ListAllUsers(context.Background())
+	var user *store.User
+	for _, u := range users {
+		if u.ID == userID {
+			user = u
+			break
+		}
+	}
+
+	userName := "user"
+	if user != nil {
+		userName = user.FirstName
+	}
+
+	edit := tgbotapi.NewEditMessageText(
+		q.Message.Chat.ID,
+		q.Message.MessageID,
+		fmt.Sprintf("👤 <b>%s</b>\n\nPlease type the number of days:\n\n<code>/assign %s [days]</code>", userName, userName),
+	)
+	edit.ParseMode = tgbotapi.ModeHTML
+	return edit, nil
 }

@@ -132,6 +132,12 @@ func (b *Bot) handleCallbackQuery(q *tgbotapi.CallbackQuery) (tgbotapi.Chattable
 		return nil, nil
 	case keyboard.ActionIgnore:
 		return nil, nil // Do nothing for ignore actions
+	case "assign_user":
+		return b.handlers.HandleAssignUserCallback(q)
+	case "assign_days":
+		return b.handlers.HandleAssignDaysCallback(q)
+	case "assign_custom":
+		return b.handlers.HandleAssignCustomCallback(q)
 	default:
 		log.Printf("Unknown callback action: %s", action)
 		return nil, nil
