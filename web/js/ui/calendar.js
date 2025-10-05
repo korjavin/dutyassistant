@@ -209,10 +209,10 @@ function displayQueueSummary(users) {
         return;
     }
 
-    // Filter users with queues
+    // Filter users with queues (API returns PascalCase)
     const usersWithQueues = users.filter(u =>
-        (u.volunteer_queue_days && u.volunteer_queue_days > 0) ||
-        (u.admin_queue_days && u.admin_queue_days > 0)
+        (u.VolunteerQueueDays && u.VolunteerQueueDays > 0) ||
+        (u.AdminQueueDays && u.AdminQueueDays > 0)
     );
 
     if (usersWithQueues.length === 0) {
@@ -223,13 +223,13 @@ function displayQueueSummary(users) {
     // Build queue list HTML
     const queueHTML = usersWithQueues.map(user => {
         const parts = [];
-        if (user.volunteer_queue_days > 0) {
-            parts.push(`<span class="text-green-600 font-semibold">V:${user.volunteer_queue_days}</span>`);
+        if (user.VolunteerQueueDays > 0) {
+            parts.push(`<span class="text-green-600 font-semibold">V:${user.VolunteerQueueDays}</span>`);
         }
-        if (user.admin_queue_days > 0) {
-            parts.push(`<span class="text-blue-600 font-semibold">A:${user.admin_queue_days}</span>`);
+        if (user.AdminQueueDays > 0) {
+            parts.push(`<span class="text-blue-600 font-semibold">A:${user.AdminQueueDays}</span>`);
         }
-        return `<div class="mb-1">👤 <strong>${user.first_name}</strong>: ${parts.join(', ')}</div>`;
+        return `<div class="mb-1">👤 <strong>${user.FirstName}</strong>: ${parts.join(', ')}</div>`;
     }).join('');
 
     queueList.innerHTML = queueHTML;
