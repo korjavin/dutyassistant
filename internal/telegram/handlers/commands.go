@@ -26,7 +26,7 @@ const (
 		"/change <date> <username> - Change assigned user for a date.\n" +
 		"/offduty <username> <start> <end> - Set off-duty period (YYYY-MM-DD).\n" +
 		"/users - List all users and their status.\n" +
-		"/toggle_active <username> - Toggle a user's participation in the rotation."
+		"/toggle\\_active <username> - Toggle a user's participation in the rotation."
 
 	statusMessage = "<b>Duty Status for %s:</b>\n\n" +
 		"📊 <b>Statistics:</b>\n" +
