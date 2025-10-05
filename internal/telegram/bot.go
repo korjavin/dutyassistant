@@ -138,6 +138,18 @@ func (b *Bot) handleCallbackQuery(q *tgbotapi.CallbackQuery) (tgbotapi.Chattable
 		return b.handlers.HandleAssignDaysCallback(q)
 	case "assign_custom":
 		return b.handlers.HandleAssignCustomCallback(q)
+	case "volunteer_days":
+		return b.handlers.HandleVolunteerDaysCallback(q)
+	case "volunteer_custom":
+		return b.handlers.HandleVolunteerCustomCallback(q)
+	case "modify_date":
+		return b.handlers.HandleModifyDateCallback(q)
+	case "modify_user":
+		return b.handlers.HandleModifyUserCallback(q)
+	case "toggle_user":
+		return b.handlers.HandleToggleUserCallback(q)
+	case "offduty_user":
+		return b.handlers.HandleOffDutyUserCallback(q)
 	default:
 		log.Printf("Unknown callback action: %s", action)
 		return nil, nil

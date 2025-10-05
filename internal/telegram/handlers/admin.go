@@ -124,8 +124,70 @@ func (h *Handlers) HandleModify(m *tgbotapi.Message) (tgbotapi.MessageConfig, er
 	}
 
 	args := strings.Fields(m.CommandArguments())
+
+	// No args - show date selection buttons (today + next 7 days)
+	if len(args) == 0 {
+		now := time.Now()
+		var buttons [][]tgbotapi.InlineKeyboardButton
+
+		for i := 0; i < 7; i++ {
+			date := now.AddDate(0, 0, i)
+			dateStr := date.Format("2006-01-02")
+			label := dateStr
+			if i == 0 {
+				label = "📅 Today (" + dateStr + ")"
+			}
+			row := []tgbotapi.InlineKeyboardButton{
+				tgbotapi.NewInlineKeyboardButtonData(label, fmt.Sprintf("modify_date:%s", dateStr)),
+			}
+			buttons = append(buttons, row)
+		}
+
+		keyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
+		msg := tgbotapi.NewMessage(m.Chat.ID, "🔄 <b>Modify duty assignment</b>\n\nSelect the date:")
+		msg.ParseMode = tgbotapi.ModeHTML
+		msg.ReplyMarkup = keyboard
+		return msg, nil
+	}
+
+	// One arg (date) - show user selection buttons
+	if len(args) == 1 {
+		dateStr := args[0]
+		_, err := time.Parse("2006-01-02", dateStr)
+		if err != nil {
+			msg := tgbotapi.NewMessage(m.Chat.ID,
+				fmt.Sprintf("⚠️ Invalid date '%s'\n\nPlease use format: YYYY-MM-DD\n\nExample: <code>/modify 2025-10-10 John</code>", dateStr))
+			msg.ParseMode = tgbotapi.ModeHTML
+			return msg, nil
+		}
+
+		users, err := h.Store.ListActiveUsers(context.Background())
+		if err != nil || len(users) == 0 {
+			return tgbotapi.NewMessage(m.Chat.ID, "No active users found."), nil
+		}
+
+		var buttons [][]tgbotapi.InlineKeyboardButton
+		for _, u := range users {
+			row := []tgbotapi.InlineKeyboardButton{
+				tgbotapi.NewInlineKeyboardButtonData(
+					fmt.Sprintf("👤 %s", u.FirstName),
+					fmt.Sprintf("modify_user:%s:%d", dateStr, u.ID),
+				),
+			}
+			buttons = append(buttons, row)
+		}
+
+		keyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
+		msg := tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("🔄 <b>Modify duty for %s</b>\n\nSelect the new user:", dateStr))
+		msg.ParseMode = tgbotapi.ModeHTML
+		msg.ReplyMarkup = keyboard
+		return msg, nil
+	}
+
 	if len(args) != 2 {
-		return tgbotapi.NewMessage(m.Chat.ID, "Invalid command format. Use /modify <YYYY-MM-DD> <new_username>"), nil
+		msg := tgbotapi.NewMessage(m.Chat.ID, "⚠️ Invalid format.\n\nUsage: <code>/modify date username</code>\n\nExample: <code>/modify 2025-10-10 John</code>")
+		msg.ParseMode = tgbotapi.ModeHTML
+		return msg, nil
 	}
 
 	dateStr, userName := args[0], args[1]
@@ -204,7 +266,31 @@ func (h *Handlers) HandleToggleActive(m *tgbotapi.Message) (tgbotapi.MessageConf
 
 	userName := m.CommandArguments()
 	if userName == "" {
-		return tgbotapi.NewMessage(m.Chat.ID, "Invalid command format. Use /toggle_active <username>"), nil
+		users, err := h.Store.ListAllUsers(context.Background())
+		if err != nil || len(users) == 0 {
+			return tgbotapi.NewMessage(m.Chat.ID, "No users found."), nil
+		}
+
+		var buttons [][]tgbotapi.InlineKeyboardButton
+		for _, u := range users {
+			status := "✅"
+			if !u.IsActive {
+				status = "❌"
+			}
+			row := []tgbotapi.InlineKeyboardButton{
+				tgbotapi.NewInlineKeyboardButtonData(
+					fmt.Sprintf("%s %s", status, u.FirstName),
+					fmt.Sprintf("toggle_user:%d", u.ID),
+				),
+			}
+			buttons = append(buttons, row)
+		}
+
+		keyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
+		msg := tgbotapi.NewMessage(m.Chat.ID, "🔄 <b>Toggle user active status</b>\n\nSelect a user:")
+		msg.ParseMode = tgbotapi.ModeHTML
+		msg.ReplyMarkup = keyboard
+		return msg, nil
 	}
 
 	user, err := h.Store.GetUserByName(context.Background(), userName)
@@ -233,30 +319,29 @@ func (h *Handlers) HandleOffDuty(m *tgbotapi.Message) (tgbotapi.MessageConfig, e
 
 	args := strings.Fields(m.CommandArguments())
 
-	// If no arguments, show help with user list
+	// If no arguments, show user selection with buttons
 	if len(args) == 0 {
 		users, err := h.Store.ListActiveUsers(context.Background())
 		if err != nil || len(users) == 0 {
-			msg := tgbotapi.NewMessage(m.Chat.ID,
-				"🏖 <b>Set off-duty period</b>\n\n"+
-				"Usage: <code>/offduty username start end</code>\n\n"+
-				"Dates in format: YYYY-MM-DD\n\n"+
-				"Example: <code>/offduty John 2025-10-10 2025-10-15</code>")
-			msg.ParseMode = tgbotapi.ModeHTML
+			msg := tgbotapi.NewMessage(m.Chat.ID, "No active users found.")
 			return msg, nil
 		}
 
-		var builder strings.Builder
-		builder.WriteString("🏖 <b>Set off-duty period</b>\n\n")
-		builder.WriteString("Usage: <code>/offduty username start end</code>\n\n")
-		builder.WriteString("Available users:\n")
+		var buttons [][]tgbotapi.InlineKeyboardButton
 		for _, u := range users {
-			builder.WriteString(fmt.Sprintf("  • %s\n", u.FirstName))
+			row := []tgbotapi.InlineKeyboardButton{
+				tgbotapi.NewInlineKeyboardButtonData(
+					fmt.Sprintf("👤 %s", u.FirstName),
+					fmt.Sprintf("offduty_user:%d:%s", u.ID, u.FirstName),
+				),
+			}
+			buttons = append(buttons, row)
 		}
-		builder.WriteString(fmt.Sprintf("\nExample: <code>/offduty %s 2025-10-10 2025-10-15</code>", users[0].FirstName))
 
-		msg := tgbotapi.NewMessage(m.Chat.ID, builder.String())
+		keyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
+		msg := tgbotapi.NewMessage(m.Chat.ID, "🏖 <b>Set off-duty period</b>\n\nSelect a user:")
 		msg.ParseMode = tgbotapi.ModeHTML
+		msg.ReplyMarkup = keyboard
 		return msg, nil
 	}
 
@@ -462,6 +547,162 @@ func (h *Handlers) HandleAssignCustomCallback(q *tgbotapi.CallbackQuery) (tgbota
 		q.Message.Chat.ID,
 		q.Message.MessageID,
 		fmt.Sprintf("👤 <b>%s</b>\n\nPlease type the number of days:\n\n<code>/assign %s [days]</code>", userName, userName),
+	)
+	edit.ParseMode = tgbotapi.ModeHTML
+	return edit, nil
+}
+
+// HandleModifyDateCallback handles date selection for modify command
+func (h *Handlers) HandleModifyDateCallback(q *tgbotapi.CallbackQuery) (tgbotapi.EditMessageTextConfig, error) {
+	parts := strings.Split(q.Data, ":")
+	if len(parts) != 2 {
+		return tgbotapi.EditMessageTextConfig{}, fmt.Errorf("invalid callback data")
+	}
+
+	dateStr := parts[1]
+
+	users, err := h.Store.ListActiveUsers(context.Background())
+	if err != nil || len(users) == 0 {
+		edit := tgbotapi.NewEditMessageText(q.Message.Chat.ID, q.Message.MessageID, "❌ No active users found.")
+		return edit, nil
+	}
+
+	var buttons [][]tgbotapi.InlineKeyboardButton
+	for _, u := range users {
+		row := []tgbotapi.InlineKeyboardButton{
+			tgbotapi.NewInlineKeyboardButtonData(
+				fmt.Sprintf("👤 %s", u.FirstName),
+				fmt.Sprintf("modify_user:%s:%d", dateStr, u.ID),
+			),
+		}
+		buttons = append(buttons, row)
+	}
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
+	edit := tgbotapi.NewEditMessageText(
+		q.Message.Chat.ID,
+		q.Message.MessageID,
+		fmt.Sprintf("🔄 <b>Modify duty for %s</b>\n\nSelect the new user:", dateStr),
+	)
+	edit.ParseMode = tgbotapi.ModeHTML
+	edit.ReplyMarkup = &keyboard
+	return edit, nil
+}
+
+// HandleModifyUserCallback handles user selection for modify command
+func (h *Handlers) HandleModifyUserCallback(q *tgbotapi.CallbackQuery) (tgbotapi.EditMessageTextConfig, error) {
+	parts := strings.Split(q.Data, ":")
+	if len(parts) != 3 {
+		return tgbotapi.EditMessageTextConfig{}, fmt.Errorf("invalid callback data")
+	}
+
+	dateStr := parts[1]
+	var userID int64
+	fmt.Sscanf(parts[2], "%d", &userID)
+
+	dutyDate, err := time.Parse("2006-01-02", dateStr)
+	if err != nil {
+		edit := tgbotapi.NewEditMessageText(
+			q.Message.Chat.ID,
+			q.Message.MessageID,
+			fmt.Sprintf("❌ Invalid date: %s", dateStr),
+		)
+		return edit, nil
+	}
+
+	users, _ := h.Store.ListAllUsers(context.Background())
+	var user *store.User
+	for _, u := range users {
+		if u.ID == userID {
+			user = u
+			break
+		}
+	}
+
+	if user == nil {
+		edit := tgbotapi.NewEditMessageText(q.Message.Chat.ID, q.Message.MessageID, "❌ User not found")
+		return edit, nil
+	}
+
+	if _, err := h.Scheduler.ChangeDutyUser(context.Background(), dutyDate, user.ID); err != nil {
+		edit := tgbotapi.NewEditMessageText(
+			q.Message.Chat.ID,
+			q.Message.MessageID,
+			fmt.Sprintf("❌ Failed to change duty for %s: %v", dateStr, err),
+		)
+		return edit, nil
+	}
+
+	edit := tgbotapi.NewEditMessageText(
+		q.Message.Chat.ID,
+		q.Message.MessageID,
+		fmt.Sprintf("✅ Successfully modified duty for %s to be handled by <b>%s</b>.", dateStr, user.FirstName),
+	)
+	edit.ParseMode = tgbotapi.ModeHTML
+	return edit, nil
+}
+
+// HandleToggleUserCallback handles user selection for toggle_active command
+func (h *Handlers) HandleToggleUserCallback(q *tgbotapi.CallbackQuery) (tgbotapi.EditMessageTextConfig, error) {
+	parts := strings.Split(q.Data, ":")
+	if len(parts) != 2 {
+		return tgbotapi.EditMessageTextConfig{}, fmt.Errorf("invalid callback data")
+	}
+
+	var userID int64
+	fmt.Sscanf(parts[1], "%d", &userID)
+
+	users, _ := h.Store.ListAllUsers(context.Background())
+	var user *store.User
+	for _, u := range users {
+		if u.ID == userID {
+			user = u
+			break
+		}
+	}
+
+	if user == nil {
+		edit := tgbotapi.NewEditMessageText(q.Message.Chat.ID, q.Message.MessageID, "❌ User not found")
+		return edit, nil
+	}
+
+	user.IsActive = !user.IsActive
+	if err := h.Store.UpdateUser(context.Background(), user); err != nil {
+		edit := tgbotapi.NewEditMessageText(
+			q.Message.Chat.ID,
+			q.Message.MessageID,
+			fmt.Sprintf("❌ Failed to toggle status for %s: %v", user.FirstName, err),
+		)
+		return edit, nil
+	}
+
+	statusText := "active"
+	if !user.IsActive {
+		statusText = "inactive"
+	}
+
+	edit := tgbotapi.NewEditMessageText(
+		q.Message.Chat.ID,
+		q.Message.MessageID,
+		fmt.Sprintf("✅ Successfully set status for <b>%s</b> to %s.", user.FirstName, statusText),
+	)
+	edit.ParseMode = tgbotapi.ModeHTML
+	return edit, nil
+}
+
+// HandleOffDutyUserCallback handles user selection for offduty command
+func (h *Handlers) HandleOffDutyUserCallback(q *tgbotapi.CallbackQuery) (tgbotapi.EditMessageTextConfig, error) {
+	parts := strings.Split(q.Data, ":")
+	if len(parts) != 3 {
+		return tgbotapi.EditMessageTextConfig{}, fmt.Errorf("invalid callback data")
+	}
+
+	userName := parts[2]
+
+	edit := tgbotapi.NewEditMessageText(
+		q.Message.Chat.ID,
+		q.Message.MessageID,
+		fmt.Sprintf("🏖 <b>Set off-duty period for %s</b>\n\nPlease provide start and end dates:\n\n<code>/offduty %s START_DATE END_DATE</code>\n\nExample: <code>/offduty %s 2025-10-10 2025-10-15</code>", userName, userName, userName),
 	)
 	edit.ParseMode = tgbotapi.ModeHTML
 	return edit, nil
