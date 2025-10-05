@@ -90,10 +90,65 @@ func (s *SQLiteStore) migrate(ctx context.Context) error {
 	return nil
 }
 
+// scanUser is a helper to scan a user row with all fields including new ones
+func scanUser(row *sql.Row) (*store.User, error) {
+	user := &store.User{}
+	var offDutyStart, offDutyEnd sql.NullString
+	err := row.Scan(&user.ID, &user.TelegramUserID, &user.FirstName, &user.IsAdmin, &user.IsActive,
+		&user.VolunteerQueueDays, &user.AdminQueueDays, &offDutyStart, &offDutyEnd)
+	if err != nil {
+		return nil, err
+	}
+
+	if offDutyStart.Valid {
+		t, _ := time.Parse("2006-01-02", offDutyStart.String)
+		user.OffDutyStart = &t
+	}
+	if offDutyEnd.Valid {
+		t, _ := time.Parse("2006-01-02", offDutyEnd.String)
+		user.OffDutyEnd = &t
+	}
+
+	return user, nil
+}
+
+// scanUserRows is a helper to scan multiple user rows
+func scanUserRows(rows *sql.Rows) (*store.User, error) {
+	user := &store.User{}
+	var offDutyStart, offDutyEnd sql.NullString
+	err := rows.Scan(&user.ID, &user.TelegramUserID, &user.FirstName, &user.IsAdmin, &user.IsActive,
+		&user.VolunteerQueueDays, &user.AdminQueueDays, &offDutyStart, &offDutyEnd)
+	if err != nil {
+		return nil, err
+	}
+
+	if offDutyStart.Valid {
+		t, _ := time.Parse("2006-01-02", offDutyStart.String)
+		user.OffDutyStart = &t
+	}
+	if offDutyEnd.Valid {
+		t, _ := time.Parse("2006-01-02", offDutyEnd.String)
+		user.OffDutyEnd = &t
+	}
+
+	return user, nil
+}
+
 // CreateUser adds a new user to the database.
 func (s *SQLiteStore) CreateUser(ctx context.Context, user *store.User) error {
-	query := `INSERT INTO users (telegram_user_id, first_name, is_admin, is_active) VALUES (?, ?, ?, ?)`
-	res, err := s.db.ExecContext(ctx, query, user.TelegramUserID, user.FirstName, user.IsAdmin, user.IsActive)
+	query := `INSERT INTO users (telegram_user_id, first_name, is_admin, is_active, volunteer_queue_days, admin_queue_days, off_duty_start, off_duty_end)
+	          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+
+	var offDutyStart, offDutyEnd interface{}
+	if user.OffDutyStart != nil {
+		offDutyStart = user.OffDutyStart.Format("2006-01-02")
+	}
+	if user.OffDutyEnd != nil {
+		offDutyEnd = user.OffDutyEnd.Format("2006-01-02")
+	}
+
+	res, err := s.db.ExecContext(ctx, query, user.TelegramUserID, user.FirstName, user.IsAdmin, user.IsActive,
+		user.VolunteerQueueDays, user.AdminQueueDays, offDutyStart, offDutyEnd)
 	if err != nil {
 		return fmt.Errorf("could not insert user: %w", err)
 	}
@@ -107,10 +162,10 @@ func (s *SQLiteStore) CreateUser(ctx context.Context, user *store.User) error {
 
 // GetUserByTelegramID retrieves a user by their Telegram ID.
 func (s *SQLiteStore) GetUserByTelegramID(ctx context.Context, id int64) (*store.User, error) {
-	query := `SELECT id, telegram_user_id, first_name, is_admin, is_active FROM users WHERE telegram_user_id = ?`
+	query := `SELECT id, telegram_user_id, first_name, is_admin, is_active, volunteer_queue_days, admin_queue_days, off_duty_start, off_duty_end
+	          FROM users WHERE telegram_user_id = ?`
 	row := s.db.QueryRowContext(ctx, query, id)
-	user := &store.User{}
-	err := row.Scan(&user.ID, &user.TelegramUserID, &user.FirstName, &user.IsAdmin, &user.IsActive)
+	user, err := scanUser(row)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil // Not found is not an error
