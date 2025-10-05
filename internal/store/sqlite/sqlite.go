@@ -377,7 +377,8 @@ func (s *SQLiteStore) GetDutiesByMonth(ctx context.Context, year int, month time
 
 	query := `
 		SELECT d.id, d.user_id, d.duty_date, d.assignment_type, d.created_at, d.completed_at,
-		       u.id, u.telegram_user_id, u.first_name, u.is_admin, u.is_active
+		       u.id, u.telegram_user_id, u.first_name, u.is_admin, u.is_active,
+		       u.volunteer_queue_days, u.admin_queue_days, u.off_duty_start, u.off_duty_end
 		FROM duties d
 		JOIN users u ON d.user_id = u.id
 		WHERE d.duty_date >= ? AND d.duty_date < ?
@@ -393,10 +394,11 @@ func (s *SQLiteStore) GetDutiesByMonth(ctx context.Context, year int, month time
 	for rows.Next() {
 		duty := &store.Duty{User: &store.User{}}
 		var dutyDateStr, assignmentTypeStr, createdAtStr string
-		var completedAtStr sql.NullString
+		var completedAtStr, offDutyStart, offDutyEnd sql.NullString
 		err := rows.Scan(
 			&duty.ID, &duty.UserID, &dutyDateStr, &assignmentTypeStr, &createdAtStr, &completedAtStr,
 			&duty.User.ID, &duty.User.TelegramUserID, &duty.User.FirstName, &duty.User.IsAdmin, &duty.User.IsActive,
+			&duty.User.VolunteerQueueDays, &duty.User.AdminQueueDays, &offDutyStart, &offDutyEnd,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("could not scan duty row: %w", err)
@@ -415,6 +417,14 @@ func (s *SQLiteStore) GetDutiesByMonth(ctx context.Context, year int, month time
 				return nil, fmt.Errorf("could not parse completed at from month query: %w", err)
 			}
 			duty.CompletedAt = &t
+		}
+		if offDutyStart.Valid {
+			t, _ := time.Parse("2006-01-02", offDutyStart.String)
+			duty.User.OffDutyStart = &t
+		}
+		if offDutyEnd.Valid {
+			t, _ := time.Parse("2006-01-02", offDutyEnd.String)
+			duty.User.OffDutyEnd = &t
 		}
 		duty.AssignmentType = store.AssignmentType(assignmentTypeStr)
 		duties = append(duties, duty)
