@@ -39,8 +39,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -ldflags="-w -s" -o /roster-bo
 # Use alpine instead of scratch to include CA certificates for HTTPS
 FROM alpine:latest
 
-# Install CA certificates for TLS/HTTPS connections
-RUN apk --no-cache add ca-certificates
+# Install CA certificates and timezone data
+RUN apk --no-cache add ca-certificates tzdata
 
 # Set the working directory for the application.
 WORKDIR /app
