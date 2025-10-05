@@ -209,10 +209,11 @@ function displayQueueSummary(users) {
         return;
     }
 
-    // Filter users with queues (API returns PascalCase)
+    // Filter active users with queues (API returns PascalCase)
     const usersWithQueues = users.filter(u =>
-        (u.VolunteerQueueDays && u.VolunteerQueueDays > 0) ||
-        (u.AdminQueueDays && u.AdminQueueDays > 0)
+        u.IsActive && // Only show active users
+        ((u.VolunteerQueueDays && u.VolunteerQueueDays > 0) ||
+         (u.AdminQueueDays && u.AdminQueueDays > 0))
     );
 
     if (usersWithQueues.length === 0) {
