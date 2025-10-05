@@ -1,151 +1,286 @@
 # Duty Assignment Logic
 
 ## Overview
-The system manages duty assignments with three types: **Voluntary**, **Admin**, and **Round-Robin**.
+The system manages duty assignments through a queue-based system with three priority levels: **Voluntary**, **Admin**, and **Round-Robin**. Assignments are finalized daily at 11:00 AM Berlin time.
+
+---
 
 ## Assignment Types
 
-### 1. Voluntary (`voluntary`)
-- User volunteers for a specific date via `/volunteer` command
-- **Restrictions:**
-  - Cannot volunteer for past dates
-  - Can override existing round-robin assignments
-  - **Special case:** When volunteering for an admin-assigned day:
-    - The admin assignment is moved to the next available day
-    - Admin assignment looks for: first unassigned day OR first round-robin day (overrides it)
+### 1. Voluntary Queue
+Users volunteer for a specific number of days using the `/volunteer` command.
 
-### 2. Admin Assignment (`admin`)
-- Admin manually assigns a user via `/assign <username> <date>`
-- **Priority:** Highest - can override any existing assignment
-- No date restrictions (can assign to past or future)
+**Command Format:**
+- `/volunteer` - Bot prompts for number of days (default: 1 day if no response within ~10 minutes)
+- `/volunteer 3` - User volunteers for 3 days directly
 
-### 3. Round-Robin (`round_robin`)
-- Automatic assignment to balance workload
-- **Current implementation:** Created by prognosis endpoint
-- **Selection criteria:**
-  - Only active users (`is_active = 1`)
-  - Excludes admins (`is_admin = 0`)
-  - Orders by: assignment count ASC, last assigned timestamp ASC
-  - Takes user with lowest count/oldest assignment
+**Behavior:**
+- Adds the specified number of days to the user's volunteer queue
+- Does NOT pre-assign specific calendar dates
+- Has **highest priority** when assigning duties
+- Cannot change today's assignment (only affects future days)
+- Queue count is displayed on web calendar and `/schedule` command per user
 
-## Current Flow
+**Example:**
+- User volunteers for 3 days → Queue: [User: 3 days]
+- When assigning tomorrow's duty → Take 1 day from this user's queue → Queue: [User: 2 days]
 
-### Volunteering Flow (`/volunteer`)
-1. User clicks `/volunteer` → sees calendar
-2. User selects a date
-3. System checks:
-   - Is date in the past? → **Reject** with error
-   - Does duty already exist?
-     - If admin assignment → **Reassign admin** to next available day, then create voluntary
-     - If voluntary/round-robin → **Override** with new voluntary assignment
-     - If none → **Create** new voluntary assignment
+---
 
-### Admin Assignment Flow (`/assign`)
-1. Admin runs `/assign <username> <date>`
-2. System checks admin authorization (ADMIN_ID from env)
-3. Creates/updates duty with `admin` type
-4. **Always succeeds** - overrides any existing assignment
+### 2. Admin Assignment Queue
+Admin assigns a user to duty for a specific number of days using `/assign`.
 
-### Prognosis/Round-Robin Flow
-**CURRENT PROBLEM AREA:**
+**Command Format:**
+- `/assign` - Bot prompts for username (with button list) and number of days
+- `/assign username` - Bot prompts for number of days
+- `/assign username 5` - Directly assigns user to 5 days
 
-#### Web Prognosis (`/api/v1/prognosis/:year/:month`)
-- **Current behavior:** Shows only next unassigned future day
-- Does NOT create duties in database
-- Calls `GetNextRoundRobinUser()` to predict
+**Behavior:**
+- Adds the specified number of days to the user's admin assignment queue
+- Has **second-highest priority** (after voluntary queue)
+- Cannot change today's assignment (only affects future days)
+- Queue count is displayed on web calendar and `/schedule` command per user
 
-#### Historical Issue (Fixed)
-- **Old behavior:** Called `AssignDutyRoundRobin()` for all unassigned days
-- This CREATED round-robin duties in the database
-- Result: Many unwanted round-robin assignments stored
+---
+
+### 3. Round-Robin Assignment
+Automatic assignment when no volunteer or admin queue entries exist.
+
+**Selection Criteria:**
+- Only considers **active** users (`is_active = 1`)
+- Excludes **admin** users (`is_admin = 0`)
+- Excludes users who are **off-duty** (see Off-Duty section)
+- Calculates fairness based on the **last 14 days** of completed duties
+- **Excludes admin-assigned days** from fairness calculation (only counts voluntary and round-robin)
+
+**Calculation:**
+- Count completed duties per user in the last 14 days (voluntary + round-robin only)
+- Assign to the user with the fewest completed duties
+- If tied, use the user who served least recently
+
+---
+
+## Daily Assignment Process
+
+### 11:00 AM Daily Finalization (Berlin Time)
+Every day at 11:00 AM, the bot:
+
+1. **Determines today's assignee** using priority order:
+   - **Priority 1:** Check volunteer queues - select from user(s) with volunteer queue entries
+   - **Priority 2:** Check admin assignment queues - select from user(s) with admin queue entries
+   - **Priority 3:** Use round-robin algorithm to select an active user
+
+2. **Queue Balancing:** If multiple users have the same priority queue type:
+   - Round-robin between them to distribute fairly
+   - Example: UserA has 2 volunteer days, UserB has 2 volunteer days
+     - Day 1: UserA (remaining: A=1, B=2)
+     - Day 2: UserB (remaining: A=1, B=1)
+     - Day 3: UserA (remaining: A=0, B=1)
+     - Day 4: UserB (remaining: A=0, B=0)
+     - Day 5: Round-robin starts
+
+3. **Send notifications:**
+   - Direct message to the assigned user
+   - Announcement to the group chat (DISH_GROUP env variable)
+
+**Message Format:**
+```
+🍽️ Duty Assignment for [Date]
+@Username is on duty today!
+```
+
+---
+
+### 21:00 PM Daily Completion
+Every day at 21:00 PM (Berlin time):
+
+1. **Mark duty as completed** by the assigned user
+2. **Record in calendar** with assignment type (voluntary, admin, or round-robin)
+3. **Update round-robin statistics** (used for next assignments)
+
+---
+
+## Admin Commands
+
+### `/change <username>` - Reassign Today's Duty
+Allows admin to change who is on duty **today** (after 11:00 AM announcement).
+
+**Behavior:**
+1. Change today's assignment to the specified user
+2. Send notification to **DISH_GROUP**: "Duty reassigned from @OldUser to @NewUser"
+3. Send DM to **old assignee**: "You are no longer on duty today"
+4. Send DM to **new assignee**: "You are now on duty today"
+
+**Important:** This does NOT affect queues - it's a one-time change for today only.
+
+---
+
+### `/offduty <username>` - Temporary Exclusion
+Put a user off-duty for a specified period.
+
+**Command Flow (Interactive Dialog):**
+1. Admin: `/offduty` or `/offduty username`
+2. Bot prompts for username (if not provided) with button selection
+3. Bot prompts: "When should this start?"
+   - "Now" button
+   - "Future date" button → prompts for date
+4. Bot prompts: "For how many days?"
+   - Number input (e.g., 5, 12, etc.)
+
+**Behavior During Off-Duty Period:**
+- User is **excluded from round-robin** selection
+- User's volunteer queue is **frozen** (days remain but aren't used)
+- User's admin queue is **frozen** (days remain but aren't used)
+- User is marked visibly as "Off-Duty" on calendar
+
+**After Off-Duty Period Ends:**
+- User automatically returns to active status
+- Queues resume from where they were frozen
+
+---
+
+### `/toggleactive <username>` or `/toggleactive`
+Permanently toggle a user between active and inactive status.
+
+**Inactive Users:**
+- Completely hidden from:
+  - Calendar displays
+  - Round-robin selection
+  - Admin command suggestions (username buttons)
+  - Statistics
+- Treated as if they don't exist in the system
+- Can be toggled back to active at any time
+
+**Active Users:**
+- Visible in all system functions
+- Participate in round-robin when not off-duty
+
+---
+
+## User Status Overview
+
+| Status | In Round-Robin? | Queues Active? | Visible in Calendar? | In Stats? |
+|--------|-----------------|----------------|----------------------|-----------|
+| Active | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes |
+| Off-Duty (temp) | ❌ No | ⏸️ Frozen | ✅ Yes (marked) | ✅ Yes |
+| Inactive (perm) | ❌ No | ❌ No | ❌ No | ❌ No |
+| Admin | ❌ No (default) | ✅ Yes | ✅ Yes (if assigned) | ✅ Yes (if assigned) |
+
+---
+
+## Weekly Statistics
+
+### Sunday 21:10 PM - Weekly Report (Berlin Time)
+
+The bot sends a summary to **DISH_GROUP** showing duty statistics for the past week.
+
+**Report Format:**
+```
+📊 Weekly Duty Report (Oct 29 - Nov 4)
+
+🏆 Duty Days This Week:
+• @UserA: 3 days
+• @UserB: 2 days
+• @UserC: 2 days
+
+Total: 7 duty days completed
+```
+
+**Criteria:**
+- Only includes users who had **at least 1 completed duty** during the past week
+- Counts all assignment types (voluntary, admin, round-robin)
+- Sent to the group specified in **DISH_GROUP** environment variable
+
+---
+
+## Environment Variables
+
+- **ADMIN_ID**: Telegram user ID of the admin
+- **DISH_GROUP**: Telegram chat ID of the group for announcements
+- **DATABASE_PATH**: Path to SQLite database file
+- **TELEGRAM_APITOKEN**: Bot API token
+
+---
 
 ## Database Schema
 
 ### Users Table
-```
+```sql
 - id (primary key)
 - telegram_user_id (unique)
 - first_name
-- is_admin (boolean) - set automatically if matches ADMIN_ID env var
-- is_active (boolean) - controls participation in round-robin
-  - Regular users: true by default
-  - Admin users: false by default
+- is_admin (boolean) - auto-set if matches ADMIN_ID
+- is_active (boolean) - true for regular users, false for admins/inactive
+- volunteer_queue_days (integer) - number of days in volunteer queue
+- admin_queue_days (integer) - number of days in admin assignment queue
+- off_duty_start (date, nullable) - start of off-duty period
+- off_duty_end (date, nullable) - end of off-duty period
 ```
 
 ### Duties Table
-```
+```sql
 - id (primary key)
 - user_id (foreign key to users)
-- duty_date (date)
+- duty_date (date, unique)
 - assignment_type (enum: 'voluntary', 'admin', 'round_robin')
 - created_at (timestamp)
+- completed_at (timestamp, nullable) - set at 21:00 PM
 ```
 
 ### Round-Robin State Table
-```
+```sql
 - user_id (primary key, foreign key to users)
-- assignment_count (integer) - tracks total assignments
-- last_assigned_timestamp (datetime)
+- last_14_days_count (integer) - completed duties in last 14 days (excl. admin)
+- last_duty_date (date, nullable) - most recent duty date
+- updated_at (timestamp) - last calculation time
 ```
 
-## Current Problems
+---
 
-### Problem 1: Inactive Admin in Round-Robin
-**Status:** Should be fixed by `is_active = 0` and `is_admin = 0` filters
-**Symptom:** Admin still appears in rotation despite being inactive
-**Possible causes:**
-1. Old round-robin duties created before the fix
-2. Admin user not properly marked as `is_active = 0`
-3. Assignment count increment happening incorrectly
-
-### Problem 2: Round-Robin Assignment Count
-**When is count incremented?**
-- Only in `AssignDutyRoundRobin()` after successful creation
-- **Issue:** If old prognosis created duties, counts were incremented
-- **Issue:** If admin reassignment happens, counts might be wrong
-
-### Problem 3: Unclear Assignment Flow
-**Questions:**
-1. Should round-robin duties be created automatically? If so, when?
-2. Should prognosis just predict, or also assign?
-3. What happens to assignment counts when duties are overridden?
-4. Should there be a background job to auto-assign round-robin?
-
-## Suggested Clarifications Needed
-
-1. **Round-Robin Assignment Strategy:**
-   - Option A: Never auto-create, only show prognosis (current after fix)
-   - Option B: Auto-create for next N days via background job
-   - Option C: Auto-create on-demand when viewing calendar
-
-2. **Assignment Count Management:**
-   - Should counts only increment for actual served duties?
-   - Should counts decrement if duty is overridden?
-   - Should counts track voluntary vs round-robin separately?
-
-3. **Admin Behavior:**
-   - Should admin be in users table at all?
-   - Should admin have a duty count?
-   - Can admin volunteer for duties?
-
-4. **Database Cleanup:**
-   - Should old round-robin assignments be deleted?
-   - How to handle orphaned assignment counts?
-
-## Display Logic
+## Queue Display
 
 ### Web Calendar
-- Shows all duties (voluntary=green, admin=blue, round-robin=white)
-- Shows prognosis for next unassigned day (gray/italic)
+- Each user with queue entries shows a badge: "👤 UserName (V:3 A:2)"
+  - V: Volunteer queue days
+  - A: Admin queue days
 
-### Telegram Calendar
-- Shows day number + user circle number (e.g., "6①")
-- Legend maps numbers to users with emoji indicators
-- Read-only in `/schedule`, interactive in `/volunteer`
+### Telegram `/schedule`
+- Shows current month calendar
+- User legend includes queue counts: "① 🟢UserA (V:2)"
 
-## Authorization
+---
 
-### Admin Check (`checkAdmin()`)
-1. If `AdminID` configured in handlers → compare Telegram user ID
-2. Else fallback to `is_admin` flag in database
-3. Admin commands: `/assign`, `/modify`, `/users`, `/toggleactive`
+## Implementation Notes
+
+### Queue Management
+- Volunteer and admin queues are **separate counters** per user
+- Queues are **decremented by 1** each time a day is assigned from that queue
+- Queues **never go negative**
+- Multiple users can have queue entries simultaneously
+
+### Timezone
+- All time-based operations use **Berlin timezone (Europe/Berlin)**
+- Critical times: 11:00 AM (assignment), 21:00 PM (completion)
+
+### Today's Protection
+- After 11:00 AM assignment, today's duty is **locked**
+- Only `/change` command can modify it
+- Volunteer/admin commands only affect future days
+
+### Fairness Algorithm
+- Round-robin considers **only the last 14 days**
+- Admin assignments **don't count** toward fairness (to avoid penalizing admin-assigned users)
+- Off-duty periods **don't count** as duties or penalties
+
+---
+
+## Migration from Current System
+
+**Issues to Address:**
+1. Remove prognosis/prediction logic (no longer needed)
+2. Add volunteer_queue_days and admin_queue_days columns to users table
+3. Add off_duty_start and off_duty_end columns to users table
+4. Implement 11:00 AM and 21:00 PM scheduled tasks
+5. Add DISH_GROUP environment variable
+6. Rewrite assignment logic to use queue system instead of direct calendar assignments
+7. Clean up old round-robin duties from database

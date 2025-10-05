@@ -44,7 +44,11 @@ func (s *SQLiteStore) migrate(ctx context.Context) error {
 			telegram_user_id INTEGER UNIQUE NOT NULL,
 			first_name TEXT NOT NULL,
 			is_admin INTEGER NOT NULL DEFAULT 0,
-			is_active INTEGER NOT NULL DEFAULT 1
+			is_active INTEGER NOT NULL DEFAULT 1,
+			volunteer_queue_days INTEGER NOT NULL DEFAULT 0,
+			admin_queue_days INTEGER NOT NULL DEFAULT 0,
+			off_duty_start TEXT,
+			off_duty_end TEXT
 		);
 
 		CREATE TABLE IF NOT EXISTS duties (
@@ -53,18 +57,37 @@ func (s *SQLiteStore) migrate(ctx context.Context) error {
 			duty_date TEXT UNIQUE NOT NULL,
 			assignment_type TEXT NOT NULL,
 			created_at TEXT NOT NULL,
+			completed_at TEXT,
 			FOREIGN KEY(user_id) REFERENCES users(id)
 		);
 
 		CREATE TABLE IF NOT EXISTS round_robin_state (
 			user_id INTEGER PRIMARY KEY,
-			assignment_count INTEGER NOT NULL DEFAULT 0,
-			last_assigned_timestamp TEXT,
+			last_14_days_count INTEGER NOT NULL DEFAULT 0,
+			last_duty_date TEXT,
+			updated_at TEXT,
 			FOREIGN KEY(user_id) REFERENCES users(id)
 		);
 	`
-	_, err := s.db.ExecContext(ctx, schema)
-	return err
+	if _, err := s.db.ExecContext(ctx, schema); err != nil {
+		return err
+	}
+
+	// Add new columns to existing tables if they don't exist
+	alterations := []string{
+		`ALTER TABLE users ADD COLUMN volunteer_queue_days INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE users ADD COLUMN admin_queue_days INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE users ADD COLUMN off_duty_start TEXT`,
+		`ALTER TABLE users ADD COLUMN off_duty_end TEXT`,
+		`ALTER TABLE duties ADD COLUMN completed_at TEXT`,
+	}
+
+	for _, alteration := range alterations {
+		// Ignore errors for columns that already exist
+		s.db.ExecContext(ctx, alteration)
+	}
+
+	return nil
 }
 
 // CreateUser adds a new user to the database.

@@ -20,11 +20,15 @@ const (
 
 // User represents a user in the system.
 type User struct {
-	ID             int64
-	TelegramUserID int64
-	FirstName      string
-	IsAdmin        bool
-	IsActive       bool
+	ID                 int64
+	TelegramUserID     int64
+	FirstName          string
+	IsAdmin            bool
+	IsActive           bool
+	VolunteerQueueDays int
+	AdminQueueDays     int
+	OffDutyStart       *time.Time
+	OffDutyEnd         *time.Time
 }
 
 // Duty represents a duty assignment in the system.
@@ -34,6 +38,7 @@ type Duty struct {
 	DutyDate       time.Time
 	AssignmentType AssignmentType
 	CreatedAt      time.Time
+	CompletedAt    *time.Time
 	User           *User // Used to join user data
 }
 
