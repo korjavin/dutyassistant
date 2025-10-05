@@ -11,8 +11,11 @@ The system manages duty assignments through a queue-based system with three prio
 Users volunteer for a specific number of days using the `/volunteer` command.
 
 **Command Format:**
-- `/volunteer` - Bot prompts for number of days (default: 1 day if no response within ~10 minutes)
-- `/volunteer 3` - User volunteers for 3 days directly
+- `/volunteer` - Shows **inline keyboard** with day selection buttons (1-7 + Custom)
+  - Buttons: `[1] [2] [3] [4]` on first row, `[5] [6] [7]` on second row, `[✏️ Custom]` on third row
+  - Clicking a number button immediately adds that many days to volunteer queue
+  - Clicking "Custom" prompts: "Please type the number of days: /volunteer [days]"
+- `/volunteer 3` - Direct text input also supported (adds 3 days directly)
 
 **Behavior:**
 - Adds the specified number of days to the user's volunteer queue
@@ -20,9 +23,11 @@ Users volunteer for a specific number of days using the `/volunteer` command.
 - Has **highest priority** when assigning duties
 - Cannot change today's assignment (only affects future days)
 - Queue count is displayed on web calendar and `/schedule` command per user
+- Confirmation message shows with ✅ emoji
 
 **Example:**
-- User volunteers for 3 days → Queue: [User: 3 days]
+- User clicks `/volunteer` → Bot shows button grid → User clicks `[3]` → Bot confirms "✅ Thank you for volunteering! Added 3 day(s) to your volunteer queue."
+- Queue: [User: 3 days]
 - When assigning tomorrow's duty → Take 1 day from this user's queue → Queue: [User: 2 days]
 
 ---
@@ -31,15 +36,18 @@ Users volunteer for a specific number of days using the `/volunteer` command.
 Admin assigns a user to duty for a specific number of days using `/assign`.
 
 **Command Format:**
-- `/assign` - Bot prompts for username (with button list) and number of days
-- `/assign username` - Bot prompts for number of days
-- `/assign username 5` - Directly assigns user to 5 days
+- `/assign` - Shows **inline keyboard** with user selection buttons
+  - Step 1: Shows list of users as buttons: `[👤 UserA]` `[👤 UserB]` etc.
+  - Step 2: After user selection, shows day buttons: `[1] [2] [3] [4]` `[5] [6] [7]` `[✏️ Custom]`
+  - Step 3: After day selection, shows confirmation and executes assignment
+- `/assign username 5` - Direct text input also supported
 
 **Behavior:**
 - Adds the specified number of days to the user's admin assignment queue
 - Has **second-highest priority** (after voluntary queue)
 - Cannot change today's assignment (only affects future days)
 - Queue count is displayed on web calendar and `/schedule` command per user
+- Confirmation message shows with ✅ emoji: "✅ Added 5 day(s) to admin queue for **UserA**"
 
 ---
 
@@ -102,30 +110,37 @@ Every day at 21:00 PM (Berlin time):
 
 ## Admin Commands
 
-### `/change <username>` - Reassign Today's Duty
-Allows admin to change who is on duty **today** (after 11:00 AM announcement).
+### `/modify` or `/change` - Modify Duty Assignment
+Allows admin to change the assigned user for any date (today or future).
+
+**Command Format:**
+- `/modify` - Shows **inline keyboard** with date selection
+  - Step 1: Shows date buttons for today + next 7 days: `[📅 Today (2025-10-05)]` `[2025-10-06]` etc.
+  - Step 2: After date selection, shows user buttons: `[👤 UserA]` `[👤 UserB]` etc.
+  - Step 3: After user selection, executes change and shows confirmation
+- `/modify 2025-10-10 username` - Direct text input also supported
 
 **Behavior:**
-1. Change today's assignment to the specified user
-2. Send notification to **DISH_GROUP**: "Duty reassigned from @OldUser to @NewUser"
-3. Send DM to **old assignee**: "You are no longer on duty today"
-4. Send DM to **new assignee**: "You are now on duty today"
+1. Change the duty assignment for the specified date to the selected user
+2. Show confirmation: "✅ Successfully modified duty for 2025-10-10 to be handled by **UserA**"
+3. If changing today's duty after 11:00 AM:
+   - Send notification to **DISH_GROUP**: "Duty reassigned from @OldUser to @NewUser"
+   - Send DM to **old assignee**: "You are no longer on duty today"
+   - Send DM to **new assignee**: "You are now on duty today"
 
-**Important:** This does NOT affect queues - it's a one-time change for today only.
+**Important:** This does NOT affect queues - it's a one-time change for the specific date only.
 
 ---
 
-### `/offduty <username>` - Temporary Exclusion
+### `/offduty` - Temporary Exclusion
 Put a user off-duty for a specified period.
 
-**Command Flow (Interactive Dialog):**
-1. Admin: `/offduty` or `/offduty username`
-2. Bot prompts for username (if not provided) with button selection
-3. Bot prompts: "When should this start?"
-   - "Now" button
-   - "Future date" button → prompts for date
-4. Bot prompts: "For how many days?"
-   - Number input (e.g., 5, 12, etc.)
+**Command Format:**
+- `/offduty` - Shows **inline keyboard** with user selection
+  - Step 1: Shows user buttons: `[👤 UserA]` `[👤 UserB]` etc.
+  - Step 2: After user selection, prompts for dates via text input
+    - Message: "🏖 Set off-duty period for **UserA**\n\nPlease provide start and end dates:\n`/offduty UserA START_DATE END_DATE`\nExample: `/offduty UserA 2025-10-10 2025-10-15`"
+- `/offduty username 2025-10-10 2025-10-15` - Direct text input supported
 
 **Behavior During Off-Duty Period:**
 - User is **excluded from round-robin** selection
@@ -139,8 +154,15 @@ Put a user off-duty for a specified period.
 
 ---
 
-### `/toggleactive <username>` or `/toggleactive`
+### `/toggleactive` - Toggle User Active Status
 Permanently toggle a user between active and inactive status.
+
+**Command Format:**
+- `/toggleactive` - Shows **inline keyboard** with user selection and status indicators
+  - Buttons show current status: `[✅ UserA]` `[❌ UserB]` etc.
+  - ✅ = Currently active, ❌ = Currently inactive
+  - Clicking button toggles the status
+- `/toggleactive username` - Direct text input also supported
 
 **Inactive Users:**
 - Completely hidden from:
@@ -154,6 +176,9 @@ Permanently toggle a user between active and inactive status.
 **Active Users:**
 - Visible in all system functions
 - Participate in round-robin when not off-duty
+
+**Confirmation:**
+- Shows message: "✅ Successfully set status for **UserA** to active." (or inactive)
 
 ---
 
