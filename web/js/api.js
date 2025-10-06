@@ -1,6 +1,23 @@
 // This module will encapsulate all communication with the backend API.
 
 /**
+ * Gets authentication headers with Telegram Web App initData if available.
+ * @returns {object} Headers object with optional Authorization header.
+ */
+function getAuthHeaders() {
+    const headers = {
+        'Content-Type': 'application/json',
+    };
+
+    // Add Telegram Web App authentication if available
+    if (window.Telegram?.WebApp?.initData) {
+        headers['Authorization'] = 'tma ' + window.Telegram.WebApp.initData;
+    }
+
+    return headers;
+}
+
+/**
  * A helper function for making POST requests.
  * @param {string} url - The URL to send the request to.
  * @param {object} data - The data to send in the request body.
@@ -9,9 +26,7 @@
 async function postData(url = '', data = {}) {
     const response = await fetch(url, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify(data),
     });
 
@@ -30,7 +45,9 @@ async function postData(url = '', data = {}) {
  */
 export async function getSchedule(year, month) {
     try {
-        const response = await fetch(`/api/v1/schedule/${year}/${month}`);
+        const response = await fetch(`/api/v1/schedule/${year}/${month}`, {
+            headers: getAuthHeaders()
+        });
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -66,7 +83,9 @@ export async function getPrognosis(year, month) {
  */
 export async function getUsers() {
     try {
-        const response = await fetch('/api/v1/users');
+        const response = await fetch('/api/v1/users', {
+            headers: getAuthHeaders()
+        });
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
