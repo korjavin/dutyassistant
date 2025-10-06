@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"strings"
 
@@ -14,10 +15,12 @@ import (
 type Bot struct {
 	api      *tgbotapi.BotAPI
 	handlers *handlers.Handlers
+	groupID  int64 // DISH_GROUP ID for access control
+	ownerID  int64 // Owner ID for access control
 }
 
 // NewBot creates a new Bot instance.
-func NewBot(apiToken string, h *handlers.Handlers) (*Bot, error) {
+func NewBot(apiToken string, h *handlers.Handlers, groupID, ownerID int64) (*Bot, error) {
 	api, err := tgbotapi.NewBotAPI(apiToken)
 	if err != nil {
 		return nil, err
@@ -28,6 +31,8 @@ func NewBot(apiToken string, h *handlers.Handlers) (*Bot, error) {
 	return &Bot{
 		api:      api,
 		handlers: h,
+		groupID:  groupID,
+		ownerID:  ownerID,
 	}, nil
 }
 
@@ -36,6 +41,37 @@ func (b *Bot) SendMessage(chatID int64, text string) error {
 	msg := tgbotapi.NewMessage(chatID, text)
 	_, err := b.api.Send(msg)
 	return err
+}
+
+// checkAccess verifies if a user has access to the bot.
+// Returns true if the user is the owner or a member of the DISH_GROUP.
+func (b *Bot) checkAccess(userID int64) bool {
+	// Owner always has access
+	if b.ownerID != 0 && userID == b.ownerID {
+		return true
+	}
+
+	// If no group is configured, allow access
+	if b.groupID == 0 {
+		return true
+	}
+
+	// Check if user is a member of the group
+	chatMember, err := b.api.GetChatMember(tgbotapi.GetChatMemberConfig{
+		ChatConfigWithUser: tgbotapi.ChatConfigWithUser{
+			ChatID: b.groupID,
+			UserID: userID,
+		},
+	})
+
+	if err != nil {
+		log.Printf("Error checking group membership for user %d: %v", userID, err)
+		return false
+	}
+
+	// Allow if user is a member, administrator, or creator
+	status := chatMember.Status
+	return status == "member" || status == "administrator" || status == "creator"
 }
 
 // Start begins listening for and processing updates from Telegram.
@@ -59,6 +95,31 @@ func (b *Bot) Start(ctx context.Context) {
 func (b *Bot) handleUpdate(update tgbotapi.Update) {
 	var err error
 	var response tgbotapi.Chattable
+
+	// Check access control for messages and callbacks
+	var userID int64
+	var chatID int64
+	if update.Message != nil {
+		userID = update.Message.From.ID
+		chatID = update.Message.Chat.ID
+	} else if update.CallbackQuery != nil {
+		userID = update.CallbackQuery.From.ID
+		chatID = update.CallbackQuery.Message.Chat.ID
+	}
+
+	// Verify user has access
+	if userID != 0 && !b.checkAccess(userID) {
+		log.Printf("Access denied for user %d", userID)
+		ownerMention := ""
+		if b.ownerID != 0 {
+			ownerMention = fmt.Sprintf(" Please contact the bot owner (ID: %d) for access.", b.ownerID)
+		}
+		response = tgbotapi.NewMessage(chatID, fmt.Sprintf("🚫 Access denied. You must be a member of the authorized group to use this bot.%s", ownerMention))
+		if _, err := b.api.Send(response); err != nil {
+			log.Printf("Error sending access denied message: %v", err)
+		}
+		return
+	}
 
 	switch {
 	case update.Message != nil && update.Message.IsCommand():

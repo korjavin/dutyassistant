@@ -57,10 +57,11 @@ func main() {
 
 	// Initialize and start Telegram bot
 	log.Println("Initializing Telegram bot...")
-	bot, err := telegram.NewBot(telegramToken, telegramHandlers)
+	bot, err := telegram.NewBot(telegramToken, telegramHandlers, dishGroupID, adminID)
 	if err != nil {
 		log.Fatalf("Failed to initialize Telegram bot: %v", err)
 	}
+	log.Printf("Access control configured: GroupID=%d, OwnerID=%d", dishGroupID, adminID)
 
 	// Start bot in background
 	botCtx, botCancel := context.WithCancel(ctx)
