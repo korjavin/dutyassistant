@@ -39,7 +39,8 @@ func GetSchedule(s store.Store) gin.HandlerFunc {
 
 		// Check if user is authenticated
 		user, authenticated := c.Request.Context().Value(middleware.UserKey).(*store.User)
-		isAuthorized := authenticated && user != nil && user.IsActive
+		// Allow admins or active users
+		isAuthorized := authenticated && user != nil && (user.IsActive || user.IsAdmin)
 
 		// Transform to frontend-friendly format
 		type dutyResponse struct {
