@@ -28,15 +28,16 @@ func NewServer(s store.Store, botToken string) *gin.Engine {
 
 	// Create an instance of the authentication middleware.
 	authMiddleware := middleware.Authenticate(s, botToken)
+	optionalAuthMiddleware := middleware.OptionalAuth(s, botToken)
 	adminRequiredMiddleware := middleware.AdminRequired()
 
 	// Group all API routes under /api/v1.
 	api := router.Group("/api/v1")
 	{
-		// Public endpoints, accessible to anyone.
-		api.GET("/schedule/:year/:month", handlers.GetSchedule(s))
+		// Public endpoints with optional auth (return limited data if not authenticated).
+		api.GET("/schedule/:year/:month", optionalAuthMiddleware, handlers.GetSchedule(s))
 		api.GET("/prognosis/:year/:month", handlers.GetPrognosis(s))
-		api.GET("/users", handlers.GetUsers(s))
+		api.GET("/users", optionalAuthMiddleware, handlers.GetUsers(s))
 
 		// Endpoints requiring user authentication (via Telegram Web App).
 		authenticated := api.Group("/")

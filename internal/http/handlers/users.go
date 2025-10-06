@@ -4,15 +4,24 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/korjavin/dutyassistant/internal/http/middleware"
 	"github.com/korjavin/dutyassistant/internal/store"
 )
 
 // GetUsers handles the GET /api/v1/users endpoint.
-// It retrieves a list of all users in the system.
-// In the future, this might be split into active/inactive users,
-// but for now, it returns everyone.
+// Returns empty list for unauthenticated users.
 func GetUsers(s store.Store) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Check if user is authenticated
+		user, authenticated := c.Request.Context().Value(middleware.UserKey).(*store.User)
+		isAuthorized := authenticated && user != nil && user.IsActive
+
+		// Return empty list for unauthorized users
+		if !isAuthorized {
+			c.JSON(http.StatusOK, []*store.User{})
+			return
+		}
+
 		users, err := s.ListAllUsers(c.Request.Context())
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve users"})

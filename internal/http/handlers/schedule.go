@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/korjavin/dutyassistant/internal/http/middleware"
 	"github.com/korjavin/dutyassistant/internal/store"
 )
 
@@ -36,6 +37,10 @@ func GetSchedule(s store.Store) gin.HandlerFunc {
 			return
 		}
 
+		// Check if user is authenticated
+		user, authenticated := c.Request.Context().Value(middleware.UserKey).(*store.User)
+		isAuthorized := authenticated && user != nil && user.IsActive
+
 		// Transform to frontend-friendly format
 		type dutyResponse struct {
 			ID                 int64  `json:"id"`
@@ -52,11 +57,16 @@ func GetSchedule(s store.Store) gin.HandlerFunc {
 			userName := ""
 			volunteerQueue := 0
 			adminQueue := 0
-			if duty.User != nil {
+
+			// Only include user details if authorized
+			if isAuthorized && duty.User != nil {
 				userName = duty.User.FirstName
 				volunteerQueue = duty.User.VolunteerQueueDays
 				adminQueue = duty.User.AdminQueueDays
+			} else if duty.User != nil {
+				userName = "***" // Anonymous placeholder
 			}
+
 			response = append(response, dutyResponse{
 				ID:                 duty.ID,
 				Date:               duty.DutyDate.Format(time.RFC3339),

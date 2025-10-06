@@ -100,3 +100,47 @@ func AdminRequired() gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+// OptionalAuth is a middleware that attempts authentication but doesn't require it.
+// If authentication succeeds, the user is added to context. If it fails, the request continues without a user.
+// This allows handlers to provide different responses based on authentication status.
+func OptionalAuth(s store.Store, botToken string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			c.Next()
+			return
+		}
+
+		parts := strings.Split(authHeader, " ")
+		if len(parts) != 2 || strings.ToLower(parts[0]) != "tma" {
+			c.Next()
+			return
+		}
+
+		initData := parts[1]
+
+		if err := initdata.Validate(initData, botToken, 0); err != nil {
+			c.Next()
+			return
+		}
+
+		data, err := initdata.Parse(initData)
+		if err != nil || data.User.ID == 0 {
+			c.Next()
+			return
+		}
+
+		user, err := s.GetUserByTelegramID(c.Request.Context(), data.User.ID)
+		if err != nil || user == nil {
+			c.Next()
+			return
+		}
+
+		// Store user in context if found
+		ctx := context.WithValue(c.Request.Context(), UserKey, user)
+		c.Request = c.Request.WithContext(ctx)
+
+		c.Next()
+	}
+}
