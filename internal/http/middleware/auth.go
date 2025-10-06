@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"strings"
 
@@ -108,34 +109,46 @@ func OptionalAuth(s store.Store, botToken string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
+			log.Println("[WEB_AUTH] No Authorization header present")
 			c.Next()
 			return
 		}
 
+		log.Printf("[WEB_AUTH] Authorization header received (length: %d)", len(authHeader))
+
 		parts := strings.Split(authHeader, " ")
 		if len(parts) != 2 || strings.ToLower(parts[0]) != "tma" {
+			log.Printf("[WEB_AUTH] Invalid auth format: parts=%d, scheme=%s", len(parts), parts[0])
 			c.Next()
 			return
 		}
 
 		initData := parts[1]
+		log.Printf("[WEB_AUTH] Validating initData (length: %d)", len(initData))
 
 		if err := initdata.Validate(initData, botToken, 0); err != nil {
+			log.Printf("[WEB_AUTH] Validation failed: %v", err)
 			c.Next()
 			return
 		}
 
 		data, err := initdata.Parse(initData)
 		if err != nil || data.User.ID == 0 {
+			log.Printf("[WEB_AUTH] Parse failed or invalid user ID: err=%v, userID=%d", err, data.User.ID)
 			c.Next()
 			return
 		}
 
+		log.Printf("[WEB_AUTH] Parsed successfully, user ID: %d", data.User.ID)
+
 		user, err := s.GetUserByTelegramID(c.Request.Context(), data.User.ID)
 		if err != nil || user == nil {
+			log.Printf("[WEB_AUTH] User lookup failed: err=%v, found=%v", err, user != nil)
 			c.Next()
 			return
 		}
+
+		log.Printf("[WEB_AUTH] User authenticated: ID=%d, Name=%s, IsActive=%v", user.ID, user.FirstName, user.IsActive)
 
 		// Store user in context if found
 		ctx := context.WithValue(c.Request.Context(), UserKey, user)
