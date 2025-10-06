@@ -9,7 +9,7 @@ services:
     # The image to use. It should be built and pushed to the specified registry,
     # for example, GitHub Container Registry (ghcr.io).
     # The ':latest' tag points to the most recent build from the main branch.
-    image: ghcr.io/korjavin/dutyassistant:latest
+    image: ghcr.io/korjavin/dutyassistant:1caea242da4e8fbda680cd7049b945aba6451d46
 
     # A friendly name for the container.
     container_name: roster-bot
