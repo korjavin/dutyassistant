@@ -44,6 +44,8 @@ services:
       - TELEGRAM_APITOKEN=${TELEGRAM_APITOKEN}
       # The Telegram user ID of the admin (from Portainer or .env)
       - ADMIN_ID=${ADMIN_ID}
+      # The Telegram group/chat ID for duty announcements (optional)
+      - DISH_GROUP=${DISH_GROUP}
       # Add other environment variables as needed (e.g., database path, LLM keys).
       - DATABASE_PATH=/app/data/roster.db
 
