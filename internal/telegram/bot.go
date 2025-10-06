@@ -48,15 +48,18 @@ func (b *Bot) SendMessage(chatID int64, text string) error {
 func (b *Bot) checkAccess(userID int64) bool {
 	// Owner always has access
 	if b.ownerID != 0 && userID == b.ownerID {
+		log.Printf("[ACCESS] User %d granted access as owner", userID)
 		return true
 	}
 
 	// If no group is configured, allow access
 	if b.groupID == 0 {
+		log.Printf("[ACCESS] User %d granted access (no group restriction)", userID)
 		return true
 	}
 
 	// Check if user is a member of the group
+	log.Printf("[ACCESS] Checking group membership for user %d in group %d", userID, b.groupID)
 	chatMember, err := b.api.GetChatMember(tgbotapi.GetChatMemberConfig{
 		ChatConfigWithUser: tgbotapi.ChatConfigWithUser{
 			ChatID: b.groupID,
@@ -65,13 +68,15 @@ func (b *Bot) checkAccess(userID int64) bool {
 	})
 
 	if err != nil {
-		log.Printf("Error checking group membership for user %d: %v", userID, err)
+		log.Printf("[ACCESS] Error checking group membership for user %d: %v", userID, err)
 		return false
 	}
 
 	// Allow if user is a member, administrator, or creator
 	status := chatMember.Status
-	return status == "member" || status == "administrator" || status == "creator"
+	allowed := status == "member" || status == "administrator" || status == "creator"
+	log.Printf("[ACCESS] User %d status in group: %s, access granted: %v", userID, status, allowed)
+	return allowed
 }
 
 // Start begins listening for and processing updates from Telegram.
