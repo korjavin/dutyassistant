@@ -31,6 +31,13 @@ func NewBot(apiToken string, h *handlers.Handlers) (*Bot, error) {
 	}, nil
 }
 
+// SendMessage sends a text message to a specific chat ID.
+func (b *Bot) SendMessage(chatID int64, text string) error {
+	msg := tgbotapi.NewMessage(chatID, text)
+	_, err := b.api.Send(msg)
+	return err
+}
+
 // Start begins listening for and processing updates from Telegram.
 func (b *Bot) Start(ctx context.Context) {
 	u := tgbotapi.NewUpdate(0)

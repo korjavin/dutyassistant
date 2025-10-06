@@ -30,6 +30,8 @@ func main() {
 	}
 	adminIDStr := getEnv("ADMIN_ID", "0")
 	adminID := parseInt64(adminIDStr, 0)
+	dishGroupIDStr := getEnv("DISH_GROUP", "0")
+	dishGroupID := parseInt64(dishGroupIDStr, 0)
 
 	// Initialize database
 	log.Println("Initializing database at", dbPath)
@@ -81,7 +83,31 @@ func main() {
 			log.Printf("[CRON] Error assigning today's duty: %v", err)
 		} else if duty != nil {
 			log.Printf("[CRON] Successfully assigned duty to user %d", duty.UserID)
-			// TODO: Send notification to DISH_GROUP
+
+			// Send notification to assigned user (DM)
+			if duty.User != nil {
+				dmMsg := fmt.Sprintf("🍽️ You've been assigned duty for today (%s)!\n\nAssignment type: %s",
+					duty.DutyDate.Format("2006-01-02"),
+					duty.AssignmentType)
+				if err := bot.SendMessage(duty.User.TelegramUserID, dmMsg); err != nil {
+					log.Printf("[CRON] Failed to send DM to user %d: %v", duty.User.TelegramUserID, err)
+				} else {
+					log.Printf("[CRON] Sent DM notification to user %d", duty.User.TelegramUserID)
+				}
+			}
+
+			// Send notification to group chat
+			if dishGroupID != 0 {
+				groupMsg := fmt.Sprintf("🍽️ Duty Assignment for %s\n\n@%s is on duty today!\n\nType: %s",
+					duty.DutyDate.Format("January 2, 2006"),
+					duty.User.FirstName,
+					duty.AssignmentType)
+				if err := bot.SendMessage(dishGroupID, groupMsg); err != nil {
+					log.Printf("[CRON] Failed to send group notification: %v", err)
+				} else {
+					log.Printf("[CRON] Sent group notification to chat %d", dishGroupID)
+				}
+			}
 		}
 	})
 	if err != nil {
