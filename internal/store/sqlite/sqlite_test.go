@@ -172,42 +172,40 @@ func TestRoundRobin(t *testing.T) {
 	s.CreateUser(ctx, user2)
 	s.CreateUser(ctx, user3)
 
-	// 1. Get next user (should be user1 as it's the first one)
-	nextUser, err := s.GetNextRoundRobinUser(ctx)
+	// Test the new queue-based system
+	// 1. Add users to volunteer queue
+	err := s.AddToVolunteerQueue(ctx, user1.ID, 2)
 	if err != nil {
-		t.Fatalf("GetNextRoundRobinUser failed: %v", err)
-	}
-	if nextUser.ID != user1.ID {
-		t.Errorf("Expected user1 to be next, got user with ID %d", nextUser.ID)
+		t.Fatalf("AddToVolunteerQueue failed: %v", err)
 	}
 
-	// 2. Increment user1's count
-	err = s.IncrementAssignmentCount(ctx, user1.ID, time.Now())
+	// 2. Get users with volunteer queue
+	volunteers, err := s.GetUsersWithVolunteerQueue(ctx)
 	if err != nil {
-		t.Fatalf("IncrementAssignmentCount failed: %v", err)
+		t.Fatalf("GetUsersWithVolunteerQueue failed: %v", err)
+	}
+	if len(volunteers) != 1 || volunteers[0].ID != user1.ID {
+		t.Errorf("Expected 1 volunteer (user1), got %d volunteers", len(volunteers))
 	}
 
-	// 3. Get next user (should be user2)
-	nextUser, err = s.GetNextRoundRobinUser(ctx)
+	// 3. Decrement volunteer queue
+	err = s.DecrementVolunteerQueue(ctx, user1.ID)
 	if err != nil {
-		t.Fatalf("GetNextRoundRobinUser failed: %v", err)
-	}
-	if nextUser.ID != user2.ID {
-		t.Errorf("Expected user2 to be next, got user with ID %d", nextUser.ID)
+		t.Fatalf("DecrementVolunteerQueue failed: %v", err)
 	}
 
-	// 4. Increment user2's count
-	err = s.IncrementAssignmentCount(ctx, user2.ID, time.Now())
+	// 4. Add to admin queue
+	err = s.AddToAdminQueue(ctx, user2.ID, 1)
 	if err != nil {
-		t.Fatalf("IncrementAssignmentCount failed: %v", err)
+		t.Fatalf("AddToAdminQueue failed: %v", err)
 	}
 
-	// 5. Get next user (should be user1 again)
-	nextUser, err = s.GetNextRoundRobinUser(ctx)
+	// 5. Get users with admin queue
+	admins, err := s.GetUsersWithAdminQueue(ctx)
 	if err != nil {
-		t.Fatalf("GetNextRoundRobinUser failed: %v", err)
+		t.Fatalf("GetUsersWithAdminQueue failed: %v", err)
 	}
-	if nextUser.ID != user1.ID {
-		t.Errorf("Expected user1 to be next again, got user with ID %d", nextUser.ID)
+	if len(admins) != 1 || admins[0].ID != user2.ID {
+		t.Errorf("Expected 1 admin queue user (user2), got %d users", len(admins))
 	}
 }

@@ -140,94 +140,258 @@ func (m *mockStore) GetDutiesByMonth(ctx context.Context, year int, month time.M
 	return result, nil
 }
 
-func TestScheduler_AssignDutyAdmin(t *testing.T) {
+// Stub implementations for new queue and off-duty methods
+func (m *mockStore) CompleteDuty(ctx context.Context, date time.Time) error {
+	key := date.Format("2006-01-02")
+	if duty, exists := m.duties[key]; exists {
+		now := time.Now()
+		duty.CompletedAt = &now
+	}
+	return nil
+}
+
+func (m *mockStore) GetTodaysDuty(ctx context.Context) (*store.Duty, error) {
+	today := time.Now().Truncate(24 * time.Hour)
+	return m.GetDutyByDate(ctx, today)
+}
+
+func (m *mockStore) GetCompletedDutiesInRange(ctx context.Context, start, end time.Time) ([]*store.Duty, error) {
+	return []*store.Duty{}, nil
+}
+
+func (m *mockStore) AddToVolunteerQueue(ctx context.Context, userID int64, days int) error {
+	for _, u := range m.users {
+		if u.ID == userID {
+			u.VolunteerQueueDays += days
+			return nil
+		}
+	}
+	return errors.New("user not found")
+}
+
+func (m *mockStore) AddToAdminQueue(ctx context.Context, userID int64, days int) error {
+	for _, u := range m.users {
+		if u.ID == userID {
+			u.AdminQueueDays += days
+			return nil
+		}
+	}
+	return errors.New("user not found")
+}
+
+func (m *mockStore) DecrementVolunteerQueue(ctx context.Context, userID int64) error {
+	for _, u := range m.users {
+		if u.ID == userID && u.VolunteerQueueDays > 0 {
+			u.VolunteerQueueDays--
+			return nil
+		}
+	}
+	return nil
+}
+
+func (m *mockStore) DecrementAdminQueue(ctx context.Context, userID int64) error {
+	for _, u := range m.users {
+		if u.ID == userID && u.AdminQueueDays > 0 {
+			u.AdminQueueDays--
+			return nil
+		}
+	}
+	return nil
+}
+
+func (m *mockStore) GetUsersWithVolunteerQueue(ctx context.Context) ([]*store.User, error) {
+	var result []*store.User
+	for _, u := range m.users {
+		if u.VolunteerQueueDays > 0 {
+			result = append(result, u)
+		}
+	}
+	return result, nil
+}
+
+func (m *mockStore) GetUsersWithAdminQueue(ctx context.Context) ([]*store.User, error) {
+	var result []*store.User
+	for _, u := range m.users {
+		if u.AdminQueueDays > 0 {
+			result = append(result, u)
+		}
+	}
+	return result, nil
+}
+
+func (m *mockStore) SetOffDuty(ctx context.Context, userID int64, start, end time.Time) error {
+	for _, u := range m.users {
+		if u.ID == userID {
+			u.OffDutyStart = &start
+			u.OffDutyEnd = &end
+			return nil
+		}
+	}
+	return errors.New("user not found")
+}
+
+func (m *mockStore) ClearOffDuty(ctx context.Context, userID int64) error {
+	for _, u := range m.users {
+		if u.ID == userID {
+			u.OffDutyStart = nil
+			u.OffDutyEnd = nil
+			return nil
+		}
+	}
+	return errors.New("user not found")
+}
+
+func (m *mockStore) IsUserOffDuty(ctx context.Context, userID int64, date time.Time) (bool, error) {
+	for _, u := range m.users {
+		if u.ID == userID && u.OffDutyStart != nil && u.OffDutyEnd != nil {
+			return !date.Before(*u.OffDutyStart) && !date.After(*u.OffDutyEnd), nil
+		}
+	}
+	return false, nil
+}
+
+func (m *mockStore) GetOffDutyUsers(ctx context.Context, date time.Time) ([]*store.User, error) {
+	var result []*store.User
+	for _, u := range m.users {
+		if u.OffDutyStart != nil && u.OffDutyEnd != nil {
+			if !date.Before(*u.OffDutyStart) && !date.After(*u.OffDutyEnd) {
+				result = append(result, u)
+			}
+		}
+	}
+	return result, nil
+}
+
+func TestScheduler_AddToVolunteerQueue(t *testing.T) {
 	mock := newMockStore()
 	scheduler := NewScheduler(mock)
 	ctx := context.Background()
 
-	user := &store.User{ID: 1, FirstName: "Alice"}
-	date := time.Now().UTC().Truncate(24 * time.Hour)
-	dateStr := date.Format(dateLayout)
-
-	// Admin assigns a new duty
-	duty, err := scheduler.AssignDutyAdmin(ctx, user, date)
+	err := scheduler.AddToVolunteerQueue(ctx, 1, 3)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
-	if duty.UserID != user.ID || duty.AssignmentType != store.AssignmentTypeAdmin {
-		t.Errorf("Duty was not assigned correctly. Got %+v", duty)
-	}
 
-	// Admin overrides a voluntary assignment
-	mock.duties[dateStr] = &store.Duty{ID: 1, UserID: 2, DutyDate: date, AssignmentType: store.AssignmentTypeVoluntary}
-	duty, err = scheduler.AssignDutyAdmin(ctx, user, date)
-	if err != nil {
-		t.Fatalf("Expected no error on override, got %v", err)
-	}
-	if duty.UserID != user.ID || duty.AssignmentType != store.AssignmentTypeAdmin {
-		t.Errorf("Duty was not overridden correctly. Got %+v", duty)
+	// Verify the queue was updated
+	if mock.users[0].VolunteerQueueDays != 3 {
+		t.Errorf("Expected 3 volunteer queue days, got %d", mock.users[0].VolunteerQueueDays)
 	}
 }
 
-func TestScheduler_AssignDutyVoluntary(t *testing.T) {
+func TestScheduler_AddToAdminQueue(t *testing.T) {
 	mock := newMockStore()
 	scheduler := NewScheduler(mock)
 	ctx := context.Background()
 
-	user := &store.User{ID: 1, FirstName: "Alice"}
-	date := time.Now().UTC().Truncate(24 * time.Hour)
-	dateStr := date.Format(dateLayout)
-
-	// Volunteer for a free date
-	duty, err := scheduler.AssignDutyVoluntary(ctx, user, date)
+	err := scheduler.AddToAdminQueue(ctx, 1, 2)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
-	if duty.UserID != user.ID || duty.AssignmentType != store.AssignmentTypeVoluntary {
-		t.Errorf("Duty was not assigned correctly. Got %+v", duty)
-	}
 
-	// Attempt to override an admin assignment (should fail)
-	adminDuty := &store.Duty{ID: 2, UserID: 99, DutyDate: date, AssignmentType: store.AssignmentTypeAdmin}
-	mock.duties[dateStr] = adminDuty
-	_, err = scheduler.AssignDutyVoluntary(ctx, user, date)
-	if err == nil {
-		t.Fatal("Expected an error when trying to override an admin assignment, but got none")
+	// Verify the queue was updated
+	if mock.users[0].AdminQueueDays != 2 {
+		t.Errorf("Expected 2 admin queue days, got %d", mock.users[0].AdminQueueDays)
 	}
 }
 
-func TestScheduler_AssignDutyRoundRobin(t *testing.T) {
+func TestScheduler_SetOffDuty(t *testing.T) {
 	mock := newMockStore()
 	scheduler := NewScheduler(mock)
 	ctx := context.Background()
 
-	nextUser := &store.User{ID: 3, FirstName: "Charlie"}
-	mock.nextRoundRobinUser = nextUser
-	date := time.Now().UTC().Truncate(24 * time.Hour)
+	start := time.Now()
+	end := start.Add(7 * 24 * time.Hour)
 
-	// Assign duty for a free date
-	duty, err := scheduler.AssignDutyRoundRobin(ctx, date)
+	err := scheduler.SetOffDuty(ctx, 1, start, end)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
-	if duty.UserID != nextUser.ID || duty.AssignmentType != store.AssignmentTypeRoundRobin {
-		t.Errorf("Duty was not assigned correctly. Got %+v", duty)
-	}
 
-	// Try to assign again on the same date (should do nothing)
-	duty2, err := scheduler.AssignDutyRoundRobin(ctx, date)
-	if err != nil {
-		t.Fatalf("Expected no error on second call, got %v", err)
+	// Verify off-duty was set
+	if mock.users[0].OffDutyStart == nil || mock.users[0].OffDutyEnd == nil {
+		t.Error("Expected off-duty dates to be set")
 	}
-	if duty.ID != duty2.ID {
-		t.Errorf("Expected the same duty to be returned. Got %+v, want %+v", duty2, duty)
-	}
+}
 
-	// Test failure to increment count
-	mock.assignmentCountError = errors.New("db error")
-	date = date.Add(24 * time.Hour) // New date
-	_, err = scheduler.AssignDutyRoundRobin(ctx, date)
+func TestScheduler_SetOffDuty_InvalidDates(t *testing.T) {
+	mock := newMockStore()
+	scheduler := NewScheduler(mock)
+	ctx := context.Background()
+
+	start := time.Now()
+	end := start.Add(-7 * 24 * time.Hour) // End before start
+
+	err := scheduler.SetOffDuty(ctx, 1, start, end)
 	if err == nil {
-		t.Fatal("Expected an error when incrementing count fails, but got none")
+		t.Fatal("Expected error for invalid date range, got nil")
+	}
+}
+
+func TestScheduler_ClearOffDuty(t *testing.T) {
+	mock := newMockStore()
+	scheduler := NewScheduler(mock)
+	ctx := context.Background()
+
+	// First set off-duty
+	start := time.Now()
+	end := start.Add(7 * 24 * time.Hour)
+	scheduler.SetOffDuty(ctx, 1, start, end)
+
+	// Then clear it
+	err := scheduler.ClearOffDuty(ctx, 1)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	// Verify off-duty was cleared
+	if mock.users[0].OffDutyStart != nil || mock.users[0].OffDutyEnd != nil {
+		t.Error("Expected off-duty dates to be cleared")
+	}
+}
+
+func TestScheduler_ChangeDutyUser(t *testing.T) {
+	mock := newMockStore()
+	scheduler := NewScheduler(mock)
+	ctx := context.Background()
+
+	// Create a duty for tomorrow
+	tomorrow := time.Now().Add(24 * time.Hour).Truncate(24 * time.Hour)
+	existingDuty := &store.Duty{
+		ID:             1,
+		UserID:         1,
+		DutyDate:       tomorrow,
+		AssignmentType: store.AssignmentTypeRoundRobin,
+	}
+	mock.duties[tomorrow.Format("2006-01-02")] = existingDuty
+
+	// Change to user 2
+	updatedDuty, err := scheduler.ChangeDutyUser(ctx, tomorrow, 2)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	if updatedDuty.UserID != 2 {
+		t.Errorf("Expected UserID to be 2, got %d", updatedDuty.UserID)
+	}
+}
+
+func TestScheduler_ChangeDutyUser_PastDate(t *testing.T) {
+	mock := newMockStore()
+	scheduler := NewScheduler(mock)
+	ctx := context.Background()
+
+	// Try to change a past duty
+	yesterday := time.Now().Add(-24 * time.Hour).Truncate(24 * time.Hour)
+	existingDuty := &store.Duty{
+		ID:             1,
+		UserID:         1,
+		DutyDate:       yesterday,
+		AssignmentType: store.AssignmentTypeRoundRobin,
+	}
+	mock.duties[yesterday.Format("2006-01-02")] = existingDuty
+
+	_, err := scheduler.ChangeDutyUser(ctx, yesterday, 2)
+	if err == nil {
+		t.Fatal("Expected error when changing past duty, got nil")
 	}
 }
