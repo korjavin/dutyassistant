@@ -122,7 +122,8 @@ func Calendar(t time.Time, duties []*store.Duty, allUsers []*store.User) tgbotap
 					}
 
 					if isToday {
-						dayText = fmt.Sprintf("·%d%s", day, numberCircle)
+						// For today, show only the assignee sign without day number for better visibility
+						dayText = fmt.Sprintf("·%s", numberCircle)
 					} else {
 						dayText = fmt.Sprintf("%d%s", day, numberCircle)
 					}
