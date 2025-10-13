@@ -12,11 +12,12 @@ func TestFormatDutyAssignedMessage(t *testing.T) {
 	testUser := &store.User{FirstName: "John"}
 	testDate, _ := time.Parse("2006-01-02", "2023-10-27")
 	duty := &store.Duty{
-		User:     testUser,
-		DutyDate: testDate,
+		User:           testUser,
+		DutyDate:       testDate,
+		AssignmentType: store.AssignmentTypeVoluntary,
 	}
 
-	expected := "🔔 *Duty Reminder* 🔔\n\nTomorrow, *Friday, 27 October 2023*, the duty is assigned to *John*\\."
+	expected := "Today's hero is *John*\\! Because of your volunteer request\\. Let us be proud of you\\!"
 	actual := FormatDutyAssignedMessage(duty)
 
 	assert.Equal(t, expected, actual)
@@ -26,12 +27,28 @@ func TestFormatDutyAutoAssignedMessage(t *testing.T) {
 	testUser := &store.User{FirstName: "Jane"}
 	testDate, _ := time.Parse("2006-01-02", "2023-10-28")
 	duty := &store.Duty{
-		User:     testUser,
-		DutyDate: testDate,
+		User:           testUser,
+		DutyDate:       testDate,
+		AssignmentType: store.AssignmentTypeRoundRobin,
 	}
 
-	expected := "📢 *Automatic Duty Assignment* 📢\n\nNo duty was scheduled for tomorrow\\. The round\\-robin scheduler has assigned the duty for *Saturday, 28 October 2023* to *Jane*\\."
+	expected := "Today's hero is *Jane*\\! Because of fair rotation\\. Let us be proud of you\\!"
 	actual := FormatDutyAutoAssignedMessage(duty)
+
+	assert.Equal(t, expected, actual)
+}
+
+func TestFormatDMToAssignee(t *testing.T) {
+	testUser := &store.User{FirstName: "Bob"}
+	testDate, _ := time.Parse("2006-01-02", "2023-10-29")
+	duty := &store.Duty{
+		User:           testUser,
+		DutyDate:       testDate,
+		AssignmentType: store.AssignmentTypeAdmin,
+	}
+
+	expected := "Congratulations, you were chosen for today because of admin assignment\\. I know it's great to help the family with chores\\!"
+	actual := FormatDMToAssignee(duty)
 
 	assert.Equal(t, expected, actual)
 }

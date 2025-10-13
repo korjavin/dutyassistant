@@ -37,9 +37,24 @@ func (m *MockStore) DeleteDuty(ctx context.Context, date time.Time) error       
 func (m *MockStore) GetDutiesByMonth(ctx context.Context, year int, month time.Month) ([]*store.Duty, error) {
 	return nil, nil
 }
-func (m *MockStore) GetNextRoundRobinUser(ctx context.Context) (*store.User, error) { return nil, nil }
-func (m *MockStore) IncrementAssignmentCount(ctx context.Context, userID int64, lastAssigned time.Time) error {
-	return nil
+func (m *MockStore) CompleteDuty(ctx context.Context, date time.Time) error                  { return nil }
+func (m *MockStore) GetTodaysDuty(ctx context.Context) (*store.Duty, error)                  { return nil, nil }
+func (m *MockStore) GetCompletedDutiesInRange(ctx context.Context, start, end time.Time) ([]*store.Duty, error) {
+	return nil, nil
+}
+func (m *MockStore) AddToVolunteerQueue(ctx context.Context, userID int64, days int) error   { return nil }
+func (m *MockStore) AddToAdminQueue(ctx context.Context, userID int64, days int) error       { return nil }
+func (m *MockStore) DecrementVolunteerQueue(ctx context.Context, userID int64) error         { return nil }
+func (m *MockStore) DecrementAdminQueue(ctx context.Context, userID int64) error             { return nil }
+func (m *MockStore) GetUsersWithVolunteerQueue(ctx context.Context) ([]*store.User, error)   { return nil, nil }
+func (m *MockStore) GetUsersWithAdminQueue(ctx context.Context) ([]*store.User, error)       { return nil, nil }
+func (m *MockStore) SetOffDuty(ctx context.Context, userID int64, start, end time.Time) error { return nil }
+func (m *MockStore) ClearOffDuty(ctx context.Context, userID int64) error                    { return nil }
+func (m *MockStore) IsUserOffDuty(ctx context.Context, userID int64, date time.Time) (bool, error) {
+	return false, nil
+}
+func (m *MockStore) GetOffDutyUsers(ctx context.Context, date time.Time) ([]*store.User, error) {
+	return nil, nil
 }
 
 // MockScheduler is a mock implementation of the Scheduler interface.
@@ -90,8 +105,12 @@ func TestCheckAndNotify_DutyAlreadyExists(t *testing.T) {
 
 	// Arrange
 	existingDuty := &store.Duty{
-		DutyDate: tomorrow,
-		User:     &store.User{FirstName: "Alex"},
+		DutyDate:       tomorrow,
+		AssignmentType: store.AssignmentTypeVoluntary,
+		User: &store.User{
+			FirstName:      "Alex",
+			TelegramUserID: 99999,
+		},
 	}
 	mockStore.On("GetDutyByDate", mock.Anything, mock.Anything).Return(existingDuty, nil)
 	mockBot.On("Send", mock.Anything).Return(tgbotapi.Message{}, nil)
@@ -101,11 +120,15 @@ func TestCheckAndNotify_DutyAlreadyExists(t *testing.T) {
 
 	// Assert
 	mockStore.AssertCalled(t, "GetDutyByDate", mock.Anything, mock.Anything)
-	mockBot.AssertCalled(t, "Send", mock.Anything)
-	// Check that the sent message is the "reminder" one.
-	sentMessage := mockBot.Calls[0].Arguments.Get(0).(tgbotapi.MessageConfig)
-	assert.Contains(t, sentMessage.Text, "Duty Reminder")
-	assert.Contains(t, sentMessage.Text, "Alex")
+	// Should be called twice - once for group message, once for DM
+	assert.Equal(t, 2, len(mockBot.Calls))
+	// Check that the group message contains the expected text
+	groupMessage := mockBot.Calls[0].Arguments.Get(0).(tgbotapi.MessageConfig)
+	assert.Contains(t, groupMessage.Text, "Today's hero")
+	assert.Contains(t, groupMessage.Text, "Alex")
+	// Check that the DM was sent
+	dmMessage := mockBot.Calls[1].Arguments.Get(0).(tgbotapi.MessageConfig)
+	assert.Contains(t, dmMessage.Text, "Congratulations")
 }
 
 func TestCheckAndNotify_AutoAssignSuccess(t *testing.T) {
@@ -117,8 +140,12 @@ func TestCheckAndNotify_AutoAssignSuccess(t *testing.T) {
 	mockStore.On("GetDutyByDate", mock.Anything, mock.Anything).Return(nil, errors.New("not found"))
 	// Scheduler assigns a new duty
 	assignedDuty := &store.Duty{
-		DutyDate: tomorrow,
-		User:     &store.User{FirstName: "Casey"},
+		DutyDate:       tomorrow,
+		AssignmentType: store.AssignmentTypeRoundRobin,
+		User: &store.User{
+			FirstName:      "Casey",
+			TelegramUserID: 88888,
+		},
 	}
 	mockScheduler.On("AssignDutyRoundRobin", mock.Anything, mock.Anything).Return(assignedDuty, nil)
 	mockBot.On("Send", mock.Anything).Return(tgbotapi.Message{}, nil)
@@ -129,11 +156,15 @@ func TestCheckAndNotify_AutoAssignSuccess(t *testing.T) {
 	// Assert
 	mockStore.AssertCalled(t, "GetDutyByDate", mock.Anything, mock.Anything)
 	mockScheduler.AssertCalled(t, "AssignDutyRoundRobin", mock.Anything, mock.Anything)
-	mockBot.AssertCalled(t, "Send", mock.Anything)
-	// Check that the sent message is the "auto-assignment" one.
-	sentMessage := mockBot.Calls[0].Arguments.Get(0).(tgbotapi.MessageConfig)
-	assert.Contains(t, sentMessage.Text, "Automatic Duty Assignment")
-	assert.Contains(t, sentMessage.Text, "Casey")
+	// Should be called twice - once for group message, once for DM
+	assert.Equal(t, 2, len(mockBot.Calls))
+	// Check that the group message contains the expected text
+	groupMessage := mockBot.Calls[0].Arguments.Get(0).(tgbotapi.MessageConfig)
+	assert.Contains(t, groupMessage.Text, "Today's hero")
+	assert.Contains(t, groupMessage.Text, "Casey")
+	// Check that the DM was sent
+	dmMessage := mockBot.Calls[1].Arguments.Get(0).(tgbotapi.MessageConfig)
+	assert.Contains(t, dmMessage.Text, "Congratulations")
 }
 
 func TestCheckAndNotify_AutoAssignFails(t *testing.T) {
@@ -159,8 +190,12 @@ func TestCheckAndNotify_SendFails(t *testing.T) {
 
 	// Arrange
 	existingDuty := &store.Duty{
-		DutyDate: tomorrow,
-		User:     &store.User{FirstName: "Alex"},
+		DutyDate:       tomorrow,
+		AssignmentType: store.AssignmentTypeAdmin,
+		User: &store.User{
+			FirstName:      "Alex",
+			TelegramUserID: 77777,
+		},
 	}
 	mockStore.On("GetDutyByDate", mock.Anything, mock.Anything).Return(existingDuty, nil)
 	// Simulate a failure in the Telegram API.
@@ -170,6 +205,7 @@ func TestCheckAndNotify_SendFails(t *testing.T) {
 	notifier.checkAndNotify()
 
 	// Assert
-	mockBot.AssertCalled(t, "Send", mock.Anything)
+	// Should attempt to send twice (group + DM), both will fail but should be attempted
+	assert.Equal(t, 2, len(mockBot.Calls))
 	// We can't assert on logs directly without a more complex setup, but we expect the error to be logged.
 }

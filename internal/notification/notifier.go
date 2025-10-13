@@ -69,7 +69,7 @@ func (n *Notifier) Stop() {
 }
 
 // checkAndNotify is the core function executed by the cron job.
-// It checks for tomorrow's duty, assigns one if needed, and sends a notification.
+// It checks for tomorrow's duty, assigns one if needed, and sends notifications.
 func (n *Notifier) checkAndNotify() {
 	ctx := context.Background()
 	log.Println("Cron job triggered: checking for tomorrow's duty.")
@@ -78,8 +78,7 @@ func (n *Notifier) checkAndNotify() {
 	nowInLocation := n.now().In(n.location)
 	tomorrow := nowInLocation.Add(24 * time.Hour)
 
-	var messageText string
-	var dutyAssigned bool
+	var duty *store.Duty
 
 	// 1. Check if a duty is already assigned for tomorrow.
 	duty, err := n.store.GetDutyByDate(ctx, tomorrow)
@@ -89,11 +88,7 @@ func (n *Notifier) checkAndNotify() {
 		log.Printf("No duty found for %s. Attempting to assign one.", tomorrow.Format("2006-01-02"))
 	}
 
-	if duty != nil {
-		// Duty already exists, format a reminder message.
-		messageText = FormatDutyAssignedMessage(duty)
-		dutyAssigned = true
-	} else {
+	if duty == nil {
 		// 2. If no duty, trigger round-robin assignment.
 		newDuty, assignErr := n.scheduler.AssignDutyRoundRobin(ctx, tomorrow)
 		if assignErr != nil {
@@ -101,20 +96,35 @@ func (n *Notifier) checkAndNotify() {
 			// Optionally, send an error notification to an admin. For now, we just log.
 			return
 		}
-		// Format an auto-assignment message.
-		messageText = FormatDutyAutoAssignedMessage(newDuty)
-		dutyAssigned = true
+		duty = newDuty
 	}
 
-	// 3. Send the notification if a duty is confirmed.
-	if dutyAssigned {
-		msg := tgbotapi.NewMessage(n.chatID, messageText)
-		msg.ParseMode = tgbotapi.ModeMarkdownV2
+	// 3. Send notifications if a duty is confirmed.
+	if duty != nil {
+		// Send message to the group chat
+		groupMessageText := FormatDutyAssignedMessage(duty)
+		groupMsg := tgbotapi.NewMessage(n.chatID, groupMessageText)
+		groupMsg.ParseMode = tgbotapi.ModeMarkdownV2
 
-		if _, err := n.bot.Send(msg); err != nil {
-			log.Printf("ERROR: Failed to send Telegram notification to chat ID %d: %v", n.chatID, err)
+		if _, err := n.bot.Send(groupMsg); err != nil {
+			log.Printf("ERROR: Failed to send group notification to chat ID %d: %v", n.chatID, err)
 		} else {
-			log.Printf("Successfully sent notification for duty on %s.", tomorrow.Format("2006-01-02"))
+			log.Printf("Successfully sent group notification for duty on %s.", tomorrow.Format("2006-01-02"))
+		}
+
+		// Send DM to the assigned user
+		if duty.User != nil && duty.User.TelegramUserID != 0 {
+			dmMessageText := FormatDMToAssignee(duty)
+			dmMsg := tgbotapi.NewMessage(duty.User.TelegramUserID, dmMessageText)
+			dmMsg.ParseMode = tgbotapi.ModeMarkdownV2
+
+			if _, err := n.bot.Send(dmMsg); err != nil {
+				log.Printf("ERROR: Failed to send DM to user %s (ID: %d): %v", duty.User.FirstName, duty.User.TelegramUserID, err)
+			} else {
+				log.Printf("Successfully sent DM to user %s for duty on %s.", duty.User.FirstName, tomorrow.Format("2006-01-02"))
+			}
+		} else {
+			log.Printf("WARNING: Cannot send DM - user data is incomplete for duty on %s", tomorrow.Format("2006-01-02"))
 		}
 	}
 }

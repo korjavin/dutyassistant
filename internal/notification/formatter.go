@@ -18,12 +18,12 @@ func FormatDutyAssignedMessage(duty *store.Duty) string {
 	if duty == nil || duty.User == nil {
 		return "Error: Could not format duty message, essential data is missing."
 	}
-	dateStr := duty.DutyDate.Format(dutyDateFormat)
-	// Using MarkdownV2 for formatting. Note the escaped period at the end.
+	reason := formatAssignmentReason(duty.AssignmentType)
+	// Using MarkdownV2 for formatting.
 	return fmt.Sprintf(
-		"🔔 *Duty Reminder* 🔔\n\nTomorrow, *%s*, the duty is assigned to *%s*\\.",
-		escapeMarkdown(dateStr),
+		"Today's hero is *%s*\\! Because of %s\\. Let us be proud of you\\!",
 		escapeMarkdown(duty.User.FirstName),
+		reason,
 	)
 }
 
@@ -33,13 +33,40 @@ func FormatDutyAutoAssignedMessage(duty *store.Duty) string {
 	if duty == nil || duty.User == nil {
 		return "Error: Could not format auto-assignment message, essential data is missing."
 	}
-	dateStr := duty.DutyDate.Format(dutyDateFormat)
-	// Using MarkdownV2 for formatting. Note the escaped characters in the static text.
+	reason := formatAssignmentReason(duty.AssignmentType)
+	// Using MarkdownV2 for formatting.
 	return fmt.Sprintf(
-		"📢 *Automatic Duty Assignment* 📢\n\nNo duty was scheduled for tomorrow\\. The round\\-robin scheduler has assigned the duty for *%s* to *%s*\\.",
-		escapeMarkdown(dateStr),
+		"Today's hero is *%s*\\! Because of %s\\. Let us be proud of you\\!",
 		escapeMarkdown(duty.User.FirstName),
+		reason,
 	)
+}
+
+// FormatDMToAssignee formats the direct message to the assigned user.
+func FormatDMToAssignee(duty *store.Duty) string {
+	if duty == nil || duty.User == nil {
+		return "Error: Could not format DM message, essential data is missing."
+	}
+	reason := formatAssignmentReason(duty.AssignmentType)
+	// Using MarkdownV2 for formatting.
+	return fmt.Sprintf(
+		"Congratulations, you were chosen for today because of %s\\. I know it's great to help the family with chores\\!",
+		reason,
+	)
+}
+
+// formatAssignmentReason returns a human-readable reason for the assignment.
+func formatAssignmentReason(assignmentType store.AssignmentType) string {
+	switch assignmentType {
+	case store.AssignmentTypeVoluntary:
+		return "your volunteer request"
+	case store.AssignmentTypeAdmin:
+		return "admin assignment"
+	case store.AssignmentTypeRoundRobin:
+		return "fair rotation"
+	default:
+		return "unknown reason"
+	}
 }
 
 // escapeMarkdown escapes characters for Telegram's MarkdownV2 parser.
