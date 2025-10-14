@@ -13,6 +13,7 @@ import (
 	"github.com/robfig/cron/v3"
 
 	httpserver "github.com/korjavin/dutyassistant/internal/http"
+	"github.com/korjavin/dutyassistant/internal/notification"
 	"github.com/korjavin/dutyassistant/internal/scheduler"
 	"github.com/korjavin/dutyassistant/internal/store/sqlite"
 	"github.com/korjavin/dutyassistant/internal/telegram"
@@ -78,38 +79,64 @@ func main() {
 
 	// Daily at 11:00 AM Berlin - Assign today's duty
 	_, err = c.AddFunc("0 11 * * *", func() {
+		log.Println("═══════════════════════════════════════════════════════════")
 		log.Println("[CRON] Running daily duty assignment (11:00 AM Berlin)")
+		log.Printf("[CRON] Current time: %s", time.Now().In(berlinLoc).Format("2006-01-02 15:04:05 MST"))
+
 		duty, err := sched.AssignTodaysDuty(context.Background())
 		if err != nil {
-			log.Printf("[CRON] Error assigning today's duty: %v", err)
-		} else if duty != nil {
-			log.Printf("[CRON] Successfully assigned duty to user %d", duty.UserID)
-
-			// Send notification to assigned user (DM)
-			if duty.User != nil {
-				dmMsg := fmt.Sprintf("🍽️ You've been assigned duty for today (%s)!\n\nAssignment type: %s",
-					duty.DutyDate.Format("2006-01-02"),
-					duty.AssignmentType)
-				if err := bot.SendMessage(duty.User.TelegramUserID, dmMsg); err != nil {
-					log.Printf("[CRON] Failed to send DM to user %d: %v", duty.User.TelegramUserID, err)
-				} else {
-					log.Printf("[CRON] Sent DM notification to user %d", duty.User.TelegramUserID)
-				}
-			}
-
-			// Send notification to group chat
-			if dishGroupID != 0 {
-				groupMsg := fmt.Sprintf("🍽️ Duty Assignment for %s\n\n@%s is on duty today!\n\nType: %s",
-					duty.DutyDate.Format("January 2, 2006"),
-					duty.User.FirstName,
-					duty.AssignmentType)
-				if err := bot.SendMessage(dishGroupID, groupMsg); err != nil {
-					log.Printf("[CRON] Failed to send group notification: %v", err)
-				} else {
-					log.Printf("[CRON] Sent group notification to chat %d", dishGroupID)
-				}
-			}
+			log.Printf("[CRON] ERROR: Failed to assign today's duty: %v", err)
+			return
 		}
+
+		if duty == nil {
+			log.Printf("[CRON] WARNING: No duty was assigned (duty is nil)")
+			return
+		}
+
+		log.Printf("[CRON] ✓ Successfully assigned duty to user %d (Assignment Type: %s)", duty.UserID, duty.AssignmentType)
+
+		if duty.User == nil {
+			log.Printf("[CRON] ERROR: Duty.User is nil - cannot send notifications!")
+			return
+		}
+
+		log.Printf("[CRON] Duty details: UserID=%d, Name=%s, TelegramID=%d, Date=%s, Type=%s",
+			duty.UserID, duty.User.FirstName, duty.User.TelegramUserID,
+			duty.DutyDate.Format("2006-01-02"), duty.AssignmentType)
+
+		// Send DM to assigned user using our notification formatter
+		if duty.User.TelegramUserID != 0 {
+			log.Printf("[CRON] Preparing DM for user %s (TelegramID: %d)", duty.User.FirstName, duty.User.TelegramUserID)
+			dmMsg := notification.FormatDMToAssignee(duty)
+			log.Printf("[CRON] DM message content: %s", dmMsg)
+
+			if err := bot.SendMessageMarkdown(duty.User.TelegramUserID, dmMsg); err != nil {
+				log.Printf("[CRON] ERROR: Failed to send DM to user %d: %v", duty.User.TelegramUserID, err)
+			} else {
+				log.Printf("[CRON] ✓ Successfully sent DM notification to user %d", duty.User.TelegramUserID)
+			}
+		} else {
+			log.Printf("[CRON] WARNING: User %s has TelegramUserID=0, cannot send DM", duty.User.FirstName)
+		}
+
+		// Send notification to group chat using our notification formatter
+		if dishGroupID != 0 {
+			log.Printf("[CRON] Preparing group message for chat %d", dishGroupID)
+			groupMsg := notification.FormatDutyAssignedMessage(duty)
+			log.Printf("[CRON] Group message content: %s", groupMsg)
+
+			if err := bot.SendMessageMarkdown(dishGroupID, groupMsg); err != nil {
+				log.Printf("[CRON] ERROR: Failed to send group notification to chat %d: %v", dishGroupID, err)
+			} else {
+				log.Printf("[CRON] ✓ Successfully sent group notification to chat %d", dishGroupID)
+			}
+		} else {
+			log.Printf("[CRON] WARNING: DISH_GROUP not configured (dishGroupID=0), skipping group notification")
+		}
+
+		log.Println("[CRON] Daily duty assignment completed")
+		log.Println("═══════════════════════════════════════════════════════════")
 	})
 	if err != nil {
 		log.Fatalf("Failed to schedule daily assignment job: %v", err)
@@ -141,7 +168,13 @@ func main() {
 
 	// Start cron scheduler
 	c.Start()
-	log.Println("Cron scheduler started with 3 jobs")
+	log.Println("═══════════════════════════════════════════════════════════")
+	log.Println("Cron scheduler started with 3 jobs:")
+	log.Println("  1. Daily at 11:00 AM Berlin - Assign today's duty and send notifications")
+	log.Println("  2. Daily at 21:00 PM Berlin - Mark today's duty as completed")
+	log.Println("  3. Sunday at 21:10 PM Berlin - Send weekly stats")
+	log.Printf("Current Berlin time: %s", time.Now().In(berlinLoc).Format("2006-01-02 15:04:05 MST"))
+	log.Println("═══════════════════════════════════════════════════════════")
 
 	// Initialize HTTP server with Gin
 	log.Println("Initializing HTTP server on :8080...")

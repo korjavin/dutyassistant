@@ -43,6 +43,14 @@ func (b *Bot) SendMessage(chatID int64, text string) error {
 	return err
 }
 
+// SendMessageMarkdown sends a text message with MarkdownV2 formatting to a specific chat ID.
+func (b *Bot) SendMessageMarkdown(chatID int64, text string) error {
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ParseMode = tgbotapi.ModeMarkdownV2
+	_, err := b.api.Send(msg)
+	return err
+}
+
 // checkAccess verifies if a user has access to the bot.
 // Returns true if the user is the owner or a member of the DISH_GROUP.
 func (b *Bot) checkAccess(userID int64) bool {
