@@ -60,6 +60,18 @@ func (s *SQLiteStore) migrate(ctx context.Context) error {
 			completed_at TEXT,
 			FOREIGN KEY(user_id) REFERENCES users(id)
 		);
+
+		CREATE TABLE IF NOT EXISTS notification_log (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			duty_date TEXT NOT NULL,
+			user_id INTEGER NOT NULL,
+			notification_type TEXT NOT NULL,
+			status TEXT NOT NULL,
+			error_message TEXT,
+			created_at TEXT NOT NULL,
+			FOREIGN KEY(user_id) REFERENCES users(id),
+			FOREIGN KEY(duty_date) REFERENCES duties(duty_date)
+		);
 	`
 	if _, err := s.db.ExecContext(ctx, schema); err != nil {
 		return err
@@ -80,6 +92,13 @@ func (s *SQLiteStore) migrate(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// LogNotification logs a notification attempt to the database
+func (s *SQLiteStore) LogNotification(ctx context.Context, dutyDate time.Time, userID int64, notificationType, status, errorMessage string) error {
+	query := `INSERT INTO notification_log (duty_date, user_id, notification_type, status, error_message, created_at) VALUES (?, ?, ?, ?, ?, ?)`
+	_, err := s.db.ExecContext(ctx, query, dutyDate.Format("2006-01-02"), userID, notificationType, status, errorMessage, time.Now().Format(time.RFC3339))
+	return err
 }
 
 // scanUser is a helper to scan a user row with all fields including new ones

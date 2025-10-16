@@ -113,11 +113,23 @@ func main() {
 
 			if err := bot.SendMessageMarkdown(duty.User.TelegramUserID, dmMsg); err != nil {
 				log.Printf("[CRON] ERROR: Failed to send DM to user %d: %v", duty.User.TelegramUserID, err)
+				// Log failure to database
+				if dbErr := store.LogNotification(context.Background(), duty.DutyDate, duty.UserID, "DM", "FAILED", err.Error()); dbErr != nil {
+					log.Printf("[CRON] ERROR: Failed to log DM failure: %v", dbErr)
+				}
 			} else {
 				log.Printf("[CRON] ✓ Successfully sent DM notification to user %d", duty.User.TelegramUserID)
+				// Log success to database
+				if dbErr := store.LogNotification(context.Background(), duty.DutyDate, duty.UserID, "DM", "SUCCESS", ""); dbErr != nil {
+					log.Printf("[CRON] ERROR: Failed to log DM success: %v", dbErr)
+				}
 			}
 		} else {
 			log.Printf("[CRON] WARNING: User %s has TelegramUserID=0, cannot send DM", duty.User.FirstName)
+			// Log skip to database
+			if dbErr := store.LogNotification(context.Background(), duty.DutyDate, duty.UserID, "DM", "SKIPPED", "TelegramUserID is 0"); dbErr != nil {
+				log.Printf("[CRON] ERROR: Failed to log DM skip: %v", dbErr)
+			}
 		}
 
 		// Send notification to group chat using our notification formatter
@@ -128,11 +140,23 @@ func main() {
 
 			if err := bot.SendMessageMarkdown(dishGroupID, groupMsg); err != nil {
 				log.Printf("[CRON] ERROR: Failed to send group notification to chat %d: %v", dishGroupID, err)
+				// Log failure to database
+				if dbErr := store.LogNotification(context.Background(), duty.DutyDate, duty.UserID, "GROUP", "FAILED", err.Error()); dbErr != nil {
+					log.Printf("[CRON] ERROR: Failed to log group notification failure: %v", dbErr)
+				}
 			} else {
 				log.Printf("[CRON] ✓ Successfully sent group notification to chat %d", dishGroupID)
+				// Log success to database
+				if dbErr := store.LogNotification(context.Background(), duty.DutyDate, duty.UserID, "GROUP", "SUCCESS", ""); dbErr != nil {
+					log.Printf("[CRON] ERROR: Failed to log group notification success: %v", dbErr)
+				}
 			}
 		} else {
 			log.Printf("[CRON] WARNING: DISH_GROUP not configured (dishGroupID=0), skipping group notification")
+			// Log skip to database
+			if dbErr := store.LogNotification(context.Background(), duty.DutyDate, duty.UserID, "GROUP", "SKIPPED", "dishGroupID not configured"); dbErr != nil {
+				log.Printf("[CRON] ERROR: Failed to log group notification skip: %v", dbErr)
+			}
 		}
 
 		log.Println("[CRON] Daily duty assignment completed")
