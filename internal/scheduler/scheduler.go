@@ -234,6 +234,7 @@ func (s *Scheduler) selectRoundRobinUser(ctx context.Context, users []*store.Use
 func (s *Scheduler) assignDuty(ctx context.Context, user *store.User, date time.Time, assignType store.AssignmentType) (*store.Duty, error) {
 	newDuty := &store.Duty{
 		UserID:         user.ID,
+		User:           user, // Populate the User field so notifications can be sent
 		DutyDate:       date,
 		AssignmentType: assignType,
 		CreatedAt:      time.Now().UTC(),

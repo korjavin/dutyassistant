@@ -106,3 +106,88 @@ func (m *MockStore) IncrementAssignmentCount(ctx context.Context, userID int64, 
 	args := m.Called(ctx, userID)
 	return args.Error(0)
 }
+
+func (m *MockStore) CompleteDuty(ctx context.Context, date time.Time) error {
+	args := m.Called(ctx, date)
+	return args.Error(0)
+}
+
+func (m *MockStore) GetTodaysDuty(ctx context.Context) (*store.Duty, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*store.Duty), args.Error(1)
+}
+
+func (m *MockStore) GetCompletedDutiesInRange(ctx context.Context, start, end time.Time) ([]*store.Duty, error) {
+	args := m.Called(ctx, start, end)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*store.Duty), args.Error(1)
+}
+
+func (m *MockStore) AddToVolunteerQueue(ctx context.Context, userID int64, days int) error {
+	args := m.Called(ctx, userID, days)
+	return args.Error(0)
+}
+
+func (m *MockStore) AddToAdminQueue(ctx context.Context, userID int64, days int) error {
+	args := m.Called(ctx, userID, days)
+	return args.Error(0)
+}
+
+func (m *MockStore) DecrementVolunteerQueue(ctx context.Context, userID int64) error {
+	args := m.Called(ctx, userID)
+	return args.Error(0)
+}
+
+func (m *MockStore) DecrementAdminQueue(ctx context.Context, userID int64) error {
+	args := m.Called(ctx, userID)
+	return args.Error(0)
+}
+
+func (m *MockStore) GetUsersWithVolunteerQueue(ctx context.Context) ([]*store.User, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*store.User), args.Error(1)
+}
+
+func (m *MockStore) GetUsersWithAdminQueue(ctx context.Context) ([]*store.User, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*store.User), args.Error(1)
+}
+
+func (m *MockStore) SetOffDuty(ctx context.Context, userID int64, start, end time.Time) error {
+	args := m.Called(ctx, userID, start, end)
+	return args.Error(0)
+}
+
+func (m *MockStore) ClearOffDuty(ctx context.Context, userID int64) error {
+	args := m.Called(ctx, userID)
+	return args.Error(0)
+}
+
+func (m *MockStore) IsUserOffDuty(ctx context.Context, userID int64, date time.Time) (bool, error) {
+	args := m.Called(ctx, userID, date)
+	return args.Bool(0), args.Error(1)
+}
+
+func (m *MockStore) GetOffDutyUsers(ctx context.Context, date time.Time) ([]*store.User, error) {
+	args := m.Called(ctx, date)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*store.User), args.Error(1)
+}
+
+func (m *MockStore) LogNotification(ctx context.Context, dutyDate time.Time, userID int64, notificationType, status, errorMessage string) error {
+	args := m.Called(ctx, dutyDate, userID, notificationType, status, errorMessage)
+	return args.Error(0)
+}
