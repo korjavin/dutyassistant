@@ -262,6 +262,14 @@ func (m *mockStore) GetOffDutyUsers(ctx context.Context, date time.Time) ([]*sto
 	return result, nil
 }
 
+func (m *mockStore) SetVacationMode(ctx context.Context, enabled bool) error {
+	return nil
+}
+
+func (m *mockStore) IsVacationMode(ctx context.Context) (bool, error) {
+	return false, nil
+}
+
 func TestScheduler_AddToVolunteerQueue(t *testing.T) {
 	mock := newMockStore()
 	scheduler := NewScheduler(mock)

@@ -186,6 +186,8 @@ func (b *Bot) handleCommand(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 		return b.handlers.HandleOffDuty(m)
 	case "users":
 		return b.handlers.HandleUsers(m)
+	case "vacation":
+		return b.handlers.HandleVacation(m)
 	case "toggle_active", "toggleactive":
 		return b.handlers.HandleToggleActive(m)
 	default:
@@ -231,6 +233,8 @@ func (b *Bot) handleCallbackQuery(q *tgbotapi.CallbackQuery) (tgbotapi.Chattable
 		return b.handlers.HandleToggleUserCallback(q)
 	case "offduty_user":
 		return b.handlers.HandleOffDutyUserCallback(q)
+	case "vacation":
+		return b.handlers.HandleVacationCallback(q)
 	default:
 		log.Printf("Unknown callback action: %s", action)
 		return nil, nil

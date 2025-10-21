@@ -32,10 +32,21 @@ func (h *Handlers) HandleSchedule(m *tgbotapi.Message) (tgbotapi.MessageConfig, 
 		users = []*store.User{}
 	}
 
+	// Check vacation mode status
+	isVacation, err := h.Scheduler.IsVacationMode(context.Background())
+	if err != nil {
+		log.Printf("Warning: could not check vacation mode: %v", err)
+	}
+
 	text := fmt.Sprintf(scheduleMessage, now.Format("January 2006"))
+	if isVacation {
+		text += "\n\n🏖 <b>VACATION MODE ON</b> - No new duties will be assigned"
+	}
+
 	markup := keyboard.Calendar(now, duties, users)
 
 	msg := tgbotapi.NewMessage(m.Chat.ID, text)
+	msg.ParseMode = tgbotapi.ModeHTML
 	msg.ReplyMarkup = markup
 	return msg, nil
 }

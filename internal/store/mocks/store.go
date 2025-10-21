@@ -199,3 +199,15 @@ func (m *MockStore) GetOffDutyUsers(ctx context.Context, date time.Time) ([]*sto
 	}
 	return args.Get(0).([]*store.User), args.Error(1)
 }
+
+// SetVacationMode mocks the SetVacationMode method.
+func (m *MockStore) SetVacationMode(ctx context.Context, enabled bool) error {
+	args := m.Called(ctx, enabled)
+	return args.Error(0)
+}
+
+// IsVacationMode mocks the IsVacationMode method.
+func (m *MockStore) IsVacationMode(ctx context.Context) (bool, error) {
+	args := m.Called(ctx)
+	return args.Bool(0), args.Error(1)
+}

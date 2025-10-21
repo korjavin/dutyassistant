@@ -25,6 +25,7 @@ const (
 		"/assign <username> <days> - Add days to user's admin queue.\n" +
 		"/change <date> <username> - Change assigned user for a date.\n" +
 		"/offduty <username> <start> <end> - Set off-duty period (YYYY-MM-DD).\n" +
+		"/vacation [on|off] - Toggle vacation mode (pauses all scheduling).\n" +
 		"/users - List all users and their status.\n" +
 		"/toggle\\_active <username> - Toggle a user's participation in the rotation."
 

@@ -72,6 +72,12 @@ func (s *SQLiteStore) migrate(ctx context.Context) error {
 			FOREIGN KEY(user_id) REFERENCES users(id),
 			FOREIGN KEY(duty_date) REFERENCES duties(duty_date)
 		);
+
+		CREATE TABLE IF NOT EXISTS settings (
+			key TEXT PRIMARY KEY,
+			value TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		);
 	`
 	if _, err := s.db.ExecContext(ctx, schema); err != nil {
 		return err
@@ -667,4 +673,34 @@ func (s *SQLiteStore) GetCompletedDutiesInRange(ctx context.Context, start, end 
 		duties = append(duties, duty)
 	}
 	return duties, nil
+}
+
+// SetVacationMode sets the system vacation mode state.
+func (s *SQLiteStore) SetVacationMode(ctx context.Context, enabled bool) error {
+	value := "false"
+	if enabled {
+		value = "true"
+	}
+
+	query := `INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)`
+	_, err := s.db.ExecContext(ctx, query, "vacation_mode", value, time.Now().UTC().Format(time.RFC3339))
+	if err != nil {
+		return fmt.Errorf("could not set vacation mode: %w", err)
+	}
+	return nil
+}
+
+// IsVacationMode checks if the system is in vacation mode.
+func (s *SQLiteStore) IsVacationMode(ctx context.Context) (bool, error) {
+	query := `SELECT value FROM settings WHERE key = ?`
+	var value string
+	err := s.db.QueryRowContext(ctx, query, "vacation_mode").Scan(&value)
+	if err == sql.ErrNoRows {
+		// Default to false if not set
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("could not get vacation mode: %w", err)
+	}
+	return value == "true", nil
 }

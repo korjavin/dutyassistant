@@ -191,3 +191,13 @@ func (m *MockStore) LogNotification(ctx context.Context, dutyDate time.Time, use
 	args := m.Called(ctx, dutyDate, userID, notificationType, status, errorMessage)
 	return args.Error(0)
 }
+
+func (m *MockStore) SetVacationMode(ctx context.Context, enabled bool) error {
+	args := m.Called(ctx, enabled)
+	return args.Error(0)
+}
+
+func (m *MockStore) IsVacationMode(ctx context.Context) (bool, error) {
+	args := m.Called(ctx)
+	return args.Bool(0), args.Error(1)
+}

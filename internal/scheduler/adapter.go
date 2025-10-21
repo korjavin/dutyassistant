@@ -24,6 +24,12 @@ type SchedulerInterface interface {
 
 	// SetOffDuty sets a user's off-duty period.
 	SetOffDuty(ctx context.Context, userID int64, start, end time.Time) error
+
+	// SetVacationMode sets the system vacation mode state.
+	SetVacationMode(ctx context.Context, enabled bool) error
+
+	// IsVacationMode checks if the system is in vacation mode.
+	IsVacationMode(ctx context.Context) (bool, error)
 }
 
 // Verify that Scheduler implements SchedulerInterface

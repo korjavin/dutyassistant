@@ -224,8 +224,18 @@ func (h *Handlers) HandleUsers(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 		return tgbotapi.NewMessage(m.Chat.ID, "No users found in the system."), nil
 	}
 
+	// Check vacation mode status
+	isVacation, err := h.Scheduler.IsVacationMode(context.Background())
+	if err != nil {
+		log.Printf("Warning: could not check vacation mode: %v", err)
+	}
+
 	var builder strings.Builder
-	builder.WriteString("<b>📋 User List</b>\n\n")
+	builder.WriteString("<b>📋 User List</b>\n")
+	if isVacation {
+		builder.WriteString("\n🏖 <b>VACATION MODE ON</b> - No new duties will be assigned\n")
+	}
+	builder.WriteString("\n")
 	for _, u := range users {
 		status := "✅ Active"
 		if !u.IsActive {
@@ -703,6 +713,105 @@ func (h *Handlers) HandleOffDutyUserCallback(q *tgbotapi.CallbackQuery) (tgbotap
 		q.Message.Chat.ID,
 		q.Message.MessageID,
 		fmt.Sprintf("🏖 <b>Set off-duty period for %s</b>\n\nPlease provide start and end dates:\n\n<code>/offduty %s START_DATE END_DATE</code>\n\nExample: <code>/offduty %s 2025-10-10 2025-10-15</code>", userName, userName, userName),
+	)
+	edit.ParseMode = tgbotapi.ModeHTML
+	return edit, nil
+}
+
+// HandleVacation toggles the system vacation mode on/off.
+func (h *Handlers) HandleVacation(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
+	isAdmin, err := h.checkAdmin(m.From.ID)
+	if err != nil || !isAdmin {
+		return tgbotapi.NewMessage(m.Chat.ID, adminOnlyMessage), nil
+	}
+
+	args := strings.Fields(m.CommandArguments())
+
+	// If no arguments, show current status and toggle options
+	if len(args) == 0 {
+		isVacation, err := h.Scheduler.IsVacationMode(context.Background())
+		if err != nil {
+			return tgbotapi.NewMessage(m.Chat.ID, "❌ Failed to check vacation mode status."), nil
+		}
+
+		statusText := "🔴 <b>OFF</b>"
+		if isVacation {
+			statusText = "🟢 <b>ON</b>"
+		}
+
+		// Create toggle buttons
+		var buttons [][]tgbotapi.InlineKeyboardButton
+		buttons = append(buttons, []tgbotapi.InlineKeyboardButton{
+			tgbotapi.NewInlineKeyboardButtonData("🟢 Turn ON", "vacation:on"),
+			tgbotapi.NewInlineKeyboardButtonData("🔴 Turn OFF", "vacation:off"),
+		})
+
+		keyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
+		msg := tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("🏖 <b>Vacation Mode</b>\n\nCurrent status: %s\n\nWhen vacation mode is ON, no duty assignments will be made.", statusText))
+		msg.ParseMode = tgbotapi.ModeHTML
+		msg.ReplyMarkup = keyboard
+		return msg, nil
+	}
+
+	// Handle explicit on/off argument
+	arg := strings.ToLower(args[0])
+	var enabled bool
+	switch arg {
+	case "on", "true", "1", "enable":
+		enabled = true
+	case "off", "false", "0", "disable":
+		enabled = false
+	default:
+		msg := tgbotapi.NewMessage(m.Chat.ID, "⚠️ Invalid argument. Use: <code>/vacation [on|off]</code>")
+		msg.ParseMode = tgbotapi.ModeHTML
+		return msg, nil
+	}
+
+	err = h.Scheduler.SetVacationMode(context.Background(), enabled)
+	if err != nil {
+		return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("❌ Failed to set vacation mode: %v", err)), nil
+	}
+
+	statusText := "OFF"
+	emoji := "🔴"
+	if enabled {
+		statusText = "ON"
+		emoji = "🟢"
+	}
+
+	return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("%s Vacation mode is now <b>%s</b>", emoji, statusText)), nil
+}
+
+// HandleVacationCallback handles the vacation mode toggle callback
+func (h *Handlers) HandleVacationCallback(q *tgbotapi.CallbackQuery) (tgbotapi.EditMessageTextConfig, error) {
+	parts := strings.Split(q.Data, ":")
+	if len(parts) != 2 {
+		return tgbotapi.EditMessageTextConfig{}, fmt.Errorf("invalid callback data")
+	}
+
+	enabled := parts[1] == "on"
+
+	err := h.Scheduler.SetVacationMode(context.Background(), enabled)
+	if err != nil {
+		edit := tgbotapi.NewEditMessageText(
+			q.Message.Chat.ID,
+			q.Message.MessageID,
+			fmt.Sprintf("❌ Failed to set vacation mode: %v", err),
+		)
+		return edit, nil
+	}
+
+	statusText := "OFF"
+	emoji := "🔴"
+	if enabled {
+		statusText = "ON"
+		emoji = "🟢"
+	}
+
+	edit := tgbotapi.NewEditMessageText(
+		q.Message.Chat.ID,
+		q.Message.MessageID,
+		fmt.Sprintf("%s Vacation mode is now <b>%s</b>\n\nWhen vacation mode is ON, no duty assignments will be made.", emoji, statusText),
 	)
 	edit.ParseMode = tgbotapi.ModeHTML
 	return edit, nil

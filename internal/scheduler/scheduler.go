@@ -51,6 +51,15 @@ func (s *Scheduler) ClearOffDuty(ctx context.Context, userID int64) error {
 // AssignTodaysDuty performs the daily assignment at 11:00 AM Berlin time.
 // Priority: Volunteer queue > Admin queue > Round-robin (with balancing).
 func (s *Scheduler) AssignTodaysDuty(ctx context.Context) (*store.Duty, error) {
+	// Check if vacation mode is enabled
+	isVacation, err := s.store.IsVacationMode(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check vacation mode: %w", err)
+	}
+	if isVacation {
+		return nil, fmt.Errorf("system is in vacation mode - no duties will be assigned")
+	}
+
 	now := time.Now()
 	berlinLoc, _ := time.LoadLocation("Europe/Berlin")
 	berlinNow := now.In(berlinLoc)
@@ -280,4 +289,14 @@ func (s *Scheduler) ChangeDutyUser(ctx context.Context, date time.Time, newUserI
 	}
 
 	return existingDuty, nil
+}
+
+// SetVacationMode sets the system vacation mode state.
+func (s *Scheduler) SetVacationMode(ctx context.Context, enabled bool) error {
+	return s.store.SetVacationMode(ctx, enabled)
+}
+
+// IsVacationMode checks if the system is in vacation mode.
+func (s *Scheduler) IsVacationMode(ctx context.Context) (bool, error) {
+	return s.store.IsVacationMode(ctx)
 }

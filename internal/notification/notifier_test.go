@@ -56,6 +56,8 @@ func (m *MockStore) IsUserOffDuty(ctx context.Context, userID int64, date time.T
 func (m *MockStore) GetOffDutyUsers(ctx context.Context, date time.Time) ([]*store.User, error) {
 	return nil, nil
 }
+func (m *MockStore) SetVacationMode(ctx context.Context, enabled bool) error { return nil }
+func (m *MockStore) IsVacationMode(ctx context.Context) (bool, error) { return false, nil }
 
 // MockScheduler is a mock implementation of the Scheduler interface.
 type MockScheduler struct {

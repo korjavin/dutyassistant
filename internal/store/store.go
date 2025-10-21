@@ -90,4 +90,8 @@ type Store interface {
 	ClearOffDuty(ctx context.Context, userID int64) error
 	IsUserOffDuty(ctx context.Context, userID int64, date time.Time) (bool, error)
 	GetOffDutyUsers(ctx context.Context, date time.Time) ([]*User, error)
+
+	// Vacation mode methods
+	SetVacationMode(ctx context.Context, enabled bool) error
+	IsVacationMode(ctx context.Context) (bool, error)
 }
