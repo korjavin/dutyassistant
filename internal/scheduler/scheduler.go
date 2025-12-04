@@ -156,7 +156,7 @@ func (s *Scheduler) filterOffDutyUsers(ctx context.Context, users []*store.User,
 }
 
 // selectUserWithBalancing selects a user from those with the highest queue count.
-// If multiple users have the same highest count, it uses round-robin balancing.
+// If multiple users have the same highest count, one is randomly selected.
 func (s *Scheduler) selectUserWithBalancing(ctx context.Context, users []*store.User) *store.User {
 	if len(users) == 0 {
 		return nil
@@ -186,13 +186,8 @@ func (s *Scheduler) selectUserWithBalancing(ctx context.Context, users []*store.
 		}
 	}
 
-	// If only one user, return it
-	if len(maxQueueUsers) == 1 {
-		return maxQueueUsers[0]
-	}
-
-	// Use round-robin balancing for multiple users
-	return s.selectRoundRobinUser(ctx, maxQueueUsers)
+	// Randomly select from users with max queue count for fairness
+	return maxQueueUsers[rand.Intn(len(maxQueueUsers))]
 }
 
 // selectRoundRobinUser selects the user with the least completed duties in the last 14 days.
