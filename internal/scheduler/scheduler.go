@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/korjavin/dutyassistant/internal/store"
@@ -155,7 +156,7 @@ func (s *Scheduler) filterOffDutyUsers(ctx context.Context, users []*store.User,
 }
 
 // selectUserWithBalancing selects a user from those with the highest queue count.
-// If multiple users have the same highest count, it uses round-robin balancing.
+// If multiple users have the same highest count, one is randomly selected.
 func (s *Scheduler) selectUserWithBalancing(ctx context.Context, users []*store.User) *store.User {
 	if len(users) == 0 {
 		return nil
@@ -185,19 +186,20 @@ func (s *Scheduler) selectUserWithBalancing(ctx context.Context, users []*store.
 		}
 	}
 
-	// If only one user, return it
-	if len(maxQueueUsers) == 1 {
-		return maxQueueUsers[0]
-	}
-
-	// Use round-robin balancing for multiple users
-	return s.selectRoundRobinUser(ctx, maxQueueUsers)
+	// Randomly select from users with max queue count for fairness
+	return maxQueueUsers[rand.Intn(len(maxQueueUsers))]
 }
 
 // selectRoundRobinUser selects the user with the least completed duties in the last 14 days.
+// If multiple users have the same minimum count, one is randomly selected for fairness.
 func (s *Scheduler) selectRoundRobinUser(ctx context.Context, users []*store.User) *store.User {
 	if len(users) == 0 {
 		return nil
+	}
+
+	// If only one user, return it immediately
+	if len(users) == 1 {
+		return users[0]
 	}
 
 	// Calculate last 14 days
@@ -208,8 +210,8 @@ func (s *Scheduler) selectRoundRobinUser(ctx context.Context, users []*store.Use
 	// Get completed duties in the last 14 days (excluding admin assignments)
 	duties, err := s.store.GetCompletedDutiesInRange(ctx, start, today)
 	if err != nil {
-		// If error, just return first user
-		return users[0]
+		// If error, randomize selection among all available users
+		return users[rand.Intn(len(users))]
 	}
 
 	// Count duties per user (excluding admin assignments)
@@ -220,23 +222,30 @@ func (s *Scheduler) selectRoundRobinUser(ctx context.Context, users []*store.Use
 		}
 	}
 
-	// Find user with minimum duty count
-	var selectedUser *store.User
+	// Find minimum duty count
 	minCount := int(^uint(0) >> 1) // max int
-
 	for _, user := range users {
 		count := dutyCounts[user.ID]
 		if count < minCount {
 			minCount = count
-			selectedUser = user
 		}
 	}
 
-	if selectedUser == nil {
-		return users[0]
+	// Collect all users with minimum duty count
+	var candidateUsers []*store.User
+	for _, user := range users {
+		count := dutyCounts[user.ID]
+		if count == minCount {
+			candidateUsers = append(candidateUsers, user)
+		}
 	}
 
-	return selectedUser
+	// Randomly select from candidates for fairness
+	if len(candidateUsers) == 0 {
+		return users[rand.Intn(len(users))]
+	}
+
+	return candidateUsers[rand.Intn(len(candidateUsers))]
 }
 
 // assignDuty creates a new duty assignment.
