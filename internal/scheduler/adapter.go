@@ -13,6 +13,9 @@ type SchedulerInterface interface {
 	// AssignDuty adds days to a user's admin queue.
 	AssignDuty(ctx context.Context, user *store.User, days int) error
 
+	// UnassignDuty reduces days from a user's admin queue.
+	UnassignDuty(ctx context.Context, user *store.User, days int) error
+
 	// VolunteerForDuty adds days to a user's volunteer queue.
 	VolunteerForDuty(ctx context.Context, user *store.User, days int) error
 
@@ -38,6 +41,11 @@ var _ SchedulerInterface = (*Scheduler)(nil)
 // AssignDuty implements the SchedulerInterface by adding days to admin queue.
 func (s *Scheduler) AssignDuty(ctx context.Context, user *store.User, days int) error {
 	return s.AddToAdminQueue(ctx, user.ID, days)
+}
+
+// UnassignDuty implements the SchedulerInterface by reducing days from admin queue.
+func (s *Scheduler) UnassignDuty(ctx context.Context, user *store.User, days int) error {
+	return s.ReduceAdminQueue(ctx, user.ID, days)
 }
 
 // VolunteerForDuty implements the SchedulerInterface by adding days to volunteer queue.

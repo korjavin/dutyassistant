@@ -82,6 +82,7 @@ type Store interface {
 	AddToAdminQueue(ctx context.Context, userID int64, days int) error
 	DecrementVolunteerQueue(ctx context.Context, userID int64) error
 	DecrementAdminQueue(ctx context.Context, userID int64) error
+	ReduceAdminQueue(ctx context.Context, userID int64, days int) error
 	GetUsersWithVolunteerQueue(ctx context.Context) ([]*User, error)
 	GetUsersWithAdminQueue(ctx context.Context) ([]*User, error)
 

@@ -178,6 +178,8 @@ func (b *Bot) handleCommand(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 		return b.handlers.HandleVolunteer(m)
 	case "assign":
 		return b.handlers.HandleAssign(m)
+	case "unassign":
+		return b.handlers.HandleUnassign(m)
 	case "modify":
 		return b.handlers.HandleModify(m)
 	case "change":
@@ -221,6 +223,10 @@ func (b *Bot) handleCallbackQuery(q *tgbotapi.CallbackQuery) (tgbotapi.Chattable
 		return b.handlers.HandleAssignDaysCallback(q)
 	case "assign_custom":
 		return b.handlers.HandleAssignCustomCallback(q)
+	case "unassign_user":
+		return b.handlers.HandleUnassignUserCallback(q)
+	case "unassign_days":
+		return b.handlers.HandleUnassignDaysCallback(q)
 	case "volunteer_days":
 		return b.handlers.HandleVolunteerDaysCallback(q)
 	case "volunteer_custom":
