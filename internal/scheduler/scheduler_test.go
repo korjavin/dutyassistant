@@ -190,9 +190,17 @@ func (m *mockStore) DecrementVolunteerQueue(ctx context.Context, userID int64) e
 }
 
 func (m *mockStore) DecrementAdminQueue(ctx context.Context, userID int64) error {
+	return m.ReduceAdminQueue(ctx, userID, 1)
+}
+
+func (m *mockStore) ReduceAdminQueue(ctx context.Context, userID int64, days int) error {
 	for _, u := range m.users {
-		if u.ID == userID && u.AdminQueueDays > 0 {
-			u.AdminQueueDays--
+		if u.ID == userID {
+			if u.AdminQueueDays > days {
+				u.AdminQueueDays -= days
+			} else {
+				u.AdminQueueDays = 0
+			}
 			return nil
 		}
 	}
@@ -299,6 +307,37 @@ func TestScheduler_AddToAdminQueue(t *testing.T) {
 	// Verify the queue was updated
 	if mock.users[0].AdminQueueDays != 2 {
 		t.Errorf("Expected 2 admin queue days, got %d", mock.users[0].AdminQueueDays)
+	}
+}
+
+func TestScheduler_ReduceAdminQueue(t *testing.T) {
+	mock := newMockStore()
+	scheduler := NewScheduler(mock)
+	ctx := context.Background()
+
+	// Initial setup
+	mock.users[0].AdminQueueDays = 5
+
+	// Reduce by 2
+	err := scheduler.ReduceAdminQueue(ctx, 1, 2)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	// Verify the queue was updated
+	if mock.users[0].AdminQueueDays != 3 {
+		t.Errorf("Expected 3 admin queue days, got %d", mock.users[0].AdminQueueDays)
+	}
+
+	// Reduce by 10 (should go to 0)
+	err = scheduler.ReduceAdminQueue(ctx, 1, 10)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	// Verify the queue is 0
+	if mock.users[0].AdminQueueDays != 0 {
+		t.Errorf("Expected 0 admin queue days, got %d", mock.users[0].AdminQueueDays)
 	}
 }
 

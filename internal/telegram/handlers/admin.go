@@ -115,6 +115,71 @@ func (h *Handlers) HandleAssign(m *tgbotapi.Message) (tgbotapi.MessageConfig, er
 	return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("✅ Successfully added %d day(s) to admin queue for %s.", days, userName)), nil
 }
 
+// HandleUnassign handles the /unassign command for admins. Format: /unassign [username] [days]
+func (h *Handlers) HandleUnassign(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
+	isAdmin, err := h.checkAdmin(m.From.ID)
+	if err != nil || !isAdmin {
+		return tgbotapi.NewMessage(m.Chat.ID, adminOnlyMessage), nil
+	}
+
+	args := strings.Fields(m.CommandArguments())
+
+	// If no arguments provided, show user selection buttons
+	if len(args) == 0 {
+		// Only list users who have admin queue > 0
+		users, err := h.Store.GetUsersWithAdminQueue(context.Background())
+		if err != nil || len(users) == 0 {
+			msg := tgbotapi.NewMessage(m.Chat.ID, "No users found with assignments in admin queue.")
+			return msg, nil
+		}
+
+		// Create inline keyboard with user buttons
+		var buttons [][]tgbotapi.InlineKeyboardButton
+		for _, u := range users {
+			row := []tgbotapi.InlineKeyboardButton{
+				tgbotapi.NewInlineKeyboardButtonData(
+					fmt.Sprintf("👤 %s (%d days)", u.FirstName, u.AdminQueueDays),
+					fmt.Sprintf("unassign_user:%d", u.ID),
+				),
+			}
+			buttons = append(buttons, row)
+		}
+
+		keyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
+		msg := tgbotapi.NewMessage(m.Chat.ID, "📋 <b>Remove days from admin queue</b>\n\nSelect a user:")
+		msg.ParseMode = tgbotapi.ModeHTML
+		msg.ReplyMarkup = keyboard
+		return msg, nil
+	}
+
+	// If only username provided, prompt for days
+	if len(args) == 1 {
+		msg := tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("How many days should I remove from %s?\n\nExample: <code>/unassign %s 3</code>", args[0], args[0]))
+		msg.ParseMode = tgbotapi.ModeHTML
+		return msg, nil
+	}
+
+	userName := args[0]
+	var days int
+	_, err = fmt.Sscanf(args[1], "%d", &days)
+	if err != nil || days <= 0 {
+		msg := tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("⚠️ '%s' is not a valid number of days.\n\nPlease use a positive number.\n\nExample: <code>/unassign %s 3</code>", args[1], userName))
+		msg.ParseMode = tgbotapi.ModeHTML
+		return msg, nil
+	}
+
+	user, err := h.Store.GetUserByName(context.Background(), userName)
+	if err != nil || user == nil {
+		return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("❌ User '%s' not found.", userName)), nil
+	}
+
+	if err := h.Scheduler.UnassignDuty(context.Background(), user, days); err != nil {
+		return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("❌ Failed to remove %d days from %s: %v", days, userName, err)), nil
+	}
+
+	return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("✅ Successfully removed %d day(s) from admin queue for %s.", days, userName)), nil
+}
+
 // HandleModify handles the /modify command. Format: /modify <date> <new_username>
 // This changes the assigned user for today or a future date.
 func (h *Handlers) HandleModify(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
@@ -557,6 +622,119 @@ func (h *Handlers) HandleAssignCustomCallback(q *tgbotapi.CallbackQuery) (tgbota
 		q.Message.Chat.ID,
 		q.Message.MessageID,
 		fmt.Sprintf("👤 <b>%s</b>\n\nPlease type the number of days:\n\n<code>/assign %s [days]</code>", userName, userName),
+	)
+	edit.ParseMode = tgbotapi.ModeHTML
+	return edit, nil
+}
+
+// HandleUnassignUserCallback handles the callback when a user is selected for unassignment
+func (h *Handlers) HandleUnassignUserCallback(q *tgbotapi.CallbackQuery) (tgbotapi.EditMessageTextConfig, error) {
+	parts := strings.Split(q.Data, ":")
+	if len(parts) != 2 {
+		return tgbotapi.EditMessageTextConfig{}, fmt.Errorf("invalid callback data")
+	}
+
+	userID := parts[1]
+	var id int64
+	fmt.Sscanf(userID, "%d", &id)
+
+	// Get user info (including queue size)
+	users, _ := h.Store.GetUsersWithAdminQueue(context.Background())
+	var user *store.User
+	for _, u := range users {
+		if u.ID == id {
+			user = u
+			break
+		}
+	}
+
+	if user == nil {
+		edit := tgbotapi.NewEditMessageText(q.Message.Chat.ID, q.Message.MessageID, "❌ User not found or has no assigned days.")
+		return edit, nil
+	}
+
+	// Create number selection keyboard
+	var buttons [][]tgbotapi.InlineKeyboardButton
+	row := []tgbotapi.InlineKeyboardButton{}
+
+	// Add "1 day" option
+	row = append(row, tgbotapi.NewInlineKeyboardButtonData("1", fmt.Sprintf("unassign_days:%d:1", user.ID)))
+
+	// Add other options based on queue size, up to 7 or queue size
+	for days := 2; days <= 7 && days < user.AdminQueueDays; days++ {
+		row = append(row, tgbotapi.NewInlineKeyboardButtonData(
+			fmt.Sprintf("%d", days),
+			fmt.Sprintf("unassign_days:%d:%d", user.ID, days),
+		))
+		if len(row) >= 4 {
+			buttons = append(buttons, row)
+			row = []tgbotapi.InlineKeyboardButton{}
+		}
+	}
+	if len(row) > 0 {
+		buttons = append(buttons, row)
+	}
+
+	// Add "All" option
+	buttons = append(buttons, []tgbotapi.InlineKeyboardButton{
+		tgbotapi.NewInlineKeyboardButtonData(
+			fmt.Sprintf("All (%d)", user.AdminQueueDays),
+			fmt.Sprintf("unassign_days:%d:%d", user.ID, user.AdminQueueDays),
+		),
+	})
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
+	edit := tgbotapi.NewEditMessageText(
+		q.Message.Chat.ID,
+		q.Message.MessageID,
+		fmt.Sprintf("👤 <b>%s</b> (Queue: %d)\n\nHow many days to remove?", user.FirstName, user.AdminQueueDays),
+	)
+	edit.ParseMode = tgbotapi.ModeHTML
+	edit.ReplyMarkup = &keyboard
+	return edit, nil
+}
+
+// HandleUnassignDaysCallback handles the final confirmation when days are selected for unassignment
+func (h *Handlers) HandleUnassignDaysCallback(q *tgbotapi.CallbackQuery) (tgbotapi.EditMessageTextConfig, error) {
+	parts := strings.Split(q.Data, ":")
+	if len(parts) != 3 {
+		return tgbotapi.EditMessageTextConfig{}, fmt.Errorf("invalid callback data")
+	}
+
+	var userID, days int64
+	fmt.Sscanf(parts[1], "%d", &userID)
+	fmt.Sscanf(parts[2], "%d", &days)
+
+	// Get user
+	users, _ := h.Store.ListAllUsers(context.Background())
+	var user *store.User
+	for _, u := range users {
+		if u.ID == userID {
+			user = u
+			break
+		}
+	}
+
+	if user == nil {
+		edit := tgbotapi.NewEditMessageText(q.Message.Chat.ID, q.Message.MessageID, "❌ User not found")
+		return edit, nil
+	}
+
+	// Unassign the days
+	err := h.Scheduler.UnassignDuty(context.Background(), user, int(days))
+	if err != nil {
+		edit := tgbotapi.NewEditMessageText(
+			q.Message.Chat.ID,
+			q.Message.MessageID,
+			fmt.Sprintf("❌ Failed to unassign: %v", err),
+		)
+		return edit, nil
+	}
+
+	edit := tgbotapi.NewEditMessageText(
+		q.Message.Chat.ID,
+		q.Message.MessageID,
+		fmt.Sprintf("✅ Removed %d day(s) from admin queue for <b>%s</b>", days, user.FirstName),
 	)
 	edit.ParseMode = tgbotapi.ModeHTML
 	return edit, nil

@@ -17,6 +17,11 @@ func (m *MockScheduler) AssignDuty(ctx context.Context, user *store.User, days i
 	return args.Error(0)
 }
 
+func (m *MockScheduler) UnassignDuty(ctx context.Context, user *store.User, days int) error {
+	args := m.Called(ctx, user, days)
+	return args.Error(0)
+}
+
 func (m *MockScheduler) VolunteerForDuty(ctx context.Context, user *store.User, days int) error {
 	args := m.Called(ctx, user, days)
 	return args.Error(0)

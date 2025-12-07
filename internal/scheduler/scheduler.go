@@ -35,6 +35,14 @@ func (s *Scheduler) AddToAdminQueue(ctx context.Context, userID int64, days int)
 	return s.store.AddToAdminQueue(ctx, userID, days)
 }
 
+// ReduceAdminQueue reduces days from a user's admin assignment queue.
+func (s *Scheduler) ReduceAdminQueue(ctx context.Context, userID int64, days int) error {
+	if days <= 0 {
+		return fmt.Errorf("days must be positive")
+	}
+	return s.store.ReduceAdminQueue(ctx, userID, days)
+}
+
 // SetOffDuty sets a user's off-duty period.
 func (s *Scheduler) SetOffDuty(ctx context.Context, userID int64, start, end time.Time) error {
 	// Validate dates

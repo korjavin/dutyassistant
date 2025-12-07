@@ -3,7 +3,6 @@ package handlers_test
 import (
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/korjavin/dutyassistant/internal/mocks"
 	"github.com/korjavin/dutyassistant/internal/store"
@@ -62,24 +61,24 @@ func TestHandleAssign_Success(t *testing.T) {
 	message := &tgbotapi.Message{
 		Chat:     &tgbotapi.Chat{ID: 789},
 		From:     &tgbotapi.User{ID: 123},
-		Text:     "/assign TestUser 2023-12-25",
+		Text:     "/assign TestUser 3",
 		Entities: []tgbotapi.MessageEntity{{Type: "bot_command", Offset: 0, Length: 7}},
 	}
 
 	targetUser := &store.User{ID: 2, FirstName: "TestUser"}
-	dutyDate, _ := time.Parse("2006-01-02", "2023-12-25")
+	days := 3
 	mockStore.On("GetUserByName", mock.Anything, "TestUser").Return(targetUser, nil)
-	mockScheduler.On("AssignDuty", mock.Anything, targetUser, dutyDate).Return(nil)
+	mockScheduler.On("AssignDuty", mock.Anything, targetUser, days).Return(nil)
 
 	msg, err := h.HandleAssign(message)
 	assert.NoError(t, err)
-	assert.Equal(t, "Successfully assigned TestUser to duty on 2023-12-25.", msg.Text)
+	assert.Equal(t, "✅ Successfully added 3 day(s) to admin queue for TestUser.", msg.Text)
 	mockStore.AssertExpectations(t)
 	mockScheduler.AssertExpectations(t)
 }
 
 func TestHandleUsers_Success(t *testing.T) {
-	mockStore, _, h := setupAdminTest(t)
+	mockStore, mockScheduler, h := setupAdminTest(t)
 
 	message := &tgbotapi.Message{
 		Chat: &tgbotapi.Chat{ID: 789},
@@ -91,12 +90,13 @@ func TestHandleUsers_Success(t *testing.T) {
 		{FirstName: "Bob", IsActive: false, IsAdmin: false},
 	}
 	mockStore.On("ListAllUsers", mock.Anything).Return(userList, nil)
+	mockScheduler.On("IsVacationMode", mock.Anything).Return(false, nil)
 
 	msg, err := h.HandleUsers(message)
 	assert.NoError(t, err)
-	assert.Contains(t, msg.Text, "<b>User List:</b>")
-	assert.Contains(t, msg.Text, "- Alice (Admin): Active")
-	assert.Contains(t, msg.Text, "- Bob: Inactive")
+	assert.Contains(t, msg.Text, "<b>📋 User List</b>")
+	assert.Contains(t, msg.Text, "<b>Alice</b> 👑: ✅ Active")
+	assert.Contains(t, msg.Text, "<b>Bob</b>: ❌ Inactive")
 	assert.Equal(t, tgbotapi.ModeHTML, msg.ParseMode)
 	mockStore.AssertExpectations(t)
 }
@@ -134,24 +134,48 @@ func TestHandleAssign_UserNotFound(t *testing.T) {
 	}
 
 	mockStore.On("GetUserByName", mock.Anything, "UnknownUser").Return(nil, errors.New("not found"))
+	// When user is not found, HandleAssign calls ListActiveUsers to show suggestions
+	mockStore.On("ListActiveUsers", mock.Anything).Return([]*store.User{}, nil)
 
 	msg, err := h.HandleAssign(message)
 	assert.NoError(t, err)
-	assert.Equal(t, "Could not find user: UnknownUser", msg.Text)
+	assert.Contains(t, msg.Text, "User 'UnknownUser' not found")
 	mockStore.AssertExpectations(t)
 }
 
-func TestHandleAssign_InvalidDate(t *testing.T) {
+func TestHandleAssign_InvalidNumber(t *testing.T) {
 	_, _, h := setupAdminTest(t)
 
 	message := &tgbotapi.Message{
 		Chat:     &tgbotapi.Chat{ID: 789},
 		From:     &tgbotapi.User{ID: 123},
-		Text:     "/assign TestUser 2023/12/25", // Invalid date format
+		Text:     "/assign TestUser abc", // Invalid number
 		Entities: []tgbotapi.MessageEntity{{Type: "bot_command", Offset: 0, Length: 7}},
 	}
 
 	msg, err := h.HandleAssign(message)
 	assert.NoError(t, err)
-	assert.Equal(t, "Invalid date format. Please use YYYY-MM-DD.", msg.Text)
+	assert.Contains(t, msg.Text, "is not a valid number of days")
+}
+
+func TestHandleUnassign_Success(t *testing.T) {
+	mockStore, mockScheduler, h := setupAdminTest(t)
+
+	message := &tgbotapi.Message{
+		Chat:     &tgbotapi.Chat{ID: 789},
+		From:     &tgbotapi.User{ID: 123},
+		Text:     "/unassign TestUser 2",
+		Entities: []tgbotapi.MessageEntity{{Type: "bot_command", Offset: 0, Length: 9}},
+	}
+
+	targetUser := &store.User{ID: 2, FirstName: "TestUser", AdminQueueDays: 5}
+	days := 2
+	mockStore.On("GetUserByName", mock.Anything, "TestUser").Return(targetUser, nil)
+	mockScheduler.On("UnassignDuty", mock.Anything, targetUser, days).Return(nil)
+
+	msg, err := h.HandleUnassign(message)
+	assert.NoError(t, err)
+	assert.Equal(t, "✅ Successfully removed 2 day(s) from admin queue for TestUser.", msg.Text)
+	mockStore.AssertExpectations(t)
+	mockScheduler.AssertExpectations(t)
 }

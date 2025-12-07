@@ -489,10 +489,15 @@ func (s *SQLiteStore) DecrementVolunteerQueue(ctx context.Context, userID int64)
 
 // DecrementAdminQueue decrements a user's admin queue by 1 (minimum 0).
 func (s *SQLiteStore) DecrementAdminQueue(ctx context.Context, userID int64) error {
-	query := `UPDATE users SET admin_queue_days = MAX(0, admin_queue_days - 1) WHERE id = ?`
-	_, err := s.db.ExecContext(ctx, query, userID)
+	return s.ReduceAdminQueue(ctx, userID, 1)
+}
+
+// ReduceAdminQueue reduces a user's admin queue by a specific number of days (minimum 0).
+func (s *SQLiteStore) ReduceAdminQueue(ctx context.Context, userID int64, days int) error {
+	query := `UPDATE users SET admin_queue_days = MAX(0, admin_queue_days - ?) WHERE id = ?`
+	_, err := s.db.ExecContext(ctx, query, days, userID)
 	if err != nil {
-		return fmt.Errorf("could not decrement admin queue: %w", err)
+		return fmt.Errorf("could not reduce admin queue: %w", err)
 	}
 	return nil
 }

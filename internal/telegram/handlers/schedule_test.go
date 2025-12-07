@@ -16,7 +16,8 @@ import (
 
 func TestHandleSchedule(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := handlers.New(mockStore, nil)
+	mockScheduler := new(mocks.MockScheduler)
+	h := handlers.New(mockStore, mockScheduler)
 	message := &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: 123}}
 
 	// Mock store to return some duties
@@ -24,6 +25,9 @@ func TestHandleSchedule(t *testing.T) {
 		{DutyDate: time.Now(), User: &store.User{FirstName: "Test"}},
 	}
 	mockStore.On("GetDutiesByMonth", mock.Anything, time.Now().Year(), time.Now().Month()).Return(duties, nil)
+	// HandleSchedule also calls ListActiveUsers to calculate stats
+	mockStore.On("ListActiveUsers", mock.Anything).Return([]*store.User{{FirstName: "Test", IsActive: true}}, nil)
+	mockScheduler.On("IsVacationMode", mock.Anything).Return(false, nil)
 
 	msg, err := h.HandleSchedule(message)
 
@@ -41,6 +45,7 @@ func TestHandleCalendarCallback(t *testing.T) {
 
 	// Mock store to return empty duties for any month query
 	mockStore.On("GetDutiesByMonth", mock.Anything, mock.Anything, mock.Anything).Return([]*store.Duty{}, nil)
+	mockStore.On("ListActiveUsers", mock.Anything).Return([]*store.User{}, nil)
 
 	testCases := []struct {
 		name          string

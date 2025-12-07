@@ -1,7 +1,6 @@
 package handlers_test
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/korjavin/dutyassistant/internal/mocks"
@@ -21,7 +20,9 @@ func TestHandleStart_NewUser(t *testing.T) {
 		From: &tgbotapi.User{ID: 456, FirstName: "NewUser"},
 	}
 
-	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return(nil, errors.New("not found"))
+	// For existing user check, we return nil, nil to indicate "not found but no error"
+	// The implementation in commands.go handles err != nil as database error.
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return(nil, nil)
 	mockStore.On("CreateUser", mock.Anything, mock.MatchedBy(func(u *store.User) bool {
 		return u.TelegramUserID == 456 && u.FirstName == "NewUser"
 	})).Return(nil)
@@ -80,8 +81,8 @@ func TestHandleStatus_Success(t *testing.T) {
 
 	msg, err := h.HandleStatus(message)
 	assert.NoError(t, err)
-	assert.Contains(t, msg.Text, "Total Duties Assigned: 5")
-	assert.Contains(t, msg.Text, "Next scheduled duty: 2023-12-31")
+	assert.Contains(t, msg.Text, "Total duties: 5")
+	assert.Contains(t, msg.Text, "Next duty: 2023-12-31")
 	mockStore.AssertExpectations(t)
 }
 
