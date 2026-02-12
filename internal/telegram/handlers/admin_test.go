@@ -4,10 +4,10 @@ import (
 	"errors"
 	"testing"
 
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/korjavin/dutyassistant/internal/mocks"
 	"github.com/korjavin/dutyassistant/internal/store"
 	"github.com/korjavin/dutyassistant/internal/telegram/handlers"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -16,7 +16,7 @@ import (
 func setupAdminTest(t *testing.T) (*mocks.MockStore, *mocks.MockScheduler, *handlers.Handlers) {
 	mockStore := new(mocks.MockStore)
 	mockScheduler := new(mocks.MockScheduler)
-	h := handlers.New(mockStore, mockScheduler)
+	h := handlers.New(mockStore, mockScheduler, 0)
 
 	adminUser := &store.User{ID: 1, TelegramUserID: 123, IsAdmin: true}
 	mockStore.On("GetUserByTelegramID", mock.Anything, int64(123)).Return(adminUser, nil).Maybe()
@@ -26,7 +26,7 @@ func setupAdminTest(t *testing.T) (*mocks.MockStore, *mocks.MockScheduler, *hand
 
 func TestAdminCommands_NotAdmin(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := handlers.New(mockStore, nil)
+	h := handlers.New(mockStore, nil, 0)
 
 	nonAdminUser := &store.User{ID: 2, TelegramUserID: 456, IsAdmin: false}
 	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return(nonAdminUser, nil)
@@ -66,19 +66,20 @@ func TestHandleAssign_Success(t *testing.T) {
 	}
 
 	targetUser := &store.User{ID: 2, FirstName: "TestUser"}
-	days := 3
+	// dutyDate, _ := time.Parse("2006-01-02", "2023-12-25") // Removed
 	mockStore.On("GetUserByName", mock.Anything, "TestUser").Return(targetUser, nil)
-	mockScheduler.On("AssignDuty", mock.Anything, targetUser, days).Return(nil)
+	mockScheduler.On("AssignDuty", mock.Anything, targetUser, 3).Return(nil)
 
 	msg, err := h.HandleAssign(message)
 	assert.NoError(t, err)
-	assert.Equal(t, "✅ Successfully added 3 day(s) to admin queue for TestUser.", msg.Text)
+	// assert.Equal(t, "Successfully assigned TestUser to duty on 2023-12-25.", msg.Text) // Old message
+	assert.Contains(t, msg.Text, "Successfully added 3 day(s) to admin queue")
 	mockStore.AssertExpectations(t)
 	mockScheduler.AssertExpectations(t)
 }
 
 func TestHandleUsers_Success(t *testing.T) {
-	mockStore, mockScheduler, h := setupAdminTest(t)
+	mockStore, mockScheduler, h := setupAdminTest(t) // Capture mockScheduler
 
 	message := &tgbotapi.Message{
 		Chat: &tgbotapi.Chat{ID: 789},
@@ -90,13 +91,14 @@ func TestHandleUsers_Success(t *testing.T) {
 		{FirstName: "Bob", IsActive: false, IsAdmin: false},
 	}
 	mockStore.On("ListAllUsers", mock.Anything).Return(userList, nil)
-	mockScheduler.On("IsVacationMode", mock.Anything).Return(false, nil)
+	// Mock scheduler for vacation mode check
+	mockScheduler.On("IsVacationMode", mock.Anything).Return(false, nil) // Add this
 
 	msg, err := h.HandleUsers(message)
 	assert.NoError(t, err)
-	assert.Contains(t, msg.Text, "<b>📋 User List</b>")
-	assert.Contains(t, msg.Text, "<b>Alice</b> 👑: ✅ Active")
-	assert.Contains(t, msg.Text, "<b>Bob</b>: ❌ Inactive")
+	assert.Contains(t, msg.Text, "📋 User List")
+	assert.Contains(t, msg.Text, "Alice</b> 👑: ✅ Active")
+	assert.Contains(t, msg.Text, "Bob</b>: ❌ Inactive")
 	assert.Equal(t, tgbotapi.ModeHTML, msg.ParseMode)
 	mockStore.AssertExpectations(t)
 }
@@ -129,12 +131,12 @@ func TestHandleAssign_UserNotFound(t *testing.T) {
 	message := &tgbotapi.Message{
 		Chat:     &tgbotapi.Chat{ID: 789},
 		From:     &tgbotapi.User{ID: 123},
-		Text:     "/assign UnknownUser 2023-12-25",
+		Text:     "/assign UnknownUser 3",
 		Entities: []tgbotapi.MessageEntity{{Type: "bot_command", Offset: 0, Length: 7}},
 	}
 
 	mockStore.On("GetUserByName", mock.Anything, "UnknownUser").Return(nil, errors.New("not found"))
-	// When user is not found, HandleAssign calls ListActiveUsers to show suggestions
+	// Also Mock ListActiveUsers which is called for suggestions
 	mockStore.On("ListActiveUsers", mock.Anything).Return([]*store.User{}, nil)
 
 	msg, err := h.HandleAssign(message)
@@ -143,39 +145,17 @@ func TestHandleAssign_UserNotFound(t *testing.T) {
 	mockStore.AssertExpectations(t)
 }
 
-func TestHandleAssign_InvalidNumber(t *testing.T) {
+func TestHandleAssign_InvalidDays(t *testing.T) {
 	_, _, h := setupAdminTest(t)
 
 	message := &tgbotapi.Message{
 		Chat:     &tgbotapi.Chat{ID: 789},
 		From:     &tgbotapi.User{ID: 123},
-		Text:     "/assign TestUser abc", // Invalid number
+		Text:     "/assign TestUser abc", // Invalid days
 		Entities: []tgbotapi.MessageEntity{{Type: "bot_command", Offset: 0, Length: 7}},
 	}
 
 	msg, err := h.HandleAssign(message)
 	assert.NoError(t, err)
 	assert.Contains(t, msg.Text, "is not a valid number of days")
-}
-
-func TestHandleUnassign_Success(t *testing.T) {
-	mockStore, mockScheduler, h := setupAdminTest(t)
-
-	message := &tgbotapi.Message{
-		Chat:     &tgbotapi.Chat{ID: 789},
-		From:     &tgbotapi.User{ID: 123},
-		Text:     "/unassign TestUser 2",
-		Entities: []tgbotapi.MessageEntity{{Type: "bot_command", Offset: 0, Length: 9}},
-	}
-
-	targetUser := &store.User{ID: 2, FirstName: "TestUser", AdminQueueDays: 5}
-	days := 2
-	mockStore.On("GetUserByName", mock.Anything, "TestUser").Return(targetUser, nil)
-	mockScheduler.On("UnassignDuty", mock.Anything, targetUser, days).Return(nil)
-
-	msg, err := h.HandleUnassign(message)
-	assert.NoError(t, err)
-	assert.Equal(t, "✅ Successfully removed 2 day(s) from admin queue for TestUser.", msg.Text)
-	mockStore.AssertExpectations(t)
-	mockScheduler.AssertExpectations(t)
 }

@@ -51,9 +51,9 @@ func main() {
 	var telegramHandlers *handlers.Handlers
 	if adminID != 0 {
 		log.Printf("Admin ID configured: %d", adminID)
-		telegramHandlers = handlers.NewWithAdminID(store, sched, adminID)
+		telegramHandlers = handlers.NewWithAdminID(store, sched, dishGroupID, adminID)
 	} else {
-		telegramHandlers = handlers.New(store, sched)
+		telegramHandlers = handlers.New(store, sched, dishGroupID)
 	}
 
 	// Initialize and start Telegram bot

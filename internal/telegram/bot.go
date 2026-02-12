@@ -6,9 +6,9 @@ import (
 	"log"
 	"strings"
 
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/korjavin/dutyassistant/internal/telegram/handlers"
 	"github.com/korjavin/dutyassistant/internal/telegram/keyboard"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 // Bot represents the Telegram bot application.
@@ -27,6 +27,9 @@ func NewBot(apiToken string, h *handlers.Handlers, groupID, ownerID int64) (*Bot
 	}
 	api.Debug = false // Set to true for verbose logging
 	log.Printf("Authorized on account %s", api.Self.UserName)
+
+	// Inject bot API into handlers for notifications
+	h.SetBot(api)
 
 	return &Bot{
 		api:      api,
@@ -176,6 +179,8 @@ func (b *Bot) handleCommand(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 		return b.handlers.HandleSchedule(m)
 	case "volunteer":
 		return b.handlers.HandleVolunteer(m)
+	case "chore":
+		return b.handlers.HandleChore(m)
 	case "assign":
 		return b.handlers.HandleAssign(m)
 	case "unassign":

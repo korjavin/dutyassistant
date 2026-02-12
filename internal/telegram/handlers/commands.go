@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/korjavin/dutyassistant/internal/store"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/korjavin/dutyassistant/internal/store"
 )
 
 const (
@@ -22,6 +22,7 @@ const (
 		"/schedule - View the duty schedule for the current month.\n" +
 		"/volunteer <days> - Add days to your volunteer queue.\n\n" +
 		"*Admin Commands:*\n" +
+		"/chore <description> - Assign a chore to a random active user.\n" +
 		"/assign <username> <days> - Add days to user's admin queue.\n" +
 		"/unassign <username> <days> - Remove days from user's admin queue.\n" +
 		"/change <date> <username> - Change assigned user for a date.\n" +

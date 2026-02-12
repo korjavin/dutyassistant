@@ -3,25 +3,23 @@ package handlers_test
 import (
 	"testing"
 
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/korjavin/dutyassistant/internal/mocks"
 	"github.com/korjavin/dutyassistant/internal/store"
 	"github.com/korjavin/dutyassistant/internal/telegram/handlers"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
 func TestHandleStart_NewUser(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := handlers.New(mockStore, nil)
+	h := handlers.New(mockStore, nil, 0)
 
 	message := &tgbotapi.Message{
 		Chat: &tgbotapi.Chat{ID: 123},
 		From: &tgbotapi.User{ID: 456, FirstName: "NewUser"},
 	}
 
-	// For existing user check, we return nil, nil to indicate "not found but no error"
-	// The implementation in commands.go handles err != nil as database error.
 	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return(nil, nil)
 	mockStore.On("CreateUser", mock.Anything, mock.MatchedBy(func(u *store.User) bool {
 		return u.TelegramUserID == 456 && u.FirstName == "NewUser"
@@ -35,7 +33,7 @@ func TestHandleStart_NewUser(t *testing.T) {
 
 func TestHandleStart_ExistingUser(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := handlers.New(mockStore, nil)
+	h := handlers.New(mockStore, nil, 0)
 
 	message := &tgbotapi.Message{
 		Chat: &tgbotapi.Chat{ID: 123},
@@ -55,7 +53,7 @@ func TestHandleStart_ExistingUser(t *testing.T) {
 }
 
 func TestHandleHelp(t *testing.T) {
-	h := handlers.New(nil, nil)
+	h := handlers.New(nil, nil, 0)
 	message := &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: 123}}
 
 	msg, err := h.HandleHelp(message)
@@ -66,7 +64,7 @@ func TestHandleHelp(t *testing.T) {
 
 func TestHandleStatus_Success(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := handlers.New(mockStore, nil)
+	h := handlers.New(mockStore, nil, 0)
 
 	message := &tgbotapi.Message{
 		Chat: &tgbotapi.Chat{ID: 123},
@@ -88,7 +86,7 @@ func TestHandleStatus_Success(t *testing.T) {
 
 func TestHandleStatus_UserNotFound(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := handlers.New(mockStore, nil)
+	h := handlers.New(mockStore, nil, 0)
 
 	message := &tgbotapi.Message{
 		Chat: &tgbotapi.Chat{ID: 123},

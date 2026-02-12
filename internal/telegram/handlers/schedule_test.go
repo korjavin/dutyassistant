@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/korjavin/dutyassistant/internal/mocks"
 	"github.com/korjavin/dutyassistant/internal/store"
 	"github.com/korjavin/dutyassistant/internal/telegram/handlers"
 	"github.com/korjavin/dutyassistant/internal/telegram/keyboard"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -17,7 +17,7 @@ import (
 func TestHandleSchedule(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	mockScheduler := new(mocks.MockScheduler)
-	h := handlers.New(mockStore, mockScheduler)
+	h := handlers.New(mockStore, mockScheduler, 0)
 	message := &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: 123}}
 
 	// Mock store to return some duties
@@ -25,8 +25,8 @@ func TestHandleSchedule(t *testing.T) {
 		{DutyDate: time.Now(), User: &store.User{FirstName: "Test"}},
 	}
 	mockStore.On("GetDutiesByMonth", mock.Anything, time.Now().Year(), time.Now().Month()).Return(duties, nil)
-	// HandleSchedule also calls ListActiveUsers to calculate stats
-	mockStore.On("ListActiveUsers", mock.Anything).Return([]*store.User{{FirstName: "Test", IsActive: true}}, nil)
+	// Mock ListActiveUsers as it might be used to highlight active users or something
+	mockStore.On("ListActiveUsers", mock.Anything).Return([]*store.User{}, nil)
 	mockScheduler.On("IsVacationMode", mock.Anything).Return(false, nil)
 
 	msg, err := h.HandleSchedule(message)
@@ -40,11 +40,12 @@ func TestHandleSchedule(t *testing.T) {
 
 func TestHandleCalendarCallback(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := handlers.New(mockStore, nil)
+	h := handlers.New(mockStore, nil, 0)
 	now := time.Date(2023, 5, 15, 0, 0, 0, 0, time.UTC)
 
 	// Mock store to return empty duties for any month query
 	mockStore.On("GetDutiesByMonth", mock.Anything, mock.Anything, mock.Anything).Return([]*store.Duty{}, nil)
+	// Mock ListActiveUsers used in calendar refresh
 	mockStore.On("ListActiveUsers", mock.Anything).Return([]*store.User{}, nil)
 
 	testCases := []struct {

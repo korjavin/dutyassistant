@@ -62,9 +62,21 @@ func TestGetSchedule(t *testing.T) {
 		router.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
-		var duties []*store.Duty
-		json.Unmarshal(w.Body.Bytes(), &duties)
-		assert.Equal(t, expectedDuties, duties)
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response struct {
+			Duties []struct {
+				ID     int64  `json:"id"`
+				UserID int64  `json:"user_id"`
+				Date   string `json:"date"`
+			} `json:"duties"`
+		}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		assert.NotEmpty(t, response.Duties)
+		assert.Equal(t, int64(1), response.Duties[0].ID)
+		assert.Equal(t, int64(101), response.Duties[0].UserID)
+		// mockStore.AssertExpectations(t)
 		mockStore.AssertExpectations(t)
 	})
 
@@ -101,6 +113,12 @@ func TestGetUsers(t *testing.T) {
 
 		w := httptest.NewRecorder()
 		req, _ := http.NewRequest("GET", "/api/v1/users", nil)
+
+		// Create a context with the user and attach it to the request.
+		user := &store.User{ID: 1, TelegramUserID: 123, IsActive: true}
+		ctx := context.WithValue(req.Context(), middleware.UserKey, user)
+		req = req.WithContext(ctx)
+
 		router.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
