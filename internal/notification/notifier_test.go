@@ -46,6 +46,7 @@ func (m *MockStore) AddToVolunteerQueue(ctx context.Context, userID int64, days 
 func (m *MockStore) AddToAdminQueue(ctx context.Context, userID int64, days int) error       { return nil }
 func (m *MockStore) DecrementVolunteerQueue(ctx context.Context, userID int64) error         { return nil }
 func (m *MockStore) DecrementAdminQueue(ctx context.Context, userID int64) error             { return nil }
+func (m *MockStore) ReduceAdminQueue(ctx context.Context, userID int64, days int) error      { return nil }
 func (m *MockStore) GetUsersWithVolunteerQueue(ctx context.Context) ([]*store.User, error)   { return nil, nil }
 func (m *MockStore) GetUsersWithAdminQueue(ctx context.Context) ([]*store.User, error)       { return nil, nil }
 func (m *MockStore) SetOffDuty(ctx context.Context, userID int64, start, end time.Time) error { return nil }

@@ -155,6 +155,12 @@ func (m *MockStore) DecrementAdminQueue(ctx context.Context, userID int64) error
 	return args.Error(0)
 }
 
+// ReduceAdminQueue mocks the ReduceAdminQueue method.
+func (m *MockStore) ReduceAdminQueue(ctx context.Context, userID int64, days int) error {
+	args := m.Called(ctx, userID, days)
+	return args.Error(0)
+}
+
 // GetUsersWithVolunteerQueue mocks the GetUsersWithVolunteerQueue method.
 func (m *MockStore) GetUsersWithVolunteerQueue(ctx context.Context) ([]*store.User, error) {
 	args := m.Called(ctx)
