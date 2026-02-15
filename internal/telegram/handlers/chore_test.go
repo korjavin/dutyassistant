@@ -197,3 +197,81 @@ func TestHandleChore_GroupAnnouncement(t *testing.T) {
 	assert.Contains(t, msg.Text, "Assigned chore to")
 	assert.Contains(t, msg.Text, "Announced in group")
 }
+
+func TestHandleChore_WeightedSelection(t *testing.T) {
+	// This test verifies that the weighted selection works correctly
+	// by running multiple iterations and checking distribution
+	mockStore := new(mocks.MockStore)
+	mockScheduler := new(mocks.MockScheduler)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
+
+	// Create users with different AdminQueueDays
+	// Alice: 0 days (weight = 1.0)
+	// Bob: 50 days (weight = 1.0 + 50*0.02 = 2.0)
+	// Charlie: 100 days (weight = 1.0 + 100*0.02 = 3.0)
+	// Total weight = 6.0
+	// Expected probabilities: Alice ~16.7%, Bob ~33.3%, Charlie ~50%
+	activeUsers := []*store.User{
+		{ID: 10, FirstName: "Alice", IsActive: true, AdminQueueDays: 0},
+		{ID: 11, FirstName: "Bob", IsActive: true, AdminQueueDays: 50},
+		{ID: 12, FirstName: "Charlie", IsActive: true, AdminQueueDays: 100},
+	}
+
+	mockStore.On("ListActiveUsers", mock.Anything).Return(activeUsers, nil)
+	mockStore.On("IsUserOffDuty", mock.Anything, mock.Anything, mock.Anything).Return(false, nil)
+
+	// Run 1000 iterations to check distribution
+	counts := make(map[string]int)
+	iterations := 1000
+
+	for i := 0; i < iterations; i++ {
+		message := &tgbotapi.Message{
+			Chat:     &tgbotapi.Chat{ID: 789},
+			From:     &tgbotapi.User{ID: 123},
+			Text:     "/chore Clean kitchen",
+			Entities: []tgbotapi.MessageEntity{{Type: "bot_command", Offset: 0, Length: 6}},
+		}
+
+		msg, err := h.HandleChore(message)
+		assert.NoError(t, err)
+
+		// Count which user was selected
+		if strings.Contains(msg.Text, "Alice") {
+			counts["Alice"]++
+		} else if strings.Contains(msg.Text, "Bob") {
+			counts["Bob"]++
+		} else if strings.Contains(msg.Text, "Charlie") {
+			counts["Charlie"]++
+		}
+	}
+
+	t.Logf("Distribution over %d iterations:", iterations)
+	t.Logf("Alice (0 days, weight 1.0): %d (%.1f%%, expected ~16.7%%)", counts["Alice"], float64(counts["Alice"])/float64(iterations)*100)
+	t.Logf("Bob (50 days, weight 2.0): %d (%.1f%%, expected ~33.3%%)", counts["Bob"], float64(counts["Bob"])/float64(iterations)*100)
+	t.Logf("Charlie (100 days, weight 3.0): %d (%.1f%%, expected ~50%%)", counts["Charlie"], float64(counts["Charlie"])/float64(iterations)*100)
+
+	// Verify that:
+	// 1. All users were occasionally selected (non-zero counts)
+	assert.Greater(t, counts["Alice"], 0, "Alice should be selected at least once")
+	assert.Greater(t, counts["Bob"], 0, "Bob should be selected at least once")
+	assert.Greater(t, counts["Charlie"], 0, "Charlie should be selected at least once")
+
+	// 2. Charlie (highest weight) should be selected most often
+	assert.Greater(t, counts["Charlie"], counts["Bob"], "Charlie should be selected more than Bob")
+	assert.Greater(t, counts["Bob"], counts["Alice"], "Bob should be selected more than Alice")
+
+	// 3. Rough distribution check (allowing for statistical variance)
+	// Charlie should get roughly 50% (+/- 10% with 1000 iterations is reasonable)
+	charliePercent := float64(counts["Charlie"]) / float64(iterations) * 100
+	assert.Greater(t, charliePercent, 40.0, "Charlie should get at least 40%")
+	assert.Less(t, charliePercent, 60.0, "Charlie should get at most 60%")
+
+	// Bob should get roughly 33% (+/- 10%)
+	bobPercent := float64(counts["Bob"]) / float64(iterations) * 100
+	assert.Greater(t, bobPercent, 23.0, "Bob should get at least 23%")
+	assert.Less(t, bobPercent, 43.0, "Bob should get at most 43%")
+
+	// Ensure total is correct
+	total := counts["Alice"] + counts["Bob"] + counts["Charlie"]
+	assert.Equal(t, iterations, total, "Total selections should equal iterations")
+}

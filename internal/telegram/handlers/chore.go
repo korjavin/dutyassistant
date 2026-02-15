@@ -80,6 +80,9 @@ func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 	var weightedCandidates []weightedUser
 	var totalWeight float64
 
+	log.Printf("[CHORE] Starting weighted selection for chore assignment")
+	log.Printf("[CHORE] Number of candidates after filtering: %d", len(candidates))
+
 	for _, u := range candidates {
 		// Base weight
 		weight := 1.0
@@ -90,25 +93,35 @@ func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 
 		weightedCandidates = append(weightedCandidates, weightedUser{user: u, weight: weight})
 		totalWeight += weight
+		log.Printf("[CHORE] Candidate: %s (ID: %d) - AdminQueueDays: %d, Weight: %.3f", 
+			u.FirstName, u.ID, u.AdminQueueDays, weight)
 	}
+
+	log.Printf("[CHORE] Total weight: %.3f", totalWeight)
 
 	// Select user
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	target := r.Float64() * totalWeight
+	log.Printf("[CHORE] Random target value: %.3f (0 to %.3f)", target, totalWeight)
 
 	var selectedUser *store.User
 	currentWeight := 0.0
-	for _, wu := range weightedCandidates {
+	for i, wu := range weightedCandidates {
 		currentWeight += wu.weight
-		if target <= currentWeight {
+		log.Printf("[CHORE] Step %d: Checking %s - cumulative weight: %.3f, target: %.3f", 
+			i+1, wu.user.FirstName, currentWeight, target)
+		if target < currentWeight {
 			selectedUser = wu.user
+			log.Printf("[CHORE] ✓ Selected: %s (ID: %d)", selectedUser.FirstName, selectedUser.ID)
 			break
 		}
 	}
 	// Fallback (should not happen mathematically if totalWeight > 0)
 	if selectedUser == nil && len(candidates) > 0 {
+		log.Printf("[CHORE] WARNING: Fallback selection triggered (this should not happen)")
 		// Just pick randomly
 		selectedUser = candidates[r.Intn(len(candidates))]
+		log.Printf("[CHORE] Fallback selected: %s (ID: %d)", selectedUser.FirstName, selectedUser.ID)
 	}
 
 	if selectedUser == nil {
