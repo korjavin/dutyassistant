@@ -140,6 +140,9 @@ func (b *Bot) handleUpdate(update tgbotapi.Update) {
 	switch {
 	case update.Message != nil && update.Message.IsCommand():
 		response, err = b.handleCommand(update.Message)
+	case update.Message != nil && !update.Message.IsCommand():
+		// Handle non-command messages (e.g., for interactive sessions)
+		response, err = b.handleMessage(update.Message)
 	case update.CallbackQuery != nil:
 		response, err = b.handleCallbackQuery(update.CallbackQuery)
 	}
@@ -246,8 +249,31 @@ func (b *Bot) handleCallbackQuery(q *tgbotapi.CallbackQuery) (tgbotapi.Chattable
 		return b.handlers.HandleOffDutyUserCallback(q)
 	case "vacation":
 		return b.handlers.HandleVacationCallback(q)
+	case "chore_done":
+		return b.handlers.HandleChoreDoneCallback(q)
+	case "chore_remind":
+		return b.handlers.HandleChoreRemindCallback(q)
 	default:
 		log.Printf("Unknown callback action: %s", action)
+		return nil, nil
+	}
+}
+
+// handleMessage handles non-command messages (for interactive sessions)
+func (b *Bot) handleMessage(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
+	// Check if user is in an interactive session
+	session, exists := b.handlers.SessionManager.GetSession(m.Chat.ID)
+	if !exists {
+		// No active session, ignore the message
+		return nil, nil
+	}
+
+	// Route to appropriate handler based on session type
+	switch session.Type {
+	case handlers.SessionTypeChoreCreation:
+		return b.handlers.HandleChoreInteractive(m)
+	default:
+		log.Printf("Unknown session type: %s", session.Type)
 		return nil, nil
 	}
 }

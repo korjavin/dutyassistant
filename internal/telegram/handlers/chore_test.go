@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/korjavin/dutyassistant/internal/mocks"
@@ -35,7 +36,7 @@ func TestHandleChore_NotAdmin(t *testing.T) {
 	assert.Equal(t, "Sorry, this command is for admins only.", msg.Text)
 }
 
-func TestHandleChore_NoArgs(t *testing.T) {
+func TestHandleChore_NoArgs_EntersInteractiveMode(t *testing.T) {
 	_, _, h := setupAdminTest(t)
 
 	message := &tgbotapi.Message{
@@ -46,7 +47,14 @@ func TestHandleChore_NoArgs(t *testing.T) {
 
 	msg, err := h.HandleChore(message)
 	assert.NoError(t, err)
-	assert.Contains(t, msg.Text, "To assign a chore, please provide a description")
+	assert.Contains(t, msg.Text, "Interactive Chore Mode")
+	assert.Contains(t, msg.Text, "What chore do you want to create?")
+
+	// Verify session was created
+	session, exists := h.SessionManager.GetSession(789)
+	assert.True(t, exists)
+	assert.Equal(t, handlers.SessionTypeChoreCreation, session.Type)
+	assert.Equal(t, int64(123), session.UserID)
 }
 
 func TestHandleChore_Success(t *testing.T) {
@@ -148,7 +156,7 @@ func TestHandleChore_GroupAnnouncement(t *testing.T) {
 	h := handlers.NewWithAdminID(mockStore, mockScheduler, groupID, 123)
 
 	activeUsers := []*store.User{
-		{ID: 10, FirstName: "Alice", IsActive: true},
+		{ID: 10, TelegramUserID: 111, FirstName: "Alice", IsActive: true},
 	}
 	mockStore.On("ListActiveUsers", mock.Anything).Return(activeUsers, nil)
 	mockStore.On("IsUserOffDuty", mock.Anything, mock.Anything, mock.Anything).Return(false, nil)
@@ -196,6 +204,357 @@ func TestHandleChore_GroupAnnouncement(t *testing.T) {
 	// Check response to user
 	assert.Contains(t, msg.Text, "Assigned chore to")
 	assert.Contains(t, msg.Text, "Announced in group")
+	assert.Contains(t, msg.Text, "DM sent to user")
+}
+
+func TestHandleChore_MissingTelegramID_ShowsRegistrationHint(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	mockScheduler := new(mocks.MockScheduler)
+	groupID := int64(-1001234567890)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, groupID, 123)
+
+	activeUsers := []*store.User{
+		{ID: 10, TelegramUserID: 0, FirstName: "Alice", IsActive: true},
+	}
+	mockStore.On("ListActiveUsers", mock.Anything).Return(activeUsers, nil)
+	mockStore.On("IsUserOffDuty", mock.Anything, mock.Anything, mock.Anything).Return(false, nil)
+
+	client := NewTestClient(func(req *http.Request) *http.Response {
+		if req.URL.String() == "https://api.telegram.org/botTOKEN/getMe" {
+			return &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(bytes.NewBufferString(`{"ok":true, "result": {"id": 123456, "is_bot": true, "first_name": "TestBot", "username": "test_bot"}}`)),
+				Header:     make(http.Header),
+			}
+		}
+		return &http.Response{
+			StatusCode: 200,
+			Body:       io.NopCloser(bytes.NewBufferString(`{"ok":true, "result": {"message_id": 1}}`)),
+			Header:     make(http.Header),
+		}
+	})
+	bot, err := tgbotapi.NewBotAPIWithClient("TOKEN", tgbotapi.APIEndpoint, client)
+	assert.NoError(t, err)
+	h.SetBot(bot)
+
+	message := &tgbotapi.Message{
+		Chat:     &tgbotapi.Chat{ID: groupID},
+		From:     &tgbotapi.User{ID: 123},
+		Text:     "/chore Clean kitchen",
+		Entities: []tgbotapi.MessageEntity{{Type: "bot_command", Offset: 0, Length: 6}},
+	}
+
+	msg, err := h.HandleChore(message)
+	assert.NoError(t, err)
+	assert.Contains(t, msg.Text, "Couldn't send DM")
+	assert.Contains(t, msg.Text, "/start")
+}
+
+func TestHandleChoreInteractive_Success(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	mockScheduler := new(mocks.MockScheduler)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
+
+	// First, enter interactive mode
+	h.SessionManager.StartSession(789, 123, handlers.SessionTypeChoreCreation)
+
+	// Setup mock data for chore assignment
+	activeUsers := []*store.User{
+		{ID: 10, TelegramUserID: 111, FirstName: "Alice", IsActive: true},
+		{ID: 11, TelegramUserID: 222, FirstName: "Bob", IsActive: true},
+	}
+	mockStore.On("ListActiveUsers", mock.Anything).Return(activeUsers, nil)
+	mockStore.On("IsUserOffDuty", mock.Anything, mock.Anything, mock.Anything).Return(false, nil)
+
+	// Send a message with chore description
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 789},
+		From: &tgbotapi.User{ID: 123},
+		Text: "Clean the coffee machine",
+	}
+
+	msg, err := h.HandleChoreInteractive(message)
+	assert.NoError(t, err)
+	assert.NotNil(t, msg)
+
+	// Type assert to MessageConfig to access Text field
+	msgConfig, ok := msg.(tgbotapi.MessageConfig)
+	assert.True(t, ok)
+	assert.Contains(t, msgConfig.Text, "Assigned chore to")
+
+	// Verify session was ended
+	_, exists := h.SessionManager.GetSession(789)
+	assert.False(t, exists)
+}
+
+func TestHandleChoreInteractive_EmptyDescription(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	mockScheduler := new(mocks.MockScheduler)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
+
+	// Enter interactive mode
+	h.SessionManager.StartSession(789, 123, handlers.SessionTypeChoreCreation)
+
+	// Send empty message
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 789},
+		From: &tgbotapi.User{ID: 123},
+		Text: "   ",
+	}
+
+	msg, err := h.HandleChoreInteractive(message)
+	assert.NoError(t, err)
+	assert.NotNil(t, msg)
+
+	// Type assert to MessageConfig to access Text field
+	msgConfig, ok := msg.(tgbotapi.MessageConfig)
+	assert.True(t, ok)
+	assert.Contains(t, msgConfig.Text, "cannot be empty")
+
+	// Session should be ended even on error
+	_, exists := h.SessionManager.GetSession(789)
+	assert.False(t, exists)
+}
+
+func TestHandleChoreInteractive_NoSession(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	mockScheduler := new(mocks.MockScheduler)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
+
+	// No session started
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 789},
+		From: &tgbotapi.User{ID: 123},
+		Text: "Some random text",
+	}
+
+	msg, err := h.HandleChoreInteractive(message)
+	assert.NoError(t, err)
+	// Should return nil when no session (completely ignored)
+	assert.Nil(t, msg)
+}
+
+func TestHandleChoreInteractive_WrongUser(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	mockScheduler := new(mocks.MockScheduler)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
+
+	// Start session for user 123
+	h.SessionManager.StartSession(789, 123, handlers.SessionTypeChoreCreation)
+
+	// Different user sends message
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 789},
+		From: &tgbotapi.User{ID: 456}, // Different user
+		Text: "Clean kitchen",
+	}
+
+	msg, err := h.HandleChoreInteractive(message)
+	assert.NoError(t, err)
+	// Should return nil when wrong user (completely ignored)
+	assert.Nil(t, msg)
+
+	// Session should still exist (only the original user can interact)
+	_, exists := h.SessionManager.GetSession(789)
+	assert.True(t, exists)
+}
+
+func TestSessionManager_SessionLifecycle(t *testing.T) {
+	sm := handlers.NewSessionManager()
+
+	// Start a session
+	sm.StartSession(123, 456, handlers.SessionTypeChoreCreation)
+
+	// Get session
+	session, exists := sm.GetSession(123)
+	assert.True(t, exists)
+	assert.Equal(t, int64(123), session.ChatID)
+	assert.Equal(t, int64(456), session.UserID)
+	assert.Equal(t, handlers.SessionTypeChoreCreation, session.Type)
+
+	// Set and get data
+	session.SetData("key1", "value1")
+	val, ok := session.GetData("key1")
+	assert.True(t, ok)
+	assert.Equal(t, "value1", val)
+
+	// End session
+	sm.EndSession(123)
+	_, exists = sm.GetSession(123)
+	assert.False(t, exists)
+}
+
+func TestHandleChoreDoneCallback_Success(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	mockScheduler := new(mocks.MockScheduler)
+	groupID := int64(-1001234567890)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, groupID, 123)
+
+	// Mock Bot API client
+	client := NewTestClient(func(req *http.Request) *http.Response {
+		if strings.Contains(req.URL.String(), "sendMessage") {
+			return &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(bytes.NewBufferString(`{"ok":true, "result": {"message_id": 1, "chat": {"id": -1001234567890}}}`)),
+				Header:     make(http.Header),
+			}
+		}
+		if strings.Contains(req.URL.String(), "getMe") {
+			return &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(bytes.NewBufferString(`{"ok":true, "result": {"id": 123456, "is_bot": true, "first_name": "TestBot"}}`)),
+				Header:     make(http.Header),
+			}
+		}
+		return &http.Response{StatusCode: 404, Body: io.NopCloser(bytes.NewBufferString(`{}`)), Header: make(http.Header)}
+	})
+
+	bot, err := tgbotapi.NewBotAPIWithClient("TOKEN", tgbotapi.APIEndpoint, client)
+	assert.NoError(t, err)
+	h.SetBot(bot)
+
+	// The ChoreReminderManager is initialized when SetBot is called
+	// For this test, we test the case where the assignment doesn't exist
+
+	callbackQuery := &tgbotapi.CallbackQuery{
+		ID:   "callback1",
+		Data: "chore_done:test_123",
+		From: &tgbotapi.User{ID: 111},
+		Message: &tgbotapi.Message{
+			Chat:      &tgbotapi.Chat{ID: 111},
+			MessageID: 999,
+		},
+	}
+
+	edit, err := h.HandleChoreDoneCallback(callbackQuery)
+	// Will fail because assignment doesn't exist, but we can check the error handling
+	assert.NoError(t, err)
+	assert.Contains(t, edit.Text, "not found")
+}
+
+func TestHandleChoreRemindCallback_Success(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	mockScheduler := new(mocks.MockScheduler)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
+
+	// Mock Bot API client
+	client := NewTestClient(func(req *http.Request) *http.Response {
+		if strings.Contains(req.URL.String(), "getMe") {
+			return &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(bytes.NewBufferString(`{"ok":true, "result": {"id": 123456, "is_bot": true, "first_name": "TestBot"}}`)),
+				Header:     make(http.Header),
+			}
+		}
+		return &http.Response{StatusCode: 404, Body: io.NopCloser(bytes.NewBufferString(`{}`)), Header: make(http.Header)}
+	})
+
+	bot, err := tgbotapi.NewBotAPIWithClient("TOKEN", tgbotapi.APIEndpoint, client)
+	assert.NoError(t, err)
+	h.SetBot(bot)
+
+	callbackQuery := &tgbotapi.CallbackQuery{
+		ID:   "callback2",
+		Data: "chore_remind:test_456",
+		From: &tgbotapi.User{ID: 111},
+		Message: &tgbotapi.Message{
+			Chat:      &tgbotapi.Chat{ID: 111},
+			MessageID: 999,
+		},
+	}
+
+	edit, err := h.HandleChoreRemindCallback(callbackQuery)
+	assert.NoError(t, err)
+	// Will show "not found" since we didn't create the assignment
+	assert.Contains(t, edit.Text, "not found")
+}
+
+func TestHandleChoreDoneCallback_InvalidData(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	mockScheduler := new(mocks.MockScheduler)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
+
+	callbackQuery := &tgbotapi.CallbackQuery{
+		ID:   "callback3",
+		Data: "chore_done", // Missing reminderID
+		From: &tgbotapi.User{ID: 111},
+		Message: &tgbotapi.Message{
+			Chat:      &tgbotapi.Chat{ID: 111},
+			MessageID: 999,
+		},
+	}
+
+	edit, err := h.HandleChoreDoneCallback(callbackQuery)
+	assert.NoError(t, err)
+	assert.Contains(t, edit.Text, "Invalid callback data")
+}
+
+func TestHandleChoreRemindCallback_InvalidData(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	mockScheduler := new(mocks.MockScheduler)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
+
+	callbackQuery := &tgbotapi.CallbackQuery{
+		ID:   "callback4",
+		Data: "chore_remind", // Missing reminderID
+		From: &tgbotapi.User{ID: 111},
+		Message: &tgbotapi.Message{
+			Chat:      &tgbotapi.Chat{ID: 111},
+			MessageID: 999,
+		},
+	}
+
+	edit, err := h.HandleChoreRemindCallback(callbackQuery)
+	assert.NoError(t, err)
+	assert.Contains(t, edit.Text, "Invalid callback data")
+}
+
+func TestHandleChoreInteractive_NoDoubleEscaping(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	mockScheduler := new(mocks.MockScheduler)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
+
+	// Enter interactive mode
+	h.SessionManager.StartSession(789, 123, handlers.SessionTypeChoreCreation)
+
+	// Setup mock data
+	activeUsers := []*store.User{
+		{ID: 10, TelegramUserID: 111, FirstName: "Alice", IsActive: true},
+	}
+	mockStore.On("ListActiveUsers", mock.Anything).Return(activeUsers, nil)
+	mockStore.On("IsUserOffDuty", mock.Anything, mock.Anything, mock.Anything).Return(false, nil)
+
+	// Send a message with HTML special characters
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 789},
+		From: &tgbotapi.User{ID: 123},
+		Text: "<script>alert('test')</script>",
+	}
+
+	msg, err := h.HandleChoreInteractive(message)
+	assert.NoError(t, err)
+
+	// The response should contain the escaped version ONCE (not double-escaped)
+	// Single escape: &lt;script&gt;
+	// Double escape would be: &amp;lt;script&amp;gt;
+	assert.NotContains(t, msg.(tgbotapi.MessageConfig).Text, "&amp;lt;")
+	assert.NotContains(t, msg.(tgbotapi.MessageConfig).Text, "&amp;gt;")
+}
+
+func TestGenerateReminderID_NoCollisions(t *testing.T) {
+	// Generate multiple IDs for the same user in rapid succession
+	userID := int64(123)
+	ids := make(map[string]bool)
+
+	for i := 0; i < 1000; i++ {
+		id := handlers.GenerateReminderID(userID, time.Now())
+		// Check for duplicates
+		assert.False(t, ids[id], "Found duplicate reminder ID: %s", id)
+		ids[id] = true
+	}
+
+	// All IDs should be unique
+	assert.Equal(t, 1000, len(ids))
 }
 
 func TestHandleChore_WeightedSelection(t *testing.T) {

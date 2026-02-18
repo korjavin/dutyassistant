@@ -15,6 +15,7 @@ import (
 
 // HandleChore handles the /chore command for admins. Format: /chore [description]
 // It assigns a random active user to the described chore.
+// If no description is provided, it enters interactive mode.
 func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
 	// 1. Admin check
 	isAdmin, err := h.checkAdmin(m.From.ID)
@@ -24,25 +25,64 @@ func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 
 	args := strings.TrimSpace(m.CommandArguments())
 
-	// 2. Argument validation
+	// 2. Check for interactive mode
 	if args == "" {
-		msg := tgbotapi.NewMessage(m.Chat.ID, "To assign a chore, please provide a description.\n\nExample: <code>/chore Clean the coffee machine</code>")
+		// Enter interactive mode
+		h.SessionManager.StartSession(m.Chat.ID, m.From.ID, SessionTypeChoreCreation)
+		msg := tgbotapi.NewMessage(m.Chat.ID, "📝 <b>Interactive Chore Mode</b>\n\nWhat chore do you want to create?\n\nJust send me the description in your next message.")
 		msg.ParseMode = tgbotapi.ModeHTML
 		return msg, nil
 	}
 
 	description := args
 
-	// Escape description to prevent HTML injection
-	description = html.EscapeString(description)
+	// Perform the actual chore assignment
+	return h.assignChore(m.Chat.ID, m.From.ID, description)
+}
 
-	// 3. Get candidates
+// HandleChoreInteractive handles messages in interactive chore creation mode
+// Returns nil if the message should be ignored (not from session creator)
+func (h *Handlers) HandleChoreInteractive(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
+	session, exists := h.SessionManager.GetSession(m.Chat.ID)
+	if !exists || session.Type != SessionTypeChoreCreation {
+		// Not in chore creation mode, ignore completely
+		return nil, nil
+	}
+
+	// CRITICAL: Only accept messages from the SAME user who started the session
+	// This prevents other users (in groups) from interfering with the interactive flow
+	if session.UserID != m.From.ID {
+		// Different user, ignore completely (don't send any response)
+		return nil, nil
+	}
+
+	// End the session
+	h.SessionManager.EndSession(m.Chat.ID)
+
+	// Use the message text as the chore description
+	description := strings.TrimSpace(m.Text)
+	if description == "" {
+		msg := tgbotapi.NewMessage(m.Chat.ID, "❌ Chore description cannot be empty. Please use <code>/chore</code> to try again.")
+		msg.ParseMode = tgbotapi.ModeHTML
+		return msg, nil
+	}
+
+	// Perform the chore assignment
+	return h.assignChore(m.Chat.ID, m.From.ID, description)
+}
+
+// assignChore performs the actual chore assignment logic
+func (h *Handlers) assignChore(chatID int64, fromUserID int64, description string) (tgbotapi.MessageConfig, error) {
+	// Note: Description is stored unescaped and will be escaped at display time
+	// This prevents double-escaping when showing in multiple places
+
+	// 1. Get candidates
 	users, err := h.Store.ListActiveUsers(context.Background())
 	if err != nil {
-		return tgbotapi.NewMessage(m.Chat.ID, "Failed to retrieve user list."), nil
+		return tgbotapi.NewMessage(chatID, "Failed to retrieve user list."), nil
 	}
 	if len(users) == 0 {
-		return tgbotapi.NewMessage(m.Chat.ID, "No active users found to assign the chore to."), nil
+		return tgbotapi.NewMessage(chatID, "No active users found to assign the chore to."), nil
 	}
 
 	// Filter candidates (exclude those on off-duty)
@@ -65,7 +105,7 @@ func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 	}
 
 	if len(candidates) == 0 {
-		return tgbotapi.NewMessage(m.Chat.ID, "All active users are currently off-duty."), nil
+		return tgbotapi.NewMessage(chatID, "All active users are currently off-duty."), nil
 	}
 
 	// 4. Weighted random assignment
@@ -125,22 +165,25 @@ func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 	}
 
 	if selectedUser == nil {
-		return tgbotapi.NewMessage(m.Chat.ID, "Failed to select a user."), nil
+		return tgbotapi.NewMessage(chatID, "Failed to select a user."), nil
 	}
 
 	// 5. Notifications
 
-	// Message to the admin/caller
+	// Escape HTML at display time (description is stored unescaped)
 	escapedName := html.EscapeString(selectedUser.FirstName)
-	responseMsg := tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("✅ Assigned chore to <b>%s</b>.", escapedName))
+	escapedDesc := html.EscapeString(description)
+
+	// Message to the admin/caller
+	responseMsg := tgbotapi.NewMessage(chatID, fmt.Sprintf("✅ Assigned chore to <b>%s</b>.", escapedName))
 	responseMsg.ParseMode = tgbotapi.ModeHTML
 
 	// Construct group announcement
-	groupText := fmt.Sprintf("🎲 <b>Random Chore Assignment</b>\n\n🎯 <b>%s</b> has been assigned a chore:\n\n<i>%s</i>", escapedName, description)
+	groupText := fmt.Sprintf("🎲 <b>Random Chore Assignment</b>\n\n🎯 <b>%s</b> has been assigned a chore:\n\n<i>%s</i>", escapedName, escapedDesc)
 
 	// Handle group announcement
 	if h.GroupID != 0 {
-		if m.Chat.ID != h.GroupID {
+		if chatID != h.GroupID {
 			// Triggered from DM, need to announce in group
 			if h.Bot != nil {
 				groupMsg := tgbotapi.NewMessage(h.GroupID, groupText)
@@ -160,7 +203,41 @@ func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 		}
 	} else {
 		// No group configured
-		responseMsg.Text = fmt.Sprintf("✅ Assigned chore to <b>%s</b>:\n%s", escapedName, description)
+		responseMsg.Text = fmt.Sprintf("✅ Assigned chore to <b>%s</b>:\n<i>%s</i>", escapedName, escapedDesc)
+	}
+
+	// 6. Send DM to assigned user and schedule reminder
+	if h.ChoreReminderManager == nil {
+		responseMsg.Text += "\n\n⚠️ DM reminders are disabled (bot API is not configured)."
+		return responseMsg, nil
+	}
+
+	if selectedUser.TelegramUserID == 0 {
+		responseMsg.Text += "\n\n⚠️ Couldn't send DM: user is not registered in the bot yet. Ask them to send /start in a DM with the bot."
+		return responseMsg, nil
+	}
+
+	// Create assignment with unescaped description (will be escaped at display time)
+	assignment := &ChoreAssignment{
+		UserID:      selectedUser.TelegramUserID,
+		UserName:    selectedUser.FirstName,
+		Description: description, // Store unescaped
+		AssignedAt:  time.Now(),
+		GroupID:     h.GroupID,
+		ReminderID:  GenerateReminderID(selectedUser.TelegramUserID, time.Now()),
+	}
+
+	// SendInitialDM now handles storage internally only on success
+	if err := h.ChoreReminderManager.SendInitialDM(assignment); err != nil {
+		log.Printf("Failed to send DM to user %s: %v", selectedUser.FirstName, err)
+		errText := strings.ToLower(err.Error())
+		if strings.Contains(errText, "forbidden") || strings.Contains(errText, "bot can't initiate conversation") {
+			responseMsg.Text += "\n\n⚠️ Failed to send DM: user must start a private chat with the bot first (/start)."
+		} else {
+			responseMsg.Text += "\n\n⚠️ Failed to send DM to user."
+		}
+	} else {
+		responseMsg.Text += "\n\n📨 DM sent to user with reminder scheduled."
 	}
 
 	return responseMsg, nil
