@@ -55,12 +55,13 @@ func (crm *ChoreReminderManager) SendInitialDM(assignment *ChoreAssignment) erro
 	// Escape HTML at display time (assignment.Description is stored unescaped)
 	escapedDesc := html.EscapeString(assignment.Description)
 	initialMsg := fmt.Sprintf(
-		"🎉 <b>Congratulations!</b>\n\nYou've just got a new task:\n\n<i>%s</i>\n\n⏰ I'll check with you in 10 minutes!",
+		"🎉 <b>Congratulations!</b>\n\nYou've got a new chore:\n\n<i>%s</i>\n\nUse the buttons below when you're done or if you want to snooze the reminder.",
 		escapedDesc,
 	)
 
 	msg := tgbotapi.NewMessage(assignment.UserID, initialMsg)
 	msg.ParseMode = tgbotapi.ModeHTML
+	msg.ReplyMarkup = choreReminderKeyboard(assignment.ReminderID)
 
 	if _, err := crm.bot.Send(msg); err != nil {
 		log.Printf("Failed to send initial DM to user %s (%d): %v", assignment.UserName, assignment.UserID, err)
@@ -106,8 +107,19 @@ func (crm *ChoreReminderManager) SendReminderWithButtons(reminderID string) {
 		escapedDesc,
 	)
 
-	// Create inline keyboard with buttons
-	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+	msg := tgbotapi.NewMessage(assignment.UserID, reminderText)
+	msg.ParseMode = tgbotapi.ModeHTML
+	msg.ReplyMarkup = choreReminderKeyboard(reminderID)
+
+	if _, err := crm.bot.Send(msg); err != nil {
+		log.Printf("Failed to send reminder to user %d: %v", assignment.UserID, err)
+	} else {
+		log.Printf("Sent reminder to user %s for chore: %s", assignment.UserName, assignment.Description)
+	}
+}
+
+func choreReminderKeyboard(reminderID string) tgbotapi.InlineKeyboardMarkup {
+	return tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("✅ I've done it", fmt.Sprintf("chore_done:%s", reminderID)),
 		),
@@ -115,16 +127,6 @@ func (crm *ChoreReminderManager) SendReminderWithButtons(reminderID string) {
 			tgbotapi.NewInlineKeyboardButtonData("⏰ Remind me in 15 min", fmt.Sprintf("chore_remind:%s", reminderID)),
 		),
 	)
-
-	msg := tgbotapi.NewMessage(assignment.UserID, reminderText)
-	msg.ParseMode = tgbotapi.ModeHTML
-	msg.ReplyMarkup = keyboard
-
-	if _, err := crm.bot.Send(msg); err != nil {
-		log.Printf("Failed to send reminder to user %d: %v", assignment.UserID, err)
-	} else {
-		log.Printf("Sent reminder to user %s for chore: %s", assignment.UserName, assignment.Description)
-	}
 }
 
 // ScheduleReReminder schedules another reminder in 15 minutes

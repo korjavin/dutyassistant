@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -555,6 +556,52 @@ func TestGenerateReminderID_NoCollisions(t *testing.T) {
 
 	// All IDs should be unique
 	assert.Equal(t, 1000, len(ids))
+}
+
+func TestSendInitialDM_IncludesDescriptionAndButtons(t *testing.T) {
+	var sendMessageForm url.Values
+
+	client := NewTestClient(func(req *http.Request) *http.Response {
+		if strings.Contains(req.URL.String(), "getMe") {
+			return &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(bytes.NewBufferString(`{"ok":true, "result": {"id": 123456, "is_bot": true, "first_name": "TestBot"}}`)),
+				Header:     make(http.Header),
+			}
+		}
+		if strings.Contains(req.URL.String(), "sendMessage") {
+			bodyBytes, _ := io.ReadAll(req.Body)
+			form, _ := url.ParseQuery(string(bodyBytes))
+			sendMessageForm = form
+			return &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(bytes.NewBufferString(`{"ok":true, "result": {"message_id": 1}}`)),
+				Header:     make(http.Header),
+			}
+		}
+		return &http.Response{StatusCode: 404, Body: io.NopCloser(bytes.NewBufferString(`{}`)), Header: make(http.Header)}
+	})
+
+	bot, err := tgbotapi.NewBotAPIWithClient("TOKEN", tgbotapi.APIEndpoint, client)
+	assert.NoError(t, err)
+
+	crm := handlers.NewChoreReminderManager(bot)
+	assignment := &handlers.ChoreAssignment{
+		UserID:      777,
+		UserName:    "Vasiliy",
+		Description: "Clean coffee machine",
+		AssignedAt:  time.Now(),
+		GroupID:     -1001234567890,
+		ReminderID:  "reminder_123",
+	}
+
+	err = crm.SendInitialDM(assignment)
+	assert.NoError(t, err)
+
+	assert.Equal(t, "777", sendMessageForm.Get("chat_id"))
+	assert.Contains(t, sendMessageForm.Get("text"), "Clean coffee machine")
+	assert.Contains(t, sendMessageForm.Get("reply_markup"), "chore_done:reminder_123")
+	assert.Contains(t, sendMessageForm.Get("reply_markup"), "chore_remind:reminder_123")
 }
 
 func TestHandleChore_WeightedSelection(t *testing.T) {
