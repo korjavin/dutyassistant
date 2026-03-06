@@ -46,10 +46,8 @@ func (h *Handlers) ProcessRecurringChores(ctx context.Context) error {
 		}
 
 		// Calculate new nextRunAt (N days from the CURRENT nextRunAt, not from time.Now)
-		// Wait, the specification says: "После успешного назначения сдвигает next run на N дней."
-		// If it's running late for some reason, we might want to shift it from current nextRunAt
-		// But let's follow a predictable pattern:
-		newNextRun := chore.NextRunAt.AddDate(0, 0, chore.Interval)
+		// Convert NextRunAt to Europe/Berlin so that AddDate respects daylight saving time.
+		newNextRun := chore.NextRunAt.In(berlinLoc).AddDate(0, 0, chore.Interval)
 
 		// If newNextRun is still in the past (e.g., bot was down for a long time), fast-forward it
 		for newNextRun.Before(now) {
@@ -160,13 +158,15 @@ func (h *Handlers) assignRecurringChore(ctx context.Context, chore *store.Recurr
 		log.Printf("Bot API not available for group announcement.")
 	}
 
-	// 6. Send DM to assigned user and schedule reminder
+	// 6. Send DM to assigned user and schedule reminder (Best Effort)
 	if h.ChoreReminderManager == nil {
-		return fmt.Errorf("DM reminders are disabled (bot API is not configured)")
+		log.Printf("Warning: DM reminders are disabled (bot API is not configured), skipping DM for %s", selectedUser.FirstName)
+		return nil
 	}
 
 	if selectedUser.TelegramUserID == 0 {
-		return fmt.Errorf("couldn't send DM: user %s is not registered in the bot yet", selectedUser.FirstName)
+		log.Printf("Warning: couldn't send DM: user %s is not registered in the bot yet", selectedUser.FirstName)
+		return nil
 	}
 
 	assignment := &ChoreAssignment{
@@ -178,7 +178,6 @@ func (h *Handlers) assignRecurringChore(ctx context.Context, chore *store.Recurr
 		ReminderID:  GenerateReminderID(selectedUser.TelegramUserID, time.Now()),
 	}
 
-	// Best effort DM
 	if err := h.ChoreReminderManager.SendInitialDM(assignment); err != nil {
 		log.Printf("Warning: failed to send initial DM to user %s: %v", selectedUser.FirstName, err)
 		// We still consider the assignment successful even if the DM fails

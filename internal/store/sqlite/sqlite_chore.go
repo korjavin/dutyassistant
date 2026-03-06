@@ -17,9 +17,9 @@ func (s *SQLiteStore) CreateRecurringChore(ctx context.Context, chore *store.Rec
 	result, err := s.db.ExecContext(ctx, query,
 		chore.Description,
 		chore.Interval,
-		chore.NextRunAt.Format(time.RFC3339),
+		chore.NextRunAt.UTC().Format(time.RFC3339),
 		1, // is_active
-		chore.CreatedAt.Format(time.RFC3339),
+		chore.CreatedAt.UTC().Format(time.RFC3339),
 	)
 	if err != nil {
 		return err
@@ -173,7 +173,7 @@ func (s *SQLiteStore) UpdateRecurringChoreNextRun(ctx context.Context, id int64,
 		SET next_run_at = ?
 		WHERE id = ?
 	`
-	_, err := s.db.ExecContext(ctx, query, nextRun.Format(time.RFC3339), id)
+	_, err := s.db.ExecContext(ctx, query, nextRun.UTC().Format(time.RFC3339), id)
 	return err
 }
 
