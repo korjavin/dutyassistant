@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"html"
 	"log"
@@ -52,6 +53,10 @@ func (h *Handlers) HandleChoreDoneCallback(q *tgbotapi.CallbackQuery) (tgbotapi.
 
 	// Mark as completed
 	h.ChoreReminderManager.CompleteChore(reminderID)
+
+	if err := h.Store.CompleteChoreByReminderID(context.Background(), reminderID); err != nil {
+		log.Printf("Failed to complete chore in database: %v", err)
+	}
 
 	// Update the message to show completion
 	// Escape HTML at display time (assignment.Description is stored unescaped)

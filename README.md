@@ -137,3 +137,7 @@ All times in **Europe/Berlin timezone**:
 ## Database Schema
 
 See [logic.md](logic.md) for complete database schema and assignment logic details.
+
+### Chore Notifications Configuration
+To enable chore notification digests:
+- Set `CHORE_TIMEZONE` (default: `Europe/Berlin`) to define when daily 16:00 reports are sent.

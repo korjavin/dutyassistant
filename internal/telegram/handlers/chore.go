@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"strings"
 	"time"
+	"os"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/korjavin/dutyassistant/internal/store"
@@ -218,6 +219,30 @@ func (h *Handlers) assignChore(chatID int64, fromUserID int64, description strin
 	}
 
 	// Create assignment with unescaped description (will be escaped at display time)
+	// Define the deadline as end of the current day in Berlin timezone (or local timezone)
+	tz := os.Getenv("CHORE_TIMEZONE")
+	if tz == "" {
+		tz = "Europe/Berlin"
+	}
+	loc, err := time.LoadLocation(tz)
+	if err != nil {
+		loc = time.Local
+	}
+	nowLocal := time.Now().In(loc)
+	deadline := time.Date(nowLocal.Year(), nowLocal.Month(), nowLocal.Day(), 23, 59, 59, 0, loc)
+
+	chore := &store.Chore{
+		UserID:      selectedUser.ID,
+		Description: description,
+		AssignedAt:  time.Now(),
+		DeadlineAt:  deadline,
+		ReminderID:  GenerateReminderID(selectedUser.TelegramUserID, time.Now()),
+	}
+	if err := h.Store.CreateChore(context.Background(), chore); err != nil {
+		log.Printf("Failed to create chore in database: %v", err)
+		responseMsg.Text += "\n\n⚠️ Failed to save chore to database."
+		return responseMsg, nil
+	}
 	assignment := &ChoreAssignment{
 		UserID:      selectedUser.TelegramUserID,
 		UserName:    selectedUser.FirstName,

@@ -32,6 +32,24 @@ type User struct {
 }
 
 // Duty represents a duty assignment in the system.
+// Chore represents a chore assignment in the system.
+// ChoreStat holds aggregated statistics for overdue chores.
+type ChoreStat struct {
+	Description string
+	Count       int
+}
+
+type Chore struct {
+	ID          int64
+	UserID      int64
+	Description string
+	AssignedAt  time.Time
+	DeadlineAt  time.Time
+	CompletedAt *time.Time
+	ReminderID  string
+	User        *User
+}
+
 type Duty struct {
 	ID             int64
 	UserID         int64
@@ -50,6 +68,12 @@ type RoundRobinState struct {
 }
 
 // UserStats holds aggregated statistics for a user.
+// UserChoreStat holds aggregated statistics for a user's chores.
+type UserChoreStat struct {
+	Name  string
+	Count int
+}
+
 type UserStats struct {
 	TotalDuties     int
 	DutiesThisMonth int
@@ -76,6 +100,17 @@ type Store interface {
 	CompleteDuty(ctx context.Context, date time.Time) error
 	GetTodaysDuty(ctx context.Context) (*Duty, error)
 	GetCompletedDutiesInRange(ctx context.Context, start, end time.Time) ([]*Duty, error)
+
+	// Chore methods
+	CreateChore(ctx context.Context, chore *Chore) error
+	GetChoreByReminderID(ctx context.Context, reminderID string) (*Chore, error)
+	GetActiveChores(ctx context.Context) ([]*Chore, error)
+	GetOverdueChores(ctx context.Context) ([]*Chore, error)
+	CompleteChoreByReminderID(ctx context.Context, reminderID string) error
+	GetTopOverdueChores(ctx context.Context, limit int) ([]*ChoreStat, error)
+	GetTopCompletedChoresUsers(ctx context.Context, limit int) ([]*UserChoreStat, error)
+	GetLastChoreDigestDate(ctx context.Context) (string, error)
+	SetLastChoreDigestDate(ctx context.Context, date string) error
 
 	// Queue management methods
 	AddToVolunteerQueue(ctx context.Context, userID int64, days int) error
