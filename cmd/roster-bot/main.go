@@ -181,8 +181,9 @@ func main() {
 	}
 
 	// Daily at 16:00 Berlin - Send daily chore summary
-	_, err = c.AddFunc("0 16 * * *", func() {
-		log.Println("[CRON] Running daily chore summary (16:00 Berlin)")
+	tz := getEnv("CHORE_TIMEZONE", "Europe/Berlin")
+	_, err = c.AddFunc("CRON_TZ=" + tz + " 0 16 * * *", func() {
+		log.Printf("[CRON] Running daily chore summary (16:00 %s)", tz)
 		err := notification.SendDailyChoreSummary(context.Background(), bot.API(), store, dishGroupID, true, getEnv("CHORE_TIMEZONE", "Europe/Berlin"))
 		if err != nil {
 			log.Printf("[CRON] Error sending daily chore summary: %v", err)
