@@ -38,6 +38,7 @@ func NewServer(s store.Store, botToken string) *gin.Engine {
 		api.GET("/schedule/:year/:month", optionalAuthMiddleware, handlers.GetSchedule(s))
 		api.GET("/prognosis/:year/:month", handlers.GetPrognosis(s))
 		api.GET("/users", optionalAuthMiddleware, handlers.GetUsers(s))
+		api.GET("/chores/active", optionalAuthMiddleware, handlers.GetActiveChores(s))
 
 		// Endpoints requiring user authentication (via Telegram Web App).
 		authenticated := api.Group("/")

@@ -97,6 +97,25 @@ export async function getUsers() {
 }
 
 /**
+ * Fetches active chores (assigned but not yet completed).
+ * @returns {Promise<any>} Active chores payload.
+ */
+export async function getActiveChores() {
+    try {
+        const response = await fetch('/api/v1/chores/active', {
+            headers: getAuthHeaders()
+        });
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return await response.json();
+    } catch (error) {
+        console.error("Failed to fetch active chores:", error);
+        return null;
+    }
+}
+
+/**
  * Allows the current user to volunteer for a specific duty.
  * @param {number} dutyId - The ID of the duty.
  * @returns {Promise<any>} The result of the operation.

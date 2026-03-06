@@ -31,6 +31,7 @@ func setupTestServer(mockStore *mocks.MockStore) *gin.Engine {
 		// Public endpoints
 		api.GET("/schedule/:year/:month", GetSchedule(mockStore))
 		api.GET("/users", GetUsers(mockStore))
+		api.GET("/chores/active", GetActiveChores(mockStore))
 
 		// Endpoints that require authentication context.
 		// The real auth middleware is omitted for unit testing.
@@ -41,6 +42,85 @@ func setupTestServer(mockStore *mocks.MockStore) *gin.Engine {
 	}
 
 	return router
+}
+
+func TestGetActiveChores(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	router := setupTestServer(mockStore)
+
+	t.Run("success", func(t *testing.T) {
+		assignedAt, _ := time.Parse(time.RFC3339, "2026-03-07T10:00:00Z")
+		expectedChores := []*store.Chore{
+			{
+				ID:          1,
+				UserID:      101,
+				Description: "Clean coffee machine",
+				AssignedAt:  assignedAt,
+				User:        &store.User{FirstName: "Alice"},
+			},
+		}
+
+		mockStore.On("GetActiveChores", mock.Anything).Return(expectedChores, nil).Once()
+
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/api/v1/chores/active", nil)
+
+		user := &store.User{ID: 1, TelegramUserID: 123, IsActive: true}
+		ctx := context.WithValue(req.Context(), middleware.UserKey, user)
+		req = req.WithContext(ctx)
+
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response struct {
+			Chores []struct {
+				ID          int64  `json:"id"`
+				Description string `json:"description"`
+				AssignedAt  string `json:"assigned_at"`
+				UserName    string `json:"user_name"`
+			} `json:"chores"`
+		}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		assert.Len(t, response.Chores, 1)
+		assert.Equal(t, int64(1), response.Chores[0].ID)
+		assert.Equal(t, "Clean coffee machine", response.Chores[0].Description)
+		assert.Equal(t, "Alice", response.Chores[0].UserName)
+		mockStore.AssertExpectations(t)
+	})
+
+	t.Run("unauthorized", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/api/v1/chores/active", nil)
+
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response struct {
+			Chores []interface{} `json:"chores"`
+		}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		assert.Len(t, response.Chores, 0)
+	})
+
+	t.Run("db error", func(t *testing.T) {
+		mockStore.On("GetActiveChores", mock.Anything).Return(nil, errors.New("db error")).Once()
+
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/api/v1/chores/active", nil)
+
+		user := &store.User{ID: 1, TelegramUserID: 123, IsActive: true}
+		ctx := context.WithValue(req.Context(), middleware.UserKey, user)
+		req = req.WithContext(ctx)
+
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		mockStore.AssertExpectations(t)
+	})
 }
 
 // TestGetSchedule tests the GetSchedule handler.
