@@ -88,6 +88,15 @@ func (s *SQLiteStore) migrate(ctx context.Context) error {
 			value TEXT NOT NULL,
 			updated_at TEXT NOT NULL
 		);
+
+		CREATE TABLE IF NOT EXISTS recurring_chores (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			description TEXT NOT NULL,
+			interval_days INTEGER NOT NULL,
+			next_run_at TEXT NOT NULL,
+			is_active INTEGER NOT NULL DEFAULT 1,
+			created_at TEXT NOT NULL
+		);
 	`
 	if _, err := s.db.ExecContext(ctx, schema); err != nil {
 		return err
@@ -642,6 +651,52 @@ func (s *SQLiteStore) GetTodaysDuty(ctx context.Context) (*store.Duty, error) {
 	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 	return s.GetDutyByDate(ctx, today)
+}
+
+// GetLastDuty retrieves the most recent duty assignment, based on duty date.
+func (s *SQLiteStore) GetLastDuty(ctx context.Context) (*store.Duty, error) {
+	query := `
+		SELECT d.id, d.user_id, d.duty_date, d.assignment_type, d.created_at, d.completed_at,
+		       u.id, u.telegram_user_id, u.first_name, u.is_admin, u.is_active
+		FROM duties d
+		JOIN users u ON d.user_id = u.id
+		ORDER BY d.duty_date DESC
+		LIMIT 1
+	`
+	row := s.db.QueryRowContext(ctx, query)
+	duty := &store.Duty{User: &store.User{}}
+	var dutyDateStr, assignmentTypeStr, createdAtStr string
+	var completedAtStr sql.NullString
+
+	err := row.Scan(
+		&duty.ID, &duty.UserID, &dutyDateStr, &assignmentTypeStr, &createdAtStr, &completedAtStr,
+		&duty.User.ID, &duty.User.TelegramUserID, &duty.User.FirstName, &duty.User.IsAdmin, &duty.User.IsActive,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil // Not found
+		}
+		return nil, fmt.Errorf("could not query last duty: %w", err)
+	}
+
+	duty.DutyDate, err = time.Parse("2006-01-02", dutyDateStr)
+	if err != nil {
+		return nil, fmt.Errorf("could not parse duty date: %w", err)
+	}
+	duty.CreatedAt, err = time.Parse(time.RFC3339, createdAtStr)
+	if err != nil {
+		return nil, fmt.Errorf("could not parse created at: %w", err)
+	}
+	if completedAtStr.Valid {
+		t, err := time.Parse(time.RFC3339, completedAtStr.String)
+		if err != nil {
+			return nil, fmt.Errorf("could not parse completed at: %w", err)
+		}
+		duty.CompletedAt = &t
+	}
+	duty.AssignmentType = store.AssignmentType(assignmentTypeStr)
+
+	return duty, nil
 }
 
 // GetCompletedDutiesInRange retrieves all completed duties in a date range.

@@ -89,9 +89,13 @@ The project uses GitHub Actions for automated builds and deployments. On push to
 - `/status` - View your duty statistics and queue status
 - `/schedule` - View the current month's duty schedule
 - `/volunteer` - Volunteer for duty (shows interactive day selection buttons)
+- `/explain` - Explain how the most recent dish hero duty was assigned
 
 ### Admin Commands
 - `/assign` - Assign days to a user's admin queue (interactive user + days selection)
+- `/chore <description> [/<N>d]` - Assign a one-off chore to a random user or make it periodic every `N` days.
+- `/list chore` - View all active periodic chores with their schedule.
+- `/cancel chore <id>` - Deactivate a periodic chore.
 - `/modify` or `/change` - Change duty assignment for a date (interactive date + user selection)
 - `/offduty` - Set off-duty period for a user (interactive user selection, text date input)
 - `/toggleactive` - Toggle user active/inactive status (interactive user selection with status indicators)
@@ -130,9 +134,17 @@ The bot uses a queue-based system with three priority levels:
 
 All times in **Europe/Berlin timezone**:
 
-- **11:00 AM Daily** - Assign today's duty based on queue priority
+- **11:00 AM Daily** - Assign today's duty based on queue priority and process due periodic chores.
 - **21:00 PM Daily** - Mark today's duty as completed
 - **21:10 PM Sunday** - Send weekly duty statistics report (TODO: implement)
+
+### Explanation System
+
+The `/explain` command provides transparency into the bot's assignment logic. It shows:
+- The assigned user and timestamp of the assignment
+- The list of candidates considered
+- Users excluded and why (e.g., off-duty, recently assigned)
+- The final rule/tie-breaker used for the decision
 
 ## Database Schema
 
@@ -141,3 +153,6 @@ See [logic.md](logic.md) for complete database schema and assignment logic detai
 ### Chore Notifications Configuration
 To enable chore notification digests:
 - Set `CHORE_TIMEZONE` (default: `Europe/Berlin`) to define when daily 16:00 reports are sent.
+
+### `/explain` - Explain Last Assignment
+Explain how the most recent dish hero duty was assigned. Shows the logic behind the choice (e.g., candidate availability, cooldowns, queues, and final criteria).

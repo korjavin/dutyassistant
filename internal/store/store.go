@@ -80,6 +80,16 @@ type UserStats struct {
 	NextDutyDate    string // YYYY-MM-DD, or empty if none
 }
 
+// RecurringChore represents a scheduled periodic chore.
+type RecurringChore struct {
+	ID          int64
+	Description string
+	Interval    int       // Interval in days
+	NextRunAt   time.Time // Time when the chore is next due
+	IsActive    bool
+	CreatedAt   time.Time
+}
+
 // Store defines the interface for all data operations.
 type Store interface {
 	// User methods
@@ -100,6 +110,7 @@ type Store interface {
 	CompleteDuty(ctx context.Context, date time.Time) error
 	GetTodaysDuty(ctx context.Context) (*Duty, error)
 	GetCompletedDutiesInRange(ctx context.Context, start, end time.Time) ([]*Duty, error)
+	GetLastDuty(ctx context.Context) (*Duty, error)
 
 	// Chore methods
 	CreateChore(ctx context.Context, chore *Chore) error
@@ -130,4 +141,12 @@ type Store interface {
 	// Vacation mode methods
 	SetVacationMode(ctx context.Context, enabled bool) error
 	IsVacationMode(ctx context.Context) (bool, error)
+
+	// Recurring Chore methods
+	CreateRecurringChore(ctx context.Context, chore *RecurringChore) error
+	GetRecurringChore(ctx context.Context, id int64) (*RecurringChore, error)
+	GetActiveRecurringChores(ctx context.Context) ([]*RecurringChore, error)
+	GetDueRecurringChores(ctx context.Context, before time.Time) ([]*RecurringChore, error)
+	UpdateRecurringChoreNextRun(ctx context.Context, id int64, nextRun time.Time) error
+	CancelRecurringChore(ctx context.Context, id int64) error
 }

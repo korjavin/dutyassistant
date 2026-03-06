@@ -77,17 +77,22 @@ func main() {
 	}
 	c := cron.New(cron.WithLocation(berlinLoc))
 
-	// Daily at 11:00 AM Berlin - Assign today's duty
+	// Daily at 11:00 AM Berlin - Assign today's duty and Process Recurring Chores
 	_, err = c.AddFunc("0 11 * * *", func() {
 		log.Println("═══════════════════════════════════════════════════════════")
-		log.Println("[CRON] Running daily duty assignment (11:00 AM Berlin)")
+		log.Println("[CRON] Running daily duty assignment and recurring chores (11:00 AM Berlin)")
 		log.Printf("[CRON] Current time: %s", time.Now().In(berlinLoc).Format("2006-01-02 15:04:05 MST"))
 
+		// Process Recurring Chores
+		if err := telegramHandlers.ProcessRecurringChores(context.Background()); err != nil {
+			log.Printf("[CRON] ERROR: Failed to process recurring chores: %v", err)
+		}
+
 		duty, err := sched.AssignTodaysDuty(context.Background())
-		if err != nil {
+	if err != nil {
 			log.Printf("[CRON] ERROR: Failed to assign today's duty: %v", err)
 			return
-		}
+	}
 
 		if duty == nil {
 			log.Printf("[CRON] WARNING: No duty was assigned (duty is nil)")

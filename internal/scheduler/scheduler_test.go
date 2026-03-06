@@ -159,6 +159,10 @@ func (m *mockStore) GetCompletedDutiesInRange(ctx context.Context, start, end ti
 	return []*store.Duty{}, nil
 }
 
+func (m *mockStore) GetLastDuty(ctx context.Context) (*store.Duty, error) {
+	return nil, nil // not fully mocked
+}
+
 func (m *mockStore) AddToVolunteerQueue(ctx context.Context, userID int64, days int) error {
 	for _, u := range m.users {
 		if u.ID == userID {
@@ -277,6 +281,13 @@ func (m *mockStore) SetVacationMode(ctx context.Context, enabled bool) error {
 func (m *mockStore) IsVacationMode(ctx context.Context) (bool, error) {
 	return false, nil
 }
+
+func (m *mockStore) CreateRecurringChore(ctx context.Context, chore *store.RecurringChore) error { return nil }
+func (m *mockStore) GetRecurringChore(ctx context.Context, id int64) (*store.RecurringChore, error) { return nil, nil }
+func (m *mockStore) GetActiveRecurringChores(ctx context.Context) ([]*store.RecurringChore, error) { return nil, nil }
+func (m *mockStore) GetDueRecurringChores(ctx context.Context, before time.Time) ([]*store.RecurringChore, error) { return nil, nil }
+func (m *mockStore) UpdateRecurringChoreNextRun(ctx context.Context, id int64, nextRun time.Time) error { return nil }
+func (m *mockStore) CancelRecurringChore(ctx context.Context, id int64) error { return nil }
 
 func TestScheduler_AddToVolunteerQueue(t *testing.T) {
 	mock := newMockStore()

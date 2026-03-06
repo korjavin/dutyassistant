@@ -1,13 +1,13 @@
 package handlers
 
 import (
-	"github.com/korjavin/dutyassistant/internal/notification"
-	"html"
-	"os"
-	"strings"
 	"context"
 	"fmt"
+	"github.com/korjavin/dutyassistant/internal/notification"
+	"html"
 	"log"
+	"os"
+	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/korjavin/dutyassistant/internal/store"
@@ -24,9 +24,12 @@ const (
 		"/help - Show this help message.\n" +
 		"/status - Show your current duty statistics.\n" +
 		"/schedule - View the duty schedule for the current month.\n" +
-		"/volunteer <days> - Add days to your volunteer queue.\n\n" +
+		"/volunteer <days> - Add days to your volunteer queue.\n" +
+		"/explain - Explain how the last assignment was made.\n\n" +
 		"*Admin Commands:*\n" +
-		"/chore <description> - Assign a chore to a random active user.\n" +
+		"/chore <description> [/<N>d] - Assign a chore to a random active user (optional: make it periodic every N days).\n" +
+		"/list chore - List active periodic chores.\n" +
+		"/cancel chore <id> - Cancel a periodic chore.\n" +
 		"/assign <username> <days> - Add days to user's admin queue.\n" +
 		"/unassign <username> <days> - Remove days from user's admin queue.\n" +
 		"/change <date> <username> - Change assigned user for a date.\n" +
@@ -138,6 +141,19 @@ func (h *Handlers) HandleStatus(m *tgbotapi.Message) (tgbotapi.MessageConfig, er
 	return msg, nil
 }
 
+// HandleExplain provides an explanation of how the last assignment was made.
+func (h *Handlers) HandleExplain(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
+	log.Printf("[HandleExplain] User %d triggered /explain", m.From.ID)
+
+	explanation, err := h.Scheduler.ExplainLastAssignment(context.Background())
+	if err != nil {
+		log.Printf("[HandleExplain] Error explaining last assignment: %v", err)
+		return tgbotapi.NewMessage(m.Chat.ID, "Не удалось получить объяснение: "+err.Error()), nil
+	}
+
+	msg := tgbotapi.NewMessage(m.Chat.ID, explanation)
+	return msg, nil
+}
 
 // HandleOverdue handles the /overdue command for admins.
 func (h *Handlers) HandleOverdue(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
@@ -151,10 +167,7 @@ func (h *Handlers) HandleOverdue(m *tgbotapi.Message) (tgbotapi.MessageConfig, e
 		return tgbotapi.NewMessage(m.Chat.ID, "Failed to generate overdue report."), nil
 	}
 
-	// SendDailyChoreSummary already sent the message to m.Chat.ID, so we just return empty or a small ack
-	// Wait, tgbotapi.MessageConfig requires text. Returning empty text fails.
-	// We should just return nil error and ignore the Config, but handlers expect MessageConfig.
-	// Actually we can return a small ack.
+	// SendDailyChoreSummary already sent the message to m.Chat.ID, so return a small ack.
 	return tgbotapi.NewMessage(m.Chat.ID, "Report generated successfully. 👆"), nil
 }
 

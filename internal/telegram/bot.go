@@ -182,6 +182,8 @@ func (b *Bot) handleCommand(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 		return b.handlers.HandleSchedule(m)
 	case "volunteer":
 		return b.handlers.HandleVolunteer(m)
+	case "explain":
+		return b.handlers.HandleExplain(m)
 	case "chore":
 		return b.handlers.HandleChore(m)
 	case "overdue":
@@ -190,6 +192,10 @@ func (b *Bot) handleCommand(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 		return b.handlers.HandleChoreStats(m)
 	case "assign":
 		return b.handlers.HandleAssign(m)
+	case "list":
+		return b.handlers.HandleList(m)
+	case "cancel":
+		return b.handlers.HandleCancel(m)
 	case "unassign":
 		return b.handlers.HandleUnassign(m)
 	case "modify":
