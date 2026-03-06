@@ -54,6 +54,14 @@ func (s *Scheduler) ExplainLastAssignment(ctx context.Context) (string, error) {
 	maxQueueCount := 0
 	if lastDuty.AssignmentType == store.AssignmentTypeVoluntary || lastDuty.AssignmentType == store.AssignmentTypeAdmin {
 		for _, u := range allUsers {
+			offDuty, err := s.store.IsUserOffDuty(ctx, u.ID, date)
+			if err != nil {
+				return "", fmt.Errorf("failed to check off duty status: %w", err)
+			}
+			if offDuty {
+				continue
+			}
+
 			queue := 0
 			if lastDuty.AssignmentType == store.AssignmentTypeVoluntary {
 				queue = u.VolunteerQueueDays
@@ -138,7 +146,10 @@ func (s *Scheduler) ExplainLastAssignment(ctx context.Context) (string, error) {
 	// Remaining candidates
 	var remainingCandidates []string
 	for _, user := range allUsers {
-		offDuty, _ := s.store.IsUserOffDuty(ctx, user.ID, date) // Error already checked
+		offDuty, err := s.store.IsUserOffDuty(ctx, user.ID, date) // Error already checked
+		if err != nil {
+			return "", fmt.Errorf("failed to check off duty status: %w", err)
+		}
 		if offDuty {
 			continue
 		}

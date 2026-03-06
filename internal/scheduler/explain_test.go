@@ -182,3 +182,46 @@ func TestExplainLastAssignment_PostDecrementZero(t *testing.T) {
 	// Alex was left in remaining candidates even though current DB count is 0
 	assert.Contains(t, explanation, "Оставшиеся кандидаты: @alex")
 }
+
+func TestExplainLastAssignment_OffDutyMaxQueue(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	s := NewScheduler(mockStore)
+	ctx := context.Background()
+
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+
+	// alex has 1 and is active
+	u1 := &store.User{ID: 1, FirstName: "alex", IsActive: true, VolunteerQueueDays: 0}
+
+	// maria has 5, but she is off duty
+	u2 := &store.User{ID: 2, FirstName: "maria", IsActive: true, VolunteerQueueDays: 5}
+
+	lastDuty := &store.Duty{
+		ID:             1,
+		UserID:         1, // assigned to alex
+		User:           u1,
+		DutyDate:       today,
+		AssignmentType: store.AssignmentTypeVoluntary,
+	}
+
+	mockStore.On("GetLastDuty", ctx).Return(lastDuty, nil)
+	mockStore.On("ListActiveUsers", ctx).Return([]*store.User{u1, u2}, nil)
+	mockStore.On("GetCompletedDutiesInRange", ctx, mock.Anything, mock.Anything).Return([]*store.Duty{}, nil)
+
+	mockStore.On("IsUserOffDuty", ctx, int64(1), today).Return(false, nil)
+	mockStore.On("IsUserOffDuty", ctx, int64(2), today).Return(true, nil) // Maria is off duty
+
+	explanation, err := s.ExplainLastAssignment(ctx)
+
+	assert.NoError(t, err)
+	assert.Contains(t, explanation, "Последнее назначение: @alex")
+	assert.Contains(t, explanation, "Кандидаты: @alex, @maria")
+
+	// Maria was excluded because she is off duty
+	assert.Contains(t, explanation, "@maria — отсутствует по расписанию")
+
+	// Since maria is off-duty, she doesn't count towards the maxQueueCount (which should be 1 for alex).
+	// Alex was left in remaining candidates
+	assert.Contains(t, explanation, "Оставшиеся кандидаты: @alex")
+}
