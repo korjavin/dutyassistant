@@ -6,6 +6,7 @@ import (
 	"html"
 	"strconv"
 	"strings"
+	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -33,9 +34,14 @@ func (h *Handlers) HandleList(m *tgbotapi.Message) (tgbotapi.MessageConfig, erro
 		var sb strings.Builder
 		sb.WriteString("📋 <b>Active Recurring Chores:</b>\n\n")
 
+		berlinLoc, err := time.LoadLocation("Europe/Berlin")
+		if err != nil {
+			berlinLoc = time.UTC // fallback
+		}
+
 		for _, chore := range chores {
 			escapedDesc := html.EscapeString(chore.Description)
-			nextRunStr := chore.NextRunAt.Format("2006-01-02 15:04 MST")
+			nextRunStr := chore.NextRunAt.In(berlinLoc).Format("2006-01-02 15:04 MST")
 			sb.WriteString(fmt.Sprintf("<b>ID:</b> <code>%d</code>\n", chore.ID))
 			sb.WriteString(fmt.Sprintf("<b>Description:</b> <i>%s</i>\n", escapedDesc))
 			sb.WriteString(fmt.Sprintf("<b>Interval:</b> every %d days\n", chore.Interval))

@@ -128,7 +128,7 @@ func (s *SQLiteStore) GetDueRecurringChores(ctx context.Context, before time.Tim
 		WHERE is_active = 1 AND next_run_at <= ?
 		ORDER BY id ASC
 	`
-	rows, err := s.db.QueryContext(ctx, query, before.Format(time.RFC3339))
+	rows, err := s.db.QueryContext(ctx, query, before.UTC().Format(time.RFC3339))
 	if err != nil {
 		return nil, err
 	}
