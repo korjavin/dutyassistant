@@ -111,6 +111,7 @@ func TestProcessRecurringChores_Success(t *testing.T) {
 
 	// Mock ChoreReminderManager so that it does not fail on missing Bot API
 	botAPI, _ := tgbotapi.NewBotAPI("dummy:token")
+	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
 	h.SetBot(botAPI)
 	// Actually, we don't want to make real API requests, so let's mock the actual function internally
 	// or bypass it by setting TelegramUserID = 0 to simulate failure, OR we can let it fail

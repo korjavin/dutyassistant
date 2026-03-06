@@ -73,6 +73,16 @@ func (s *SQLiteStore) migrate(ctx context.Context) error {
 			FOREIGN KEY(duty_date) REFERENCES duties(duty_date)
 		);
 
+		CREATE TABLE IF NOT EXISTS chores (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			description TEXT NOT NULL,
+			assigned_at TEXT NOT NULL,
+			deadline_at TEXT NOT NULL,
+			completed_at TEXT,
+			reminder_id TEXT UNIQUE NOT NULL,
+			FOREIGN KEY(user_id) REFERENCES users(id)
+		);
 		CREATE TABLE IF NOT EXISTS settings (
 			key TEXT PRIMARY KEY,
 			value TEXT NOT NULL,

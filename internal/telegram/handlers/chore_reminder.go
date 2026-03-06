@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"context"
+	"github.com/korjavin/dutyassistant/internal/store"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
@@ -29,11 +31,15 @@ type ChoreReminderManager struct {
 }
 
 // NewChoreReminderManager creates a new chore reminder manager
-func NewChoreReminderManager(bot *tgbotapi.BotAPI) *ChoreReminderManager {
-	return &ChoreReminderManager{
+func NewChoreReminderManager(bot *tgbotapi.BotAPI, db store.Store, groupID int64) *ChoreReminderManager {
+	crm := &ChoreReminderManager{
 		activeChores: make(map[string]*ChoreAssignment),
 		bot:          bot,
 	}
+	if db != nil {
+		crm.loadActiveChores(db, groupID)
+	}
+	return crm
 }
 
 // GenerateReminderID creates a unique ID for a chore assignment
@@ -187,4 +193,29 @@ func (crm *ChoreReminderManager) SendCompletionToGroup(assignment *ChoreAssignme
 
 	log.Printf("Sent completion message to group for chore: %s", assignment.Description)
 	return nil
+}
+
+func (crm *ChoreReminderManager) loadActiveChores(db store.Store, groupID int64) {
+	chores, err := db.GetActiveChores(context.Background())
+	if err != nil {
+		log.Printf("Failed to load active chores from database: %v", err)
+		return
+	}
+
+	crm.mu.Lock()
+	defer crm.mu.Unlock()
+
+	for _, chore := range chores {
+		if chore.User != nil {
+			crm.activeChores[chore.ReminderID] = &ChoreAssignment{
+				UserID:      chore.User.TelegramUserID,
+				UserName:    chore.User.FirstName,
+				Description: chore.Description,
+				AssignedAt:  chore.AssignedAt,
+				GroupID:     groupID,
+				ReminderID:  chore.ReminderID,
+			}
+		}
+	}
+	log.Printf("Loaded %d active chores from database", len(crm.activeChores))
 }

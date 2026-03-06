@@ -149,5 +149,10 @@ The `/explain` command provides transparency into the bot's assignment logic. It
 ## Database Schema
 
 See [logic.md](logic.md) for complete database schema and assignment logic details.
+
+### Chore Notifications Configuration
+To enable chore notification digests:
+- Set `CHORE_TIMEZONE` (default: `Europe/Berlin`) to define when daily 16:00 reports are sent.
+
 ### `/explain` - Explain Last Assignment
 Explain how the most recent dish hero duty was assigned. Shows the logic behind the choice (e.g., candidate availability, cooldowns, queues, and final criteria).
