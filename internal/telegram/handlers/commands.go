@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"github.com/korjavin/dutyassistant/internal/notification"
+	"html"
 	"os"
 	"strings"
 	"context"
@@ -182,7 +183,7 @@ func (h *Handlers) HandleChoreStats(m *tgbotapi.Message) (tgbotapi.MessageConfig
 		sb.WriteString("No overdue chores recorded.\n")
 	} else {
 		for i, chore := range topOverdue {
-			sb.WriteString(fmt.Sprintf("%d. %s (%d times)\n", i+1, chore.Description, chore.Count))
+			sb.WriteString(fmt.Sprintf("%d. %s (%d times)\n", i+1, html.EscapeString(chore.Description), chore.Count))
 		}
 	}
 	sb.WriteString("\n")
@@ -192,7 +193,7 @@ func (h *Handlers) HandleChoreStats(m *tgbotapi.Message) (tgbotapi.MessageConfig
 		sb.WriteString("No completed chores recorded.\n")
 	} else {
 		for i, stat := range topUsers {
-			sb.WriteString(fmt.Sprintf("%d. %s (%d completed)\n", i+1, stat.Name, stat.Count))
+			sb.WriteString(fmt.Sprintf("%d. %s (%d completed)\n", i+1, html.EscapeString(stat.Name), stat.Count))
 		}
 	}
 

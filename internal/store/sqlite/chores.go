@@ -101,7 +101,7 @@ func (s *SQLiteStore) GetTopOverdueChores(ctx context.Context, limit int) ([]*st
 	query := `
 		SELECT description, COUNT(*) as cnt
 		FROM chores
-		WHERE completed_at IS NULL AND deadline_at < ?
+		WHERE deadline_at < COALESCE(completed_at, ?)
 		GROUP BY description
 		ORDER BY cnt DESC
 		LIMIT ?

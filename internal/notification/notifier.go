@@ -195,7 +195,7 @@ func SendDailyChoreSummary(ctx context.Context, bot *tgbotapi.BotAPI, db store.S
 
 		if daysOverdue >= 3 {
 			critical = append(critical, choreLine)
-		} else if daysOverdue >= 2 {
+		} else if daysOverdue >= 1 {
 			medium = append(medium, choreLine)
 		} else {
 			today = append(today, choreLine)
