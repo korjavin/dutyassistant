@@ -1,0 +1,187 @@
+package handlers
+
+import (
+	"context"
+	"fmt"
+	"html"
+	"log"
+	"math/rand"
+	"time"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/korjavin/dutyassistant/internal/store"
+)
+
+// ProcessRecurringChores fetches all due recurring chores and assigns them.
+// It should be called periodically by the cron scheduler.
+func (h *Handlers) ProcessRecurringChores(ctx context.Context) error {
+	log.Printf("[CRON] Starting ProcessRecurringChores")
+
+	berlinLoc, err := time.LoadLocation("Europe/Berlin")
+	if err != nil {
+		return fmt.Errorf("failed to load Europe/Berlin timezone: %v", err)
+	}
+
+	now := time.Now().In(berlinLoc)
+	dueChores, err := h.Store.GetDueRecurringChores(ctx, now)
+	if err != nil {
+		return fmt.Errorf("failed to get due recurring chores: %v", err)
+	}
+
+	if len(dueChores) == 0 {
+		log.Printf("[CRON] No recurring chores are due.")
+		return nil
+	}
+
+	log.Printf("[CRON] Found %d due recurring chores.", len(dueChores))
+
+	for _, chore := range dueChores {
+		log.Printf("[CRON] Processing recurring chore %d: %s", chore.ID, chore.Description)
+
+		err := h.assignRecurringChore(ctx, chore)
+		if err != nil {
+			log.Printf("[CRON] ERROR: Failed to assign recurring chore %d: %v", chore.ID, err)
+			// Do not update nextRunAt so it retries next time
+			continue
+		}
+
+		// Calculate new nextRunAt (N days from the CURRENT nextRunAt, not from time.Now)
+		// Convert NextRunAt to Europe/Berlin so that AddDate respects daylight saving time.
+		newNextRun := chore.NextRunAt.In(berlinLoc).AddDate(0, 0, chore.Interval)
+
+		// If newNextRun is still in the past (e.g., bot was down for a long time), fast-forward it
+		for newNextRun.Before(now) {
+			newNextRun = newNextRun.AddDate(0, 0, chore.Interval)
+		}
+
+		if err := h.Store.UpdateRecurringChoreNextRun(ctx, chore.ID, newNextRun); err != nil {
+			log.Printf("[CRON] ERROR: Failed to update next_run_at for chore %d: %v", chore.ID, err)
+		} else {
+			log.Printf("[CRON] Successfully scheduled recurring chore %d for next run at %s", chore.ID, newNextRun.Format("2006-01-02 15:04 MST"))
+		}
+	}
+
+	return nil
+}
+
+// assignRecurringChore is similar to assignChore but doesn't reply to a specific user
+// It just sends notifications to the group and the assigned user.
+func (h *Handlers) assignRecurringChore(ctx context.Context, chore *store.RecurringChore) error {
+	// 1. Get candidates
+	users, err := h.Store.ListActiveUsers(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve user list: %v", err)
+	}
+	if len(users) == 0 {
+		return fmt.Errorf("no active users found to assign the chore to")
+	}
+
+	// Filter candidates (exclude those on off-duty)
+	var candidates []*store.User
+	now := time.Now()
+	checkDate := time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, now.Location())
+
+	for _, u := range users {
+		isOff, err := h.Store.IsUserOffDuty(ctx, u.ID, checkDate)
+		if err != nil {
+			log.Printf("Error checking off-duty status for user %d: %v", u.ID, err)
+			continue
+		}
+		if !isOff {
+			candidates = append(candidates, u)
+		}
+	}
+
+	if len(candidates) == 0 {
+		return fmt.Errorf("all active users are currently off-duty")
+	}
+
+	// 4. Weighted random assignment
+	type weightedUser struct {
+		user   *store.User
+		weight float64
+	}
+
+	var weightedCandidates []weightedUser
+	var totalWeight float64
+
+	for _, u := range candidates {
+		weight := 1.0
+		if u.AdminQueueDays > 0 {
+			weight += float64(u.AdminQueueDays) * 0.02
+		}
+		weightedCandidates = append(weightedCandidates, weightedUser{user: u, weight: weight})
+		totalWeight += weight
+	}
+
+	// Select user
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	target := r.Float64() * totalWeight
+
+	var selectedUser *store.User
+	currentWeight := 0.0
+	for _, wu := range weightedCandidates {
+		currentWeight += wu.weight
+		if target < currentWeight {
+			selectedUser = wu.user
+			break
+		}
+	}
+
+	if selectedUser == nil && len(candidates) > 0 {
+		selectedUser = candidates[r.Intn(len(candidates))]
+	}
+
+	if selectedUser == nil {
+		return fmt.Errorf("failed to select a user")
+	}
+
+	// 5. Notifications
+	escapedName := html.EscapeString(selectedUser.FirstName)
+	escapedDesc := html.EscapeString(chore.Description)
+
+	// Construct group announcement
+	groupText := fmt.Sprintf("🎲 <b>Periodic Chore Assignment</b>\n\n🎯 <b>%s</b> has been assigned a chore:\n\n<i>%s</i>", escapedName, escapedDesc)
+
+	// Handle group announcement
+	if h.GroupID != 0 && h.Bot != nil {
+		groupMsg := tgbotapi.NewMessage(h.GroupID, groupText)
+		groupMsg.ParseMode = tgbotapi.ModeHTML
+		if _, err := h.Bot.Send(groupMsg); err != nil {
+			log.Printf("Failed to send recurring chore announcement to group %d: %v", h.GroupID, err)
+		} else {
+			log.Printf("Announced recurring chore in group.")
+		}
+	} else if h.GroupID == 0 {
+		log.Printf("No group configured to announce recurring chore.")
+	} else if h.Bot == nil {
+		log.Printf("Bot API not available for group announcement.")
+	}
+
+	// 6. Send DM to assigned user and schedule reminder (Best Effort)
+	if h.ChoreReminderManager == nil {
+		log.Printf("Warning: DM reminders are disabled (bot API is not configured), skipping DM for %s", selectedUser.FirstName)
+		return nil
+	}
+
+	if selectedUser.TelegramUserID == 0 {
+		log.Printf("Warning: couldn't send DM: user %s is not registered in the bot yet", selectedUser.FirstName)
+		return nil
+	}
+
+	assignment := &ChoreAssignment{
+		UserID:      selectedUser.TelegramUserID,
+		UserName:    selectedUser.FirstName,
+		Description: chore.Description,
+		AssignedAt:  time.Now(),
+		GroupID:     h.GroupID,
+		ReminderID:  GenerateReminderID(selectedUser.TelegramUserID, time.Now()),
+	}
+
+	if err := h.ChoreReminderManager.SendInitialDM(assignment); err != nil {
+		log.Printf("Warning: failed to send initial DM to user %s: %v", selectedUser.FirstName, err)
+		// We still consider the assignment successful even if the DM fails
+	}
+
+	return nil
+}

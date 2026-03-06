@@ -287,6 +287,12 @@ Total: 7 duty days completed
 - All time-based operations use **Berlin timezone (Europe/Berlin)**
 - Critical times: 11:00 AM (assignment), 21:00 PM (completion)
 
+### Periodic Chores
+- **Storage:** Stored in the `recurring_chores` table, tracking description, interval (days), next run time (in Europe/Berlin), and active state.
+- **Next Run Calculation:** When created, the `next_run_at` is set to `N` days from the current day at 11:00 AM Europe/Berlin.
+- **Cron Integration:** Processed at 11:00 AM alongside daily duties. A random active user is assigned based on the weighted chore logic.
+- **Retries:** If assignment fails (e.g., no active users available), the `next_run_at` is not updated, allowing it to retry the next day. If successful, it is pushed forward by `N` days.
+
 ### Today's Protection
 - After 11:00 AM assignment, today's duty is **locked**
 - Only `/change` command can modify it

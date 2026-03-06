@@ -93,6 +93,9 @@ The project uses GitHub Actions for automated builds and deployments. On push to
 
 ### Admin Commands
 - `/assign` - Assign days to a user's admin queue (interactive user + days selection)
+- `/chore <description> [/<N>d]` - Assign a one-off chore to a random user or make it periodic every `N` days.
+- `/list chore` - View all active periodic chores with their schedule.
+- `/cancel chore <id>` - Deactivate a periodic chore.
 - `/modify` or `/change` - Change duty assignment for a date (interactive date + user selection)
 - `/offduty` - Set off-duty period for a user (interactive user selection, text date input)
 - `/toggleactive` - Toggle user active/inactive status (interactive user selection with status indicators)
@@ -131,7 +134,7 @@ The bot uses a queue-based system with three priority levels:
 
 All times in **Europe/Berlin timezone**:
 
-- **11:00 AM Daily** - Assign today's duty based on queue priority
+- **11:00 AM Daily** - Assign today's duty based on queue priority and process due periodic chores.
 - **21:00 PM Daily** - Mark today's duty as completed
 - **21:10 PM Sunday** - Send weekly duty statistics report (TODO: implement)
 

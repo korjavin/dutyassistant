@@ -6,6 +6,8 @@ import (
 	"html"
 	"log"
 	"math/rand"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,8 +15,9 @@ import (
 	"github.com/korjavin/dutyassistant/internal/store"
 )
 
-// HandleChore handles the /chore command for admins. Format: /chore [description]
+// HandleChore handles the /chore command for admins. Format: /chore [description] [/<N>d]
 // It assigns a random active user to the described chore.
+// If the /<N>d suffix is provided, it sets up a recurring chore.
 // If no description is provided, it enters interactive mode.
 func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
 	// 1. Admin check
@@ -34,6 +37,72 @@ func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 		return msg, nil
 	}
 
+	// 3. Parse for recurring chore suffix /<N>d
+	recurringRe := regexp.MustCompile(`(?i)\s+/([1-9][0-9]*)d$`)
+	match := recurringRe.FindStringSubmatch(args)
+
+	if len(match) > 1 {
+		// It's a recurring chore
+		intervalDays, err := strconv.Atoi(match[1])
+		if err != nil || intervalDays < 1 {
+			return tgbotapi.NewMessage(m.Chat.ID, "❌ Invalid interval for recurring chore. Must be a positive integer, e.g., /3d."), nil
+		}
+
+		// Remove the suffix from the description
+		description := strings.TrimSpace(args[:len(args)-len(match[0])])
+		if description == "" {
+			return tgbotapi.NewMessage(m.Chat.ID, "❌ Chore description cannot be empty."), nil
+		}
+
+		// Calculate next run at 11:00 AM Europe/Berlin today or future
+		berlinLoc, err := time.LoadLocation("Europe/Berlin")
+		if err != nil {
+			log.Printf("Failed to load Europe/Berlin location: %v", err)
+			return tgbotapi.NewMessage(m.Chat.ID, "❌ Internal error determining timezone."), nil
+		}
+
+		now := time.Now().In(berlinLoc)
+		// Check if it's already past 11:00 AM today
+		nextRun := time.Date(now.Year(), now.Month(), now.Day(), 11, 0, 0, 0, berlinLoc)
+		if now.After(nextRun) {
+			// If it's past 11:00 AM, the first run shouldn't be missed immediately.
+			// Let's schedule it for tomorrow + (interval - 1) days
+			nextRun = nextRun.AddDate(0, 0, intervalDays)
+		} else {
+			// Wait until 11 AM today or interval? If they create it before 11, let's run it today,
+			// or actually interval from now makes more sense.
+			// Task requirement: N days from now.
+			nextRun = nextRun.AddDate(0, 0, intervalDays)
+		}
+
+		chore := &store.RecurringChore{
+			Description: description,
+			Interval:    intervalDays,
+			NextRunAt:   nextRun,
+			CreatedAt:   now,
+		}
+
+		if err := h.Store.CreateRecurringChore(context.Background(), chore); err != nil {
+			log.Printf("Failed to create recurring chore: %v", err)
+			return tgbotapi.NewMessage(m.Chat.ID, "❌ Failed to create recurring chore."), nil
+		}
+
+		escapedDesc := html.EscapeString(description)
+		nextRunStr := nextRun.Format("2006-01-02 15:04 MST")
+
+		msgText := fmt.Sprintf("✅ <b>Recurring chore created!</b>\n\n"+
+			"<b>ID:</b> <code>%d</code>\n"+
+			"<b>Description:</b> <i>%s</i>\n"+
+			"<b>Interval:</b> every %d days\n"+
+			"<b>Next Run:</b> %s",
+			chore.ID, escapedDesc, chore.Interval, nextRunStr)
+
+		msg := tgbotapi.NewMessage(m.Chat.ID, msgText)
+		msg.ParseMode = tgbotapi.ModeHTML
+		return msg, nil
+	}
+
+	// 4. One-off chore
 	description := args
 
 	// Perform the actual chore assignment

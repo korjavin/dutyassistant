@@ -214,3 +214,48 @@ func (m *MockStore) IsVacationMode(ctx context.Context) (bool, error) {
 	args := m.Called(ctx)
 	return args.Bool(0), args.Error(1)
 }
+
+// CreateRecurringChore mocks the CreateRecurringChore method.
+func (m *MockStore) CreateRecurringChore(ctx context.Context, chore *store.RecurringChore) error {
+	args := m.Called(ctx, chore)
+	return args.Error(0)
+}
+
+// GetRecurringChore mocks the GetRecurringChore method.
+func (m *MockStore) GetRecurringChore(ctx context.Context, id int64) (*store.RecurringChore, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*store.RecurringChore), args.Error(1)
+}
+
+// GetActiveRecurringChores mocks the GetActiveRecurringChores method.
+func (m *MockStore) GetActiveRecurringChores(ctx context.Context) ([]*store.RecurringChore, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*store.RecurringChore), args.Error(1)
+}
+
+// GetDueRecurringChores mocks the GetDueRecurringChores method.
+func (m *MockStore) GetDueRecurringChores(ctx context.Context, before time.Time) ([]*store.RecurringChore, error) {
+	args := m.Called(ctx, before)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*store.RecurringChore), args.Error(1)
+}
+
+// UpdateRecurringChoreNextRun mocks the UpdateRecurringChoreNextRun method.
+func (m *MockStore) UpdateRecurringChoreNextRun(ctx context.Context, id int64, nextRun time.Time) error {
+	args := m.Called(ctx, id, nextRun)
+	return args.Error(0)
+}
+
+// CancelRecurringChore mocks the CancelRecurringChore method.
+func (m *MockStore) CancelRecurringChore(ctx context.Context, id int64) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}

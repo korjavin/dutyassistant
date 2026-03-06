@@ -282,6 +282,13 @@ func (m *mockStore) IsVacationMode(ctx context.Context) (bool, error) {
 	return false, nil
 }
 
+func (m *mockStore) CreateRecurringChore(ctx context.Context, chore *store.RecurringChore) error { return nil }
+func (m *mockStore) GetRecurringChore(ctx context.Context, id int64) (*store.RecurringChore, error) { return nil, nil }
+func (m *mockStore) GetActiveRecurringChores(ctx context.Context) ([]*store.RecurringChore, error) { return nil, nil }
+func (m *mockStore) GetDueRecurringChores(ctx context.Context, before time.Time) ([]*store.RecurringChore, error) { return nil, nil }
+func (m *mockStore) UpdateRecurringChoreNextRun(ctx context.Context, id int64, nextRun time.Time) error { return nil }
+func (m *mockStore) CancelRecurringChore(ctx context.Context, id int64) error { return nil }
+
 func TestScheduler_AddToVolunteerQueue(t *testing.T) {
 	mock := newMockStore()
 	scheduler := NewScheduler(mock)
