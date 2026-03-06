@@ -89,10 +89,10 @@ func main() {
 		}
 
 		duty, err := sched.AssignTodaysDuty(context.Background())
-	if err != nil {
+		if err != nil {
 			log.Printf("[CRON] ERROR: Failed to assign today's duty: %v", err)
 			return
-	}
+		}
 
 		if duty == nil {
 			log.Printf("[CRON] WARNING: No duty was assigned (duty is nil)")
@@ -187,7 +187,7 @@ func main() {
 
 	// Daily at 16:00 Berlin - Send daily chore summary
 	tz := getEnv("CHORE_TIMEZONE", "Europe/Berlin")
-	_, err = c.AddFunc("CRON_TZ=" + tz + " 0 16 * * *", func() {
+	_, err = c.AddFunc("CRON_TZ="+tz+" 0 16 * * *", func() {
 		log.Printf("[CRON] Running daily chore summary (16:00 %s)", tz)
 		err := notification.SendDailyChoreSummary(context.Background(), bot.API(), store, dishGroupID, true, getEnv("CHORE_TIMEZONE", "Europe/Berlin"))
 		if err != nil {
@@ -227,7 +227,11 @@ func main() {
 
 	// Initialize HTTP server with Gin
 	log.Println("Initializing HTTP server on :8080...")
-	router := httpserver.NewServer(store, telegramToken)
+	dutySecret := getEnv("DUTY_SECRET", "")
+	if dutySecret == "" {
+		log.Println("WARNING: DUTY_SECRET is not set. The /who endpoint will return 503 until it is configured.")
+	}
+	router := httpserver.NewServer(store, telegramToken, dutySecret)
 
 	// Create HTTP server for graceful shutdown
 	srv := &http.Server{

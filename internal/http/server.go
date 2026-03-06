@@ -9,7 +9,10 @@ import (
 
 // NewServer creates and configures a new Gin HTTP server.
 // It sets up the router, registers middleware, and defines all API routes.
-func NewServer(s store.Store, botToken string) *gin.Engine {
+//
+// dutySecret is the shared HMAC secret for the /who endpoint used by EchoBridge.
+// If empty, the /who endpoint will respond with 503 Service Unavailable.
+func NewServer(s store.Store, botToken string, dutySecret string) *gin.Engine {
 	// Set Gin to release mode for production.
 	gin.SetMode(gin.ReleaseMode)
 
@@ -56,6 +59,11 @@ func NewServer(s store.Store, botToken string) *gin.Engine {
 			admin.DELETE("/duties/:date", handlers.AdminDeleteDuty(s))
 		}
 	}
+
+	// Machine-to-machine endpoint: GET /who
+	// Uses HMAC-SHA256 auth instead of Telegram Web App auth.
+	hmacMiddleware := middleware.HMACAuth(dutySecret)
+	router.GET("/who", hmacMiddleware, handlers.GetWho(s))
 
 	return router
 }
