@@ -1,12 +1,17 @@
 package notification
 
 import (
+	"net/http"
+	"net/url"
+	"io"
+	"bytes"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"context"
 	"errors"
 	"testing"
+	"strings"
 	"time"
 
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/korjavin/dutyassistant/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -211,4 +216,134 @@ func TestCheckAndNotify_SendFails(t *testing.T) {
 	// Should attempt to send twice (group + DM), both will fail but should be attempted
 	assert.Equal(t, 2, len(mockBot.Calls))
 	// We can't assert on logs directly without a more complex setup, but we expect the error to be logged.
+}
+
+
+
+func (m *MockStore) CreateChore(ctx context.Context, chore *store.Chore) error {
+	args := m.Called(ctx, chore)
+	return args.Error(0)
+}
+func (m *MockStore) GetChoreByReminderID(ctx context.Context, reminderID string) (*store.Chore, error) {
+	args := m.Called(ctx, reminderID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*store.Chore), args.Error(1)
+}
+func (m *MockStore) GetActiveChores(ctx context.Context) ([]*store.Chore, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*store.Chore), args.Error(1)
+}
+func (m *MockStore) GetOverdueChores(ctx context.Context) ([]*store.Chore, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*store.Chore), args.Error(1)
+}
+func (m *MockStore) CompleteChoreByReminderID(ctx context.Context, reminderID string) error {
+	args := m.Called(ctx, reminderID)
+	return args.Error(0)
+}
+func (m *MockStore) GetTopOverdueChores(ctx context.Context, limit int) ([]*store.ChoreStat, error) {
+	args := m.Called(ctx, limit)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*store.ChoreStat), args.Error(1)
+}
+func (m *MockStore) GetTopCompletedChoresUsers(ctx context.Context, limit int) ([]*store.UserChoreStat, error) {
+	args := m.Called(ctx, limit)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*store.UserChoreStat), args.Error(1)
+}
+func (m *MockStore) GetLastChoreDigestDate(ctx context.Context) (string, error) {
+	args := m.Called(ctx)
+	return args.String(0), args.Error(1)
+}
+func (m *MockStore) SetLastChoreDigestDate(ctx context.Context, date string) error {
+	args := m.Called(ctx, date)
+	return args.Error(0)
+}
+
+
+func TestSendDailyChoreSummary_NoOverdue(t *testing.T) {
+	mockStore := new(MockStore)
+	var sentText string
+	bot := setupBotAPI(t, func(form url.Values) { sentText = form.Get("text") })
+
+	mockStore.On("GetLastChoreDigestDate", mock.Anything).Return("", nil)
+	mockStore.On("GetOverdueChores", mock.Anything).Return([]*store.Chore{}, nil)
+	mockStore.On("SetLastChoreDigestDate", mock.Anything, mock.Anything).Return(nil)
+
+	err := SendDailyChoreSummary(context.Background(), bot, mockStore, 123, true, "UTC")
+	assert.NoError(t, err)
+	assert.Contains(t, sentText, "Просроченных chores нет")
+}
+
+func TestSendDailyChoreSummary_Idempotency(t *testing.T) {
+	mockStore := new(MockStore)
+	var sentMessages []string
+	bot := setupBotAPI(t, func(form url.Values) { sentMessages = append(sentMessages, form.Get("text")) })
+
+	todayStr := time.Now().UTC().Format("2006-01-02")
+
+	// First call - should skip because date matches today
+	mockStore.On("GetLastChoreDigestDate", mock.Anything).Return(todayStr, nil)
+
+	err := SendDailyChoreSummary(context.Background(), bot, mockStore, 123, true, "UTC")
+	assert.NoError(t, err)
+	assert.Equal(t, 0, len(sentMessages))
+
+	// Verify GetOverdueChores was NOT called (we skip early)
+	mockStore.AssertNotCalled(t, "GetOverdueChores")
+}
+
+func TestSendDailyChoreSummary_NotCronIgnoresIdempotency(t *testing.T) {
+	mockStore := new(MockStore)
+	var sentMessages []string
+	bot := setupBotAPI(t, func(form url.Values) { sentMessages = append(sentMessages, form.Get("text")) })
+
+	mockStore.On("GetOverdueChores", mock.Anything).Return([]*store.Chore{}, nil)
+
+	// isCron=false, should NOT check last date, should send the empty message
+	err := SendDailyChoreSummary(context.Background(), bot, mockStore, 123, false, "UTC")
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(sentMessages))
+	assert.Contains(t, sentMessages[0], "Просроченных chores нет")
+}
+
+
+type RoundTripFunc func(req *http.Request) *http.Response
+func (f RoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req), nil
+}
+func NewTestClient(fn RoundTripFunc) *http.Client {
+	return &http.Client{Transport: fn}
+}
+
+func setupBotAPI(t *testing.T, checkReq func(url.Values)) *tgbotapi.BotAPI {
+	client := NewTestClient(func(req *http.Request) *http.Response {
+		if strings.Contains(req.URL.String(), "sendMessage") {
+			bodyBytes, _ := io.ReadAll(req.Body)
+			form, _ := url.ParseQuery(string(bodyBytes))
+			if checkReq != nil {
+				checkReq(form)
+			}
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewBufferString(`{"ok":true, "result": {"message_id": 1}}`)), Header: make(http.Header)}
+		}
+		if strings.Contains(req.URL.String(), "getMe") {
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewBufferString(`{"ok":true, "result": {"id": 123456, "is_bot": true, "first_name": "TestBot"}}`)), Header: make(http.Header)}
+		}
+		return &http.Response{StatusCode: 404, Body: io.NopCloser(bytes.NewBufferString(`{}`)), Header: make(http.Header)}
+	})
+	bot, err := tgbotapi.NewBotAPIWithClient("TOKEN", tgbotapi.APIEndpoint, client)
+	assert.NoError(t, err)
+	return bot
 }

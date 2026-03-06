@@ -19,6 +19,7 @@ import (
 
 func TestHandleChore_NotAdmin(t *testing.T) {
 	mockStore := new(mocks.MockStore)
+	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
 	// Create handlers with groupID=0
 	h := handlers.New(mockStore, nil, 0)
 
@@ -60,6 +61,7 @@ func TestHandleChore_NoArgs_EntersInteractiveMode(t *testing.T) {
 
 func TestHandleChore_Success(t *testing.T) {
 	mockStore := new(mocks.MockStore)
+	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
 	mockScheduler := new(mocks.MockScheduler)
 	// Create with admin ID 123 and group ID 0
 	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
@@ -75,6 +77,7 @@ func TestHandleChore_Success(t *testing.T) {
 
 	// Mock off-duty check - everyone on duty
 	mockStore.On("IsUserOffDuty", mock.Anything, mock.Anything, mock.Anything).Return(false, nil)
+	mockStore.On("CreateChore", mock.Anything, mock.Anything).Return(nil)
 
 	message := &tgbotapi.Message{
 		Chat:     &tgbotapi.Chat{ID: 789},
@@ -114,6 +117,7 @@ func TestHandleChore_NoActiveUsers(t *testing.T) {
 
 func TestHandleChore_HTMLInjection(t *testing.T) {
 	mockStore := new(mocks.MockStore)
+	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
 	mockScheduler := new(mocks.MockScheduler)
 	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
 
@@ -122,6 +126,7 @@ func TestHandleChore_HTMLInjection(t *testing.T) {
 	}
 	mockStore.On("ListActiveUsers", mock.Anything).Return(activeUsers, nil)
 	mockStore.On("IsUserOffDuty", mock.Anything, mock.Anything, mock.Anything).Return(false, nil)
+	mockStore.On("CreateChore", mock.Anything, mock.Anything).Return(nil)
 
 	message := &tgbotapi.Message{
 		Chat:     &tgbotapi.Chat{ID: 789},
@@ -152,6 +157,7 @@ func NewTestClient(fn RoundTripFunc) *http.Client {
 
 func TestHandleChore_GroupAnnouncement(t *testing.T) {
 	mockStore := new(mocks.MockStore)
+	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
 	mockScheduler := new(mocks.MockScheduler)
 	groupID := int64(-1001234567890)
 	h := handlers.NewWithAdminID(mockStore, mockScheduler, groupID, 123)
@@ -161,6 +167,7 @@ func TestHandleChore_GroupAnnouncement(t *testing.T) {
 	}
 	mockStore.On("ListActiveUsers", mock.Anything).Return(activeUsers, nil)
 	mockStore.On("IsUserOffDuty", mock.Anything, mock.Anything, mock.Anything).Return(false, nil)
+	mockStore.On("CreateChore", mock.Anything, mock.Anything).Return(nil)
 
 	// Mock Bot API client
 	client := NewTestClient(func(req *http.Request) *http.Response {
@@ -210,6 +217,7 @@ func TestHandleChore_GroupAnnouncement(t *testing.T) {
 
 func TestHandleChore_MissingTelegramID_ShowsRegistrationHint(t *testing.T) {
 	mockStore := new(mocks.MockStore)
+	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
 	mockScheduler := new(mocks.MockScheduler)
 	groupID := int64(-1001234567890)
 	h := handlers.NewWithAdminID(mockStore, mockScheduler, groupID, 123)
@@ -219,6 +227,7 @@ func TestHandleChore_MissingTelegramID_ShowsRegistrationHint(t *testing.T) {
 	}
 	mockStore.On("ListActiveUsers", mock.Anything).Return(activeUsers, nil)
 	mockStore.On("IsUserOffDuty", mock.Anything, mock.Anything, mock.Anything).Return(false, nil)
+	mockStore.On("CreateChore", mock.Anything, mock.Anything).Return(nil)
 
 	client := NewTestClient(func(req *http.Request) *http.Response {
 		if req.URL.String() == "https://api.telegram.org/botTOKEN/getMe" {
@@ -253,6 +262,7 @@ func TestHandleChore_MissingTelegramID_ShowsRegistrationHint(t *testing.T) {
 
 func TestHandleChoreInteractive_Success(t *testing.T) {
 	mockStore := new(mocks.MockStore)
+	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
 	mockScheduler := new(mocks.MockScheduler)
 	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
 
@@ -266,6 +276,7 @@ func TestHandleChoreInteractive_Success(t *testing.T) {
 	}
 	mockStore.On("ListActiveUsers", mock.Anything).Return(activeUsers, nil)
 	mockStore.On("IsUserOffDuty", mock.Anything, mock.Anything, mock.Anything).Return(false, nil)
+	mockStore.On("CreateChore", mock.Anything, mock.Anything).Return(nil)
 
 	// Send a message with chore description
 	message := &tgbotapi.Message{
@@ -290,6 +301,7 @@ func TestHandleChoreInteractive_Success(t *testing.T) {
 
 func TestHandleChoreInteractive_EmptyDescription(t *testing.T) {
 	mockStore := new(mocks.MockStore)
+	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
 	mockScheduler := new(mocks.MockScheduler)
 	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
 
@@ -319,6 +331,7 @@ func TestHandleChoreInteractive_EmptyDescription(t *testing.T) {
 
 func TestHandleChoreInteractive_NoSession(t *testing.T) {
 	mockStore := new(mocks.MockStore)
+	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
 	mockScheduler := new(mocks.MockScheduler)
 	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
 
@@ -337,6 +350,7 @@ func TestHandleChoreInteractive_NoSession(t *testing.T) {
 
 func TestHandleChoreInteractive_WrongUser(t *testing.T) {
 	mockStore := new(mocks.MockStore)
+	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
 	mockScheduler := new(mocks.MockScheduler)
 	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
 
@@ -387,6 +401,7 @@ func TestSessionManager_SessionLifecycle(t *testing.T) {
 
 func TestHandleChoreDoneCallback_Success(t *testing.T) {
 	mockStore := new(mocks.MockStore)
+	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
 	mockScheduler := new(mocks.MockScheduler)
 	groupID := int64(-1001234567890)
 	h := handlers.NewWithAdminID(mockStore, mockScheduler, groupID, 123)
@@ -435,6 +450,7 @@ func TestHandleChoreDoneCallback_Success(t *testing.T) {
 
 func TestHandleChoreRemindCallback_Success(t *testing.T) {
 	mockStore := new(mocks.MockStore)
+	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
 	mockScheduler := new(mocks.MockScheduler)
 	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
 
@@ -472,6 +488,7 @@ func TestHandleChoreRemindCallback_Success(t *testing.T) {
 
 func TestHandleChoreDoneCallback_InvalidData(t *testing.T) {
 	mockStore := new(mocks.MockStore)
+	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
 	mockScheduler := new(mocks.MockScheduler)
 	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
 
@@ -492,6 +509,7 @@ func TestHandleChoreDoneCallback_InvalidData(t *testing.T) {
 
 func TestHandleChoreRemindCallback_InvalidData(t *testing.T) {
 	mockStore := new(mocks.MockStore)
+	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
 	mockScheduler := new(mocks.MockScheduler)
 	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
 
@@ -512,6 +530,7 @@ func TestHandleChoreRemindCallback_InvalidData(t *testing.T) {
 
 func TestHandleChoreInteractive_NoDoubleEscaping(t *testing.T) {
 	mockStore := new(mocks.MockStore)
+	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
 	mockScheduler := new(mocks.MockScheduler)
 	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
 
@@ -524,6 +543,7 @@ func TestHandleChoreInteractive_NoDoubleEscaping(t *testing.T) {
 	}
 	mockStore.On("ListActiveUsers", mock.Anything).Return(activeUsers, nil)
 	mockStore.On("IsUserOffDuty", mock.Anything, mock.Anything, mock.Anything).Return(false, nil)
+	mockStore.On("CreateChore", mock.Anything, mock.Anything).Return(nil)
 
 	// Send a message with HTML special characters
 	message := &tgbotapi.Message{
@@ -585,7 +605,7 @@ func TestSendInitialDM_IncludesDescriptionAndButtons(t *testing.T) {
 	bot, err := tgbotapi.NewBotAPIWithClient("TOKEN", tgbotapi.APIEndpoint, client)
 	assert.NoError(t, err)
 
-	crm := handlers.NewChoreReminderManager(bot)
+	crm := handlers.NewChoreReminderManager(bot, nil, 0)
 	assignment := &handlers.ChoreAssignment{
 		UserID:      777,
 		UserName:    "Vasiliy",
@@ -608,6 +628,7 @@ func TestHandleChore_WeightedSelection(t *testing.T) {
 	// This test verifies that the weighted selection works correctly
 	// by running multiple iterations and checking distribution
 	mockStore := new(mocks.MockStore)
+	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
 	mockScheduler := new(mocks.MockScheduler)
 	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
 
@@ -625,6 +646,7 @@ func TestHandleChore_WeightedSelection(t *testing.T) {
 
 	mockStore.On("ListActiveUsers", mock.Anything).Return(activeUsers, nil)
 	mockStore.On("IsUserOffDuty", mock.Anything, mock.Anything, mock.Anything).Return(false, nil)
+	mockStore.On("CreateChore", mock.Anything, mock.Anything).Return(nil)
 
 	// Run 1000 iterations to check distribution
 	counts := make(map[string]int)

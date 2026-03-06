@@ -206,3 +206,55 @@ func (m *MockStore) IsVacationMode(ctx context.Context) (bool, error) {
 	args := m.Called(ctx)
 	return args.Bool(0), args.Error(1)
 }
+func (m *MockStore) CreateChore(ctx context.Context, chore *store.Chore) error {
+	args := m.Called(ctx, chore)
+	return args.Error(0)
+}
+func (m *MockStore) GetChoreByReminderID(ctx context.Context, reminderID string) (*store.Chore, error) {
+	args := m.Called(ctx, reminderID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*store.Chore), args.Error(1)
+}
+func (m *MockStore) GetActiveChores(ctx context.Context) ([]*store.Chore, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*store.Chore), args.Error(1)
+}
+func (m *MockStore) GetOverdueChores(ctx context.Context) ([]*store.Chore, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*store.Chore), args.Error(1)
+}
+func (m *MockStore) CompleteChoreByReminderID(ctx context.Context, reminderID string) error {
+	args := m.Called(ctx, reminderID)
+	return args.Error(0)
+}
+func (m *MockStore) GetTopOverdueChores(ctx context.Context, limit int) ([]*store.ChoreStat, error) {
+	args := m.Called(ctx, limit)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*store.ChoreStat), args.Error(1)
+}
+func (m *MockStore) GetTopCompletedChoresUsers(ctx context.Context, limit int) ([]*store.UserChoreStat, error) {
+	args := m.Called(ctx, limit)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*store.UserChoreStat), args.Error(1)
+}
+
+func (m *MockStore) GetLastChoreDigestDate(ctx context.Context) (string, error) {
+	args := m.Called(ctx)
+	return args.String(0), args.Error(1)
+}
+func (m *MockStore) SetLastChoreDigestDate(ctx context.Context, date string) error {
+	args := m.Called(ctx, date)
+	return args.Error(0)
+}

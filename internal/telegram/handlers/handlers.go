@@ -23,7 +23,7 @@ func (h *Handlers) SetBot(bot *tgbotapi.BotAPI) {
 	h.Bot = bot
 	// Initialize ChoreReminderManager when bot is set
 	if h.ChoreReminderManager == nil {
-		h.ChoreReminderManager = NewChoreReminderManager(bot)
+		h.ChoreReminderManager = NewChoreReminderManager(bot, h.Store, h.GroupID)
 	}
 }
 

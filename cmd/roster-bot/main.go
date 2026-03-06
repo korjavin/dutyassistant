@@ -180,10 +180,29 @@ func main() {
 		log.Fatalf("Failed to schedule daily completion job: %v", err)
 	}
 
+	// Daily at 16:00 Berlin - Send daily chore summary
+	_, err = c.AddFunc("0 16 * * *", func() {
+		log.Println("[CRON] Running daily chore summary (16:00 Berlin)")
+		err := notification.SendDailyChoreSummary(context.Background(), bot.API(), store, dishGroupID, true, getEnv("CHORE_TIMEZONE", "Europe/Berlin"))
+		if err != nil {
+			log.Printf("[CRON] Error sending daily chore summary: %v", err)
+		} else {
+			log.Printf("[CRON] Successfully sent daily chore summary")
+		}
+	})
+	if err != nil {
+		log.Fatalf("Failed to schedule daily chore summary job: %v", err)
+	}
+
 	// Sunday at 21:10 PM Berlin - Send weekly stats
 	_, err = c.AddFunc("10 21 * * 0", func() {
 		log.Println("[CRON] Running weekly stats (Sunday 21:10 PM Berlin)")
-		// TODO: Implement weekly stats gathering and sending to DISH_GROUP
+		err := notification.SendWeeklyChoreStats(context.Background(), bot.API(), store, dishGroupID)
+		if err != nil {
+			log.Printf("[CRON] Error sending weekly chore stats: %v", err)
+		} else {
+			log.Printf("[CRON] Successfully sent weekly chore stats")
+		}
 		log.Printf("[CRON] Weekly stats job executed")
 	})
 	if err != nil {

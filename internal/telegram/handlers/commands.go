@@ -1,6 +1,9 @@
 package handlers
 
 import (
+	"github.com/korjavin/dutyassistant/internal/notification"
+	"os"
+	"strings"
 	"context"
 	"fmt"
 	"log"
@@ -130,6 +133,70 @@ func (h *Handlers) HandleStatus(m *tgbotapi.Message) (tgbotapi.MessageConfig, er
 		offDutyText)
 
 	msg := tgbotapi.NewMessage(m.Chat.ID, message)
+	msg.ParseMode = tgbotapi.ModeHTML
+	return msg, nil
+}
+
+
+// HandleOverdue handles the /overdue command for admins.
+func (h *Handlers) HandleOverdue(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
+	isAdmin, err := h.checkAdmin(m.From.ID)
+	if err != nil || !isAdmin {
+		return tgbotapi.NewMessage(m.Chat.ID, adminOnlyMessage), nil
+	}
+
+	err = notification.SendDailyChoreSummary(context.Background(), h.Bot, h.Store, m.Chat.ID, false, os.Getenv("CHORE_TIMEZONE"))
+	if err != nil {
+		return tgbotapi.NewMessage(m.Chat.ID, "Failed to generate overdue report."), nil
+	}
+
+	// SendDailyChoreSummary already sent the message to m.Chat.ID, so we just return empty or a small ack
+	// Wait, tgbotapi.MessageConfig requires text. Returning empty text fails.
+	// We should just return nil error and ignore the Config, but handlers expect MessageConfig.
+	// Actually we can return a small ack.
+	return tgbotapi.NewMessage(m.Chat.ID, "Report generated successfully. 👆"), nil
+}
+
+// HandleChoreStats handles the /chore_stats command for admins.
+func (h *Handlers) HandleChoreStats(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
+	isAdmin, err := h.checkAdmin(m.From.ID)
+	if err != nil || !isAdmin {
+		return tgbotapi.NewMessage(m.Chat.ID, adminOnlyMessage), nil
+	}
+
+	topOverdue, err := h.Store.GetTopOverdueChores(context.Background(), 5)
+	if err != nil {
+		return tgbotapi.NewMessage(m.Chat.ID, "Failed to fetch overdue stats."), nil
+	}
+
+	topUsers, err := h.Store.GetTopCompletedChoresUsers(context.Background(), 5)
+	if err != nil {
+		return tgbotapi.NewMessage(m.Chat.ID, "Failed to fetch user stats."), nil
+	}
+
+	var sb strings.Builder
+	sb.WriteString("📊 <b>Chore Statistics</b>\n\n")
+
+	sb.WriteString("🔥 <b>Top 5 Overdue Chores:</b>\n")
+	if len(topOverdue) == 0 {
+		sb.WriteString("No overdue chores recorded.\n")
+	} else {
+		for i, chore := range topOverdue {
+			sb.WriteString(fmt.Sprintf("%d. %s (%d times)\n", i+1, chore.Description, chore.Count))
+		}
+	}
+	sb.WriteString("\n")
+
+	sb.WriteString("🏆 <b>Top 5 Users (Completed Chores):</b>\n")
+	if len(topUsers) == 0 {
+		sb.WriteString("No completed chores recorded.\n")
+	} else {
+		for i, stat := range topUsers {
+			sb.WriteString(fmt.Sprintf("%d. %s (%d completed)\n", i+1, stat.Name, stat.Count))
+		}
+	}
+
+	msg := tgbotapi.NewMessage(m.Chat.ID, sb.String())
 	msg.ParseMode = tgbotapi.ModeHTML
 	return msg, nil
 }

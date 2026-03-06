@@ -442,3 +442,31 @@ func TestScheduler_ChangeDutyUser_PastDate(t *testing.T) {
 		t.Fatal("Expected error when changing past duty, got nil")
 	}
 }
+func (m *mockStore) CreateChore(ctx context.Context, chore *store.Chore) error {
+	return nil
+}
+func (m *mockStore) GetChoreByReminderID(ctx context.Context, reminderID string) (*store.Chore, error) {
+	return nil, nil
+}
+func (m *mockStore) GetActiveChores(ctx context.Context) ([]*store.Chore, error) {
+	return nil, nil
+}
+func (m *mockStore) GetOverdueChores(ctx context.Context) ([]*store.Chore, error) {
+	return nil, nil
+}
+func (m *mockStore) CompleteChoreByReminderID(ctx context.Context, reminderID string) error {
+	return nil
+}
+func (m *mockStore) GetTopOverdueChores(ctx context.Context, limit int) ([]*store.ChoreStat, error) {
+	return nil, nil
+}
+func (m *mockStore) GetTopCompletedChoresUsers(ctx context.Context, limit int) ([]*store.UserChoreStat, error) {
+	return nil, nil
+}
+
+func (m *mockStore) GetLastChoreDigestDate(ctx context.Context) (string, error) {
+	return "", nil
+}
+func (m *mockStore) SetLastChoreDigestDate(ctx context.Context, date string) error {
+	return nil
+}

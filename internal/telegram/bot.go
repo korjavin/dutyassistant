@@ -184,6 +184,10 @@ func (b *Bot) handleCommand(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 		return b.handlers.HandleVolunteer(m)
 	case "chore":
 		return b.handlers.HandleChore(m)
+	case "overdue":
+		return b.handlers.HandleOverdue(m)
+	case "chore_stats":
+		return b.handlers.HandleChoreStats(m)
 	case "assign":
 		return b.handlers.HandleAssign(m)
 	case "unassign":
@@ -276,4 +280,9 @@ func (b *Bot) handleMessage(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 		log.Printf("Unknown session type: %s", session.Type)
 		return nil, nil
 	}
+}
+
+// API returns the underlying Telegram Bot API instance.
+func (b *Bot) API() *tgbotapi.BotAPI {
+	return b.api
 }
