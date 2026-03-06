@@ -76,6 +76,7 @@ type Store interface {
 	CompleteDuty(ctx context.Context, date time.Time) error
 	GetTodaysDuty(ctx context.Context) (*Duty, error)
 	GetCompletedDutiesInRange(ctx context.Context, start, end time.Time) ([]*Duty, error)
+	GetLastDuty(ctx context.Context) (*Duty, error)
 
 	// Queue management methods
 	AddToVolunteerQueue(ctx context.Context, userID int64, days int) error

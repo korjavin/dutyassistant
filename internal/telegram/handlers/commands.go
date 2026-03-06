@@ -20,7 +20,8 @@ const (
 		"/help - Show this help message.\n" +
 		"/status - Show your current duty statistics.\n" +
 		"/schedule - View the duty schedule for the current month.\n" +
-		"/volunteer <days> - Add days to your volunteer queue.\n\n" +
+		"/volunteer <days> - Add days to your volunteer queue.\n" +
+		"/explain - Explain how the last assignment was made.\n\n" +
 		"*Admin Commands:*\n" +
 		"/chore <description> - Assign a chore to a random active user.\n" +
 		"/assign <username> <days> - Add days to user's admin queue.\n" +
@@ -131,5 +132,19 @@ func (h *Handlers) HandleStatus(m *tgbotapi.Message) (tgbotapi.MessageConfig, er
 
 	msg := tgbotapi.NewMessage(m.Chat.ID, message)
 	msg.ParseMode = tgbotapi.ModeHTML
+	return msg, nil
+}
+
+// HandleExplain provides an explanation of how the last assignment was made.
+func (h *Handlers) HandleExplain(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
+	log.Printf("[HandleExplain] User %d triggered /explain", m.From.ID)
+
+	explanation, err := h.Scheduler.ExplainLastAssignment(context.Background())
+	if err != nil {
+		log.Printf("[HandleExplain] Error explaining last assignment: %v", err)
+		return tgbotapi.NewMessage(m.Chat.ID, "Не удалось получить объяснение: "+err.Error()), nil
+	}
+
+	msg := tgbotapi.NewMessage(m.Chat.ID, explanation)
 	return msg, nil
 }

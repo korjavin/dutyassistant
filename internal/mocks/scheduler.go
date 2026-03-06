@@ -57,3 +57,8 @@ func (m *MockScheduler) IsVacationMode(ctx context.Context) (bool, error) {
 	args := m.Called(ctx)
 	return args.Bool(0), args.Error(1)
 }
+
+func (m *MockScheduler) ExplainLastAssignment(ctx context.Context) (string, error) {
+	args := m.Called(ctx)
+	return args.String(0), args.Error(1)
+}

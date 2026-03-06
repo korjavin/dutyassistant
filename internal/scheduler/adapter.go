@@ -28,6 +28,9 @@ type SchedulerInterface interface {
 	// SetOffDuty sets a user's off-duty period.
 	SetOffDuty(ctx context.Context, userID int64, start, end time.Time) error
 
+	// ExplainLastAssignment returns a human-readable explanation of the last duty assignment.
+	ExplainLastAssignment(ctx context.Context) (string, error)
+
 	// SetVacationMode sets the system vacation mode state.
 	SetVacationMode(ctx context.Context, enabled bool) error
 
