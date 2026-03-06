@@ -186,6 +186,10 @@ func (b *Bot) handleCommand(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 		return b.handlers.HandleChore(m)
 	case "assign":
 		return b.handlers.HandleAssign(m)
+	case "list":
+		return b.handlers.HandleList(m)
+	case "cancel":
+		return b.handlers.HandleCancel(m)
 	case "unassign":
 		return b.handlers.HandleUnassign(m)
 	case "modify":

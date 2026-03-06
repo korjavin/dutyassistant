@@ -78,6 +78,15 @@ func (s *SQLiteStore) migrate(ctx context.Context) error {
 			value TEXT NOT NULL,
 			updated_at TEXT NOT NULL
 		);
+
+		CREATE TABLE IF NOT EXISTS recurring_chores (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			description TEXT NOT NULL,
+			interval_days INTEGER NOT NULL,
+			next_run_at TEXT NOT NULL,
+			is_active INTEGER NOT NULL DEFAULT 1,
+			created_at TEXT NOT NULL
+		);
 	`
 	if _, err := s.db.ExecContext(ctx, schema); err != nil {
 		return err

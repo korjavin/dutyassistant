@@ -59,6 +59,12 @@ func (m *MockStore) GetOffDutyUsers(ctx context.Context, date time.Time) ([]*sto
 }
 func (m *MockStore) SetVacationMode(ctx context.Context, enabled bool) error { return nil }
 func (m *MockStore) IsVacationMode(ctx context.Context) (bool, error) { return false, nil }
+func (m *MockStore) CreateRecurringChore(ctx context.Context, chore *store.RecurringChore) error { return nil }
+func (m *MockStore) GetRecurringChore(ctx context.Context, id int64) (*store.RecurringChore, error) { return nil, nil }
+func (m *MockStore) GetActiveRecurringChores(ctx context.Context) ([]*store.RecurringChore, error) { return nil, nil }
+func (m *MockStore) GetDueRecurringChores(ctx context.Context, before time.Time) ([]*store.RecurringChore, error) { return nil, nil }
+func (m *MockStore) UpdateRecurringChoreNextRun(ctx context.Context, id int64, nextRun time.Time) error { return nil }
+func (m *MockStore) CancelRecurringChore(ctx context.Context, id int64) error { return nil }
 
 // MockScheduler is a mock implementation of the Scheduler interface.
 type MockScheduler struct {
