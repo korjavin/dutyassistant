@@ -105,7 +105,7 @@ func TestExplainLastAssignment_Volunteer(t *testing.T) {
 	assert.Contains(t, explanation, "Последнее назначение: @alex")
 	assert.Contains(t, explanation, "Кандидаты: @alex, @maria")
 	assert.Contains(t, explanation, "Оставшиеся кандидаты: @alex")
-	assert.Contains(t, explanation, "доброволец с наивысшим приоритетом")
+	assert.Contains(t, explanation, "доброволец с наибольшим количеством дней (tie-break случайный при равенстве).")
 }
 
 func TestExplainLastAssignment_Admin(t *testing.T) {
@@ -140,5 +140,45 @@ func TestExplainLastAssignment_Admin(t *testing.T) {
 	assert.Contains(t, explanation, "Последнее назначение: @alex")
 	assert.Contains(t, explanation, "Кандидаты: @alex, @maria")
 	assert.Contains(t, explanation, "Оставшиеся кандидаты: @alex")
-	assert.Contains(t, explanation, "назначен администратором")
+	assert.Contains(t, explanation, "назначен администратором с наибольшим количеством дней в очереди (tie-break случайный при равенстве).")
+}
+
+func TestExplainLastAssignment_PostDecrementZero(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	s := NewScheduler(mockStore)
+	ctx := context.Background()
+
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+
+	// User alex now has 0 days because it was decremented during assignment
+	u1 := &store.User{ID: 1, FirstName: "alex", IsActive: true, VolunteerQueueDays: 0}
+	u2 := &store.User{ID: 2, FirstName: "maria", IsActive: true, VolunteerQueueDays: 0}
+
+	lastDuty := &store.Duty{
+		ID:             1,
+		UserID:         1, // assigned to alex
+		User:           u1,
+		DutyDate:       today,
+		AssignmentType: store.AssignmentTypeVoluntary,
+	}
+
+	mockStore.On("GetLastDuty", ctx).Return(lastDuty, nil)
+	mockStore.On("ListActiveUsers", ctx).Return([]*store.User{u1, u2}, nil)
+	mockStore.On("GetCompletedDutiesInRange", ctx, mock.Anything, mock.Anything).Return([]*store.Duty{}, nil)
+
+	mockStore.On("IsUserOffDuty", ctx, int64(1), today).Return(false, nil)
+	mockStore.On("IsUserOffDuty", ctx, int64(2), today).Return(false, nil)
+
+	explanation, err := s.ExplainLastAssignment(ctx)
+
+	assert.NoError(t, err)
+	assert.Contains(t, explanation, "Последнее назначение: @alex")
+	assert.Contains(t, explanation, "Кандидаты: @alex, @maria")
+
+	// Maria was excluded because she had 0
+	assert.Contains(t, explanation, "@maria — нет дней в очереди")
+
+	// Alex was left in remaining candidates even though current DB count is 0
+	assert.Contains(t, explanation, "Оставшиеся кандидаты: @alex")
 }
