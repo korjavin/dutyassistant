@@ -159,6 +159,10 @@ func (m *mockStore) GetCompletedDutiesInRange(ctx context.Context, start, end ti
 	return []*store.Duty{}, nil
 }
 
+func (m *mockStore) GetLastDuty(ctx context.Context) (*store.Duty, error) {
+	return nil, nil // not fully mocked
+}
+
 func (m *mockStore) AddToVolunteerQueue(ctx context.Context, userID int64, days int) error {
 	for _, u := range m.users {
 		if u.ID == userID {

@@ -89,6 +89,7 @@ The project uses GitHub Actions for automated builds and deployments. On push to
 - `/status` - View your duty statistics and queue status
 - `/schedule` - View the current month's duty schedule
 - `/volunteer` - Volunteer for duty (shows interactive day selection buttons)
+- `/explain` - Explain how the most recent dish hero duty was assigned
 
 ### Admin Commands
 - `/assign` - Assign days to a user's admin queue (interactive user + days selection)
@@ -134,6 +135,16 @@ All times in **Europe/Berlin timezone**:
 - **21:00 PM Daily** - Mark today's duty as completed
 - **21:10 PM Sunday** - Send weekly duty statistics report (TODO: implement)
 
+### Explanation System
+
+The `/explain` command provides transparency into the bot's assignment logic. It shows:
+- The assigned user and timestamp of the assignment
+- The list of candidates considered
+- Users excluded and why (e.g., off-duty, recently assigned)
+- The final rule/tie-breaker used for the decision
+
 ## Database Schema
 
 See [logic.md](logic.md) for complete database schema and assignment logic details.
+### `/explain` - Explain Last Assignment
+Explain how the most recent dish hero duty was assigned. Shows the logic behind the choice (e.g., candidate availability, cooldowns, queues, and final criteria).

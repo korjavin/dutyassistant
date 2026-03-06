@@ -122,6 +122,15 @@ func (m *MockStore) GetTodaysDuty(ctx context.Context) (*store.Duty, error) {
 	return args.Get(0).(*store.Duty), args.Error(1)
 }
 
+// GetLastDuty mocks the GetLastDuty method.
+func (m *MockStore) GetLastDuty(ctx context.Context) (*store.Duty, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*store.Duty), args.Error(1)
+}
+
 // GetCompletedDutiesInRange mocks the GetCompletedDutiesInRange method.
 func (m *MockStore) GetCompletedDutiesInRange(ctx context.Context, start, end time.Time) ([]*store.Duty, error) {
 	args := m.Called(ctx, start, end)
