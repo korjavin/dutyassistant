@@ -185,7 +185,7 @@ func (h *Handlers) assignRecurringChore(ctx context.Context, chore *store.Recurr
 		ReminderID:  reminderID,
 	}
 	if err := h.Store.CreateChore(ctx, dbChore); err != nil {
-		log.Printf("Warning: failed to save recurring chore to database: %v", err)
+		return fmt.Errorf("failed to save recurring chore to database: %v", err)
 	}
 
 	// 7. Send DM to assigned user and schedule reminder (Best Effort)

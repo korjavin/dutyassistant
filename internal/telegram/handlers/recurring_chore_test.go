@@ -196,7 +196,12 @@ func TestProcessRecurringChores_Success(t *testing.T) {
 	}
 	mockStore.On("ListActiveUsers", mock.Anything).Return(users, nil)
 	mockStore.On("GetOffDutyUsers", mock.Anything, mock.Anything).Return([]*store.User{}, nil)
-	mockStore.On("CreateChore", mock.Anything, mock.Anything).Return(nil)
+
+	var capturedReminderID string
+	mockStore.On("CreateChore", mock.Anything, mock.MatchedBy(func(c *store.Chore) bool {
+		capturedReminderID = c.ReminderID
+		return c.Description == "Foo" && c.ReminderID != ""
+	})).Return(nil)
 
 	// 3. update next run
 	mockStore.On("UpdateRecurringChoreNextRun", mock.Anything, int64(1), mock.MatchedBy(func(next time.Time) bool {
@@ -205,6 +210,9 @@ func TestProcessRecurringChores_Success(t *testing.T) {
 
 	err := h.ProcessRecurringChores(context.Background())
 	assert.NoError(t, err)
+
+	// Assert the captured ID is non-empty
+	assert.NotEmpty(t, capturedReminderID, "ReminderID should not be empty")
 
 	// Ensure methods were called
 	mockStore.AssertExpectations(t)
