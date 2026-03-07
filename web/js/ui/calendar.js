@@ -6,6 +6,16 @@ import { createDutyCard, createModal, showModal, createLoadingSpinner, createErr
 const calendarContainer = document.getElementById('calendar-container');
 let calendar;
 let scheduleLoadSeq = 0;
+const calendarElementId = 'calendar';
+
+function ensureCalendarElement() {
+    let element = document.getElementById(calendarElementId);
+    if (!element) {
+        calendarContainer.innerHTML = `<div id="${calendarElementId}"></div>`;
+        element = document.getElementById(calendarElementId);
+    }
+    return element;
+}
 
 function isCalendarDebugEnabled() {
     const params = new URLSearchParams(window.location.search);
@@ -282,21 +292,16 @@ function renderCalendar(scheduleData = {}, prognosisData = {}) {
         },
     };
 
+    // Recreate calendar instance on every render to avoid stale closures
+    // and duplicated internal handlers from month-to-month updates.
     if (calendar) {
-        // This calendar build expects options on the instance itself.
-        // Updating the custom `calendar.options` field has no effect.
-        Object.assign(calendar, options);
-        calendar.update({
-            year: true,
-            month: true,
-            dates: true,
-            holidays: true,
-            time: true,
-        });
-    } else {
-        calendar = new VanillaCalendar(calendarContainer, options);
-        calendar.init();
+        calendar.destroy();
+        calendar = null;
     }
+
+    const calendarElement = ensureCalendarElement();
+    calendar = new VanillaCalendar(calendarElement, options);
+    calendar.init();
 }
 
 /**
@@ -410,9 +415,7 @@ export function initializeCalendar() {
         currentMonth: today.getMonth() + 1,
     });
 
-    if (!document.getElementById('calendar')) {
-        calendarContainer.innerHTML = '<div id="calendar"></div>';
-    }
+    ensureCalendarElement();
 
     loadAndDisplaySchedule();
 }
