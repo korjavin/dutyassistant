@@ -160,6 +160,39 @@ func TestDutyLifecycle(t *testing.T) {
 	}
 }
 
+func TestGetDutiesByMonth_OrphanDutyRow(t *testing.T) {
+	s := setupTestDB(t)
+	ctx := context.Background()
+
+	// Simulate legacy/orphan data where duty row exists but linked user is missing.
+	if _, err := s.db.ExecContext(ctx, `PRAGMA foreign_keys = OFF`); err != nil {
+		t.Fatalf("Failed to disable foreign keys: %v", err)
+	}
+
+	createdAt := time.Now().UTC().Format(time.RFC3339)
+	if _, err := s.db.ExecContext(ctx,
+		`INSERT INTO duties (user_id, duty_date, assignment_type, created_at, completed_at) VALUES (?, ?, ?, ?, ?)`,
+		int64(999999), "2026-02-14", "round_robin", createdAt, nil,
+	); err != nil {
+		t.Fatalf("Failed to insert orphan duty: %v", err)
+	}
+
+	if _, err := s.db.ExecContext(ctx, `PRAGMA foreign_keys = ON`); err != nil {
+		t.Fatalf("Failed to re-enable foreign keys: %v", err)
+	}
+
+	duties, err := s.GetDutiesByMonth(ctx, 2026, time.February)
+	if err != nil {
+		t.Fatalf("GetDutiesByMonth failed for orphan duty row: %v", err)
+	}
+	if len(duties) != 1 {
+		t.Fatalf("Expected 1 duty in February, got %d", len(duties))
+	}
+	if duties[0].User != nil {
+		t.Fatalf("Expected duty user to be nil for orphan row, got %+v", duties[0].User)
+	}
+}
+
 func TestRoundRobin(t *testing.T) {
 	s := setupTestDB(t)
 	ctx := context.Background()
