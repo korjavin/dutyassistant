@@ -7,6 +7,30 @@ const calendarContainer = document.getElementById('calendar-container');
 let calendar;
 
 /**
+ * Normalizes incoming date values to YYYY-MM-DD keys used in calendar maps.
+ * @param {string} value
+ * @returns {string}
+ */
+function normalizeDateKey(value) {
+    if (!value) {
+        return '';
+    }
+
+    const raw = String(value);
+    const directMatch = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (directMatch) {
+        return directMatch[1];
+    }
+
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) {
+        return '';
+    }
+
+    return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
+}
+
+/**
  * Fetches and displays the schedule for the current month.
  */
 async function loadAndDisplaySchedule() {
@@ -49,7 +73,10 @@ function renderCalendar(scheduleData = {}, prognosisData = {}) {
     // Add actual duties
     if (scheduleData.duties) {
         scheduleData.duties.forEach(duty => {
-            const date = duty.date.split('T')[0];
+            const date = normalizeDateKey(duty.date);
+            if (!date) {
+                return;
+            }
             if (!dutiesByDate[date]) {
                 dutiesByDate[date] = [];
             }
@@ -79,15 +106,19 @@ function renderCalendar(scheduleData = {}, prognosisData = {}) {
     // Add prognosis for unassigned days
     if (prognosisData.prognosis) {
         prognosisData.prognosis.forEach(prog => {
-            if (!dutiesByDate[prog.date]) {
-                dutiesByDate[prog.date] = [];
+            const date = normalizeDateKey(prog.date);
+            if (!date) {
+                return;
             }
-            dutiesByDate[prog.date].push({
+            if (!dutiesByDate[date]) {
+                dutiesByDate[date] = [];
+            }
+            dutiesByDate[date].push({
                 displayName: prog.user_name,
                 typeClass: 'text-gray-400 italic',
                 assignment_type: 'prognosis (round-robin)',
                 isPrognosis: true,
-                date: prog.date
+                date
             });
         });
     }
@@ -112,7 +143,10 @@ function renderCalendar(scheduleData = {}, prognosisData = {}) {
         },
         actions: {
             clickDay(event, self) {
-                const date = self.selectedDates[0];
+                const date = normalizeDateKey(self.selectedDates?.[0]);
+                if (!date) {
+                    return;
+                }
                 if (dutiesByDate[date]) {
                     const duties = dutiesByDate[date];
                     const content = duties.map(duty => `
@@ -176,7 +210,7 @@ function renderCalendar(scheduleData = {}, prognosisData = {}) {
                 loadAndDisplaySchedule();
             },
             getDays(day, date, HTMLElement, HTMLButtonElement, self) {
-                const dateStr = `${self.selectedYear}-${String(self.selectedMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const dateStr = normalizeDateKey(date) || `${self.selectedYear}-${String(self.selectedMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                 if (dutiesByDate[dateStr]) {
                     const duties = dutiesByDate[dateStr];
                     const namesHTML = duties.map(duty => {
