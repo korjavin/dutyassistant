@@ -6,6 +6,24 @@ import { createDutyCard, createModal, showModal, createLoadingSpinner, createErr
 const calendarContainer = document.getElementById('calendar-container');
 let calendar;
 
+function isCalendarDebugEnabled() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('debugCalendar') === '1') {
+        return true;
+    }
+    try {
+        return window.localStorage?.getItem('debugCalendar') === '1';
+    } catch {
+        return false;
+    }
+}
+
+function calendarDebug(...args) {
+    if (isCalendarDebugEnabled()) {
+        console.log('[CalendarDebug]', ...args);
+    }
+}
+
 /**
  * Normalizes incoming date values to YYYY-MM-DD keys used in calendar maps.
  * @param {string} value
@@ -36,6 +54,7 @@ function normalizeDateKey(value) {
 async function loadAndDisplaySchedule() {
     const { currentYear, currentMonth } = getState();
     calendarContainer.innerHTML = createLoadingSpinner();
+    calendarDebug('Loading month', { currentYear, currentMonth });
 
     try {
         const [scheduleData, prognosisData, usersData, choresData] = await Promise.all([
@@ -50,6 +69,12 @@ async function loadAndDisplaySchedule() {
         displayPendingChores(choresData);
 
         if (scheduleData) {
+            calendarDebug('Month payload ready', {
+                currentYear,
+                currentMonth,
+                dutiesCount: Array.isArray(scheduleData?.duties) ? scheduleData.duties.length : 0,
+                prognosisCount: Array.isArray(prognosisData?.prognosis) ? prognosisData.prognosis.length : 0,
+            });
             setState({ schedule: { [`${currentYear}-${currentMonth}`]: scheduleData } });
             renderCalendar(scheduleData, prognosisData);
         } else {
@@ -127,6 +152,16 @@ function renderCalendar(scheduleData = {}, prognosisData = {}) {
         date: dateStr,
         CSSClasses: ['has-duty'],
     }));
+    const monthPrefix = `${currentYear}-${String(currentMonth).padStart(2, '0')}-`;
+    const datesInCurrentMonth = dates.map(d => d.date).filter(d => d.startsWith(monthPrefix));
+    calendarDebug('Render month', {
+        currentYear,
+        currentMonth,
+        mappedDatesTotal: dates.length,
+        mappedDatesInCurrentMonth: datesInCurrentMonth.length,
+        sampleInCurrentMonth: datesInCurrentMonth.slice(0, 10),
+        sampleAllDates: dates.map(d => d.date).slice(0, 10),
+    });
 
     const options = {
         type: 'default',
