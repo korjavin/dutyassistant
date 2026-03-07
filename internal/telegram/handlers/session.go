@@ -87,12 +87,17 @@ func (sm *SessionManager) cleanupStale() {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		sm.mu.Lock()
-		for chatID, session := range sm.sessions {
-			if time.Since(session.CreatedAt) > 5*time.Minute {
-				delete(sm.sessions, chatID)
-			}
+		sm.removeStale(5 * time.Minute)
+	}
+}
+
+// removeStale removes sessions older than the given duration
+func (sm *SessionManager) removeStale(olderThan time.Duration) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	for chatID, session := range sm.sessions {
+		if time.Since(session.CreatedAt) > olderThan {
+			delete(sm.sessions, chatID)
 		}
-		sm.mu.Unlock()
 	}
 }
