@@ -153,10 +153,18 @@ func (s *Scheduler) AssignTodaysDuty(ctx context.Context) (*store.Duty, error) {
 
 // filterOffDutyUsers removes users who are off-duty on the given date.
 func (s *Scheduler) filterOffDutyUsers(ctx context.Context, users []*store.User, date time.Time) []*store.User {
+	offDutyUsers, err := s.store.GetOffDutyUsers(ctx, date)
+	if err != nil {
+		return users // Return all users on error to be safe, or should we return empty?
+	}
+	offDutyMap := make(map[int64]bool)
+	for _, u := range offDutyUsers {
+		offDutyMap[u.ID] = true
+	}
+
 	var available []*store.User
 	for _, user := range users {
-		offDuty, _ := s.store.IsUserOffDuty(ctx, user.ID, date)
-		if !offDuty {
+		if !offDutyMap[user.ID] {
 			available = append(available, user)
 		}
 	}

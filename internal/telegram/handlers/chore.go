@@ -161,15 +161,17 @@ func (h *Handlers) assignChore(chatID int64, fromUserID int64, description strin
 	// Using noon to check off-duty status as it's a daily check usually
 	checkDate := time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, now.Location())
 
+	offDutyUsers, err := h.Store.GetOffDutyUsers(context.Background(), checkDate)
+	if err != nil {
+		return tgbotapi.NewMessage(chatID, "Failed to retrieve off-duty users."), nil
+	}
+	offDutyMap := make(map[int64]bool)
+	for _, u := range offDutyUsers {
+		offDutyMap[u.ID] = true
+	}
+
 	for _, u := range users {
-		// Check if user is off-duty
-		isOff, err := h.Store.IsUserOffDuty(context.Background(), u.ID, checkDate)
-		if err != nil {
-			log.Printf("Error checking off-duty status for user %d: %v", u.ID, err)
-			// Assume not off-duty on error to be safe or skip? Skipping is safer for the user.
-			continue
-		}
-		if !isOff {
+		if !offDutyMap[u.ID] {
 			candidates = append(candidates, u)
 		}
 	}

@@ -32,6 +32,15 @@ func (s *Scheduler) ExplainLastAssignment(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("failed to get active users: %w", err)
 	}
 
+	offDutyUsers, err := s.store.GetOffDutyUsers(ctx, date)
+	if err != nil {
+		return "", fmt.Errorf("failed to get off duty users: %w", err)
+	}
+	offDutyMap := make(map[int64]bool)
+	for _, u := range offDutyUsers {
+		offDutyMap[u.ID] = true
+	}
+
 	// Calculate considered candidates and exclusions
 	var candidates []string
 	var exclusions []string
@@ -54,11 +63,7 @@ func (s *Scheduler) ExplainLastAssignment(ctx context.Context) (string, error) {
 	maxQueueCount := 0
 	if lastDuty.AssignmentType == store.AssignmentTypeVoluntary || lastDuty.AssignmentType == store.AssignmentTypeAdmin {
 		for _, u := range allUsers {
-			offDuty, err := s.store.IsUserOffDuty(ctx, u.ID, date)
-			if err != nil {
-				return "", fmt.Errorf("failed to check off duty status: %w", err)
-			}
-			if offDuty {
+			if offDutyMap[u.ID] {
 				continue
 			}
 
@@ -83,11 +88,7 @@ func (s *Scheduler) ExplainLastAssignment(ctx context.Context) (string, error) {
 	minCount := int(^uint(0) >> 1)
 	if lastDuty.AssignmentType == store.AssignmentTypeRoundRobin {
 		for _, u := range allUsers {
-			offDuty, err := s.store.IsUserOffDuty(ctx, u.ID, date)
-			if err != nil {
-				return "", fmt.Errorf("failed to check off duty status: %w", err)
-			}
-			if !offDuty {
+			if !offDutyMap[u.ID] {
 				if count := dutyCounts[u.ID]; count < minCount {
 					minCount = count
 				}
@@ -98,10 +99,7 @@ func (s *Scheduler) ExplainLastAssignment(ctx context.Context) (string, error) {
 	for _, user := range allUsers {
 		candidates = append(candidates, fmt.Sprintf("@%s", user.FirstName))
 
-		offDuty, err := s.store.IsUserOffDuty(ctx, user.ID, date)
-		if err != nil {
-			return "", fmt.Errorf("failed to check off duty status: %w", err)
-		}
+		offDuty := offDutyMap[user.ID]
 
 		if offDuty {
 			exclusions = append(exclusions, fmt.Sprintf("@%s — отсутствует по расписанию", user.FirstName))
@@ -146,11 +144,7 @@ func (s *Scheduler) ExplainLastAssignment(ctx context.Context) (string, error) {
 	// Remaining candidates
 	var remainingCandidates []string
 	for _, user := range allUsers {
-		offDuty, err := s.store.IsUserOffDuty(ctx, user.ID, date) // Error already checked
-		if err != nil {
-			return "", fmt.Errorf("failed to check off duty status: %w", err)
-		}
-		if offDuty {
+		if offDutyMap[user.ID] {
 			continue
 		}
 		if lastDuty.AssignmentType == store.AssignmentTypeRoundRobin {

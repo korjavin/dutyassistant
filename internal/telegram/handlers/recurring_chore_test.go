@@ -133,7 +133,7 @@ func TestProcessRecurringChores_Success(t *testing.T) {
 		{ID: 1, TelegramUserID: 123, FirstName: "Alice", IsActive: true},
 	}
 	mockStore.On("ListActiveUsers", mock.Anything).Return(users, nil)
-	mockStore.On("IsUserOffDuty", mock.Anything, int64(1), mock.Anything).Return(false, nil)
+	mockStore.On("GetOffDutyUsers", mock.Anything, mock.Anything).Return([]*store.User{}, nil)
 
 	// 3. update next run
 	mockStore.On("UpdateRecurringChoreNextRun", mock.Anything, int64(1), mock.MatchedBy(func(next time.Time) bool {

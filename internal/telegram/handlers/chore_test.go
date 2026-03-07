@@ -76,7 +76,7 @@ func TestHandleChore_Success(t *testing.T) {
 	mockStore.On("ListActiveUsers", mock.Anything).Return(activeUsers, nil)
 
 	// Mock off-duty check - everyone on duty
-	mockStore.On("IsUserOffDuty", mock.Anything, mock.Anything, mock.Anything).Return(false, nil)
+	mockStore.On("GetOffDutyUsers", mock.Anything, mock.Anything).Return([]*store.User{}, nil)
 	mockStore.On("CreateChore", mock.Anything, mock.Anything).Return(nil)
 
 	message := &tgbotapi.Message{
@@ -125,7 +125,7 @@ func TestHandleChore_HTMLInjection(t *testing.T) {
 		{ID: 10, FirstName: "<b>EvilUser</b>", IsActive: true},
 	}
 	mockStore.On("ListActiveUsers", mock.Anything).Return(activeUsers, nil)
-	mockStore.On("IsUserOffDuty", mock.Anything, mock.Anything, mock.Anything).Return(false, nil)
+	mockStore.On("GetOffDutyUsers", mock.Anything, mock.Anything).Return([]*store.User{}, nil)
 	mockStore.On("CreateChore", mock.Anything, mock.Anything).Return(nil)
 
 	message := &tgbotapi.Message{
@@ -166,7 +166,7 @@ func TestHandleChore_GroupAnnouncement(t *testing.T) {
 		{ID: 10, TelegramUserID: 111, FirstName: "Alice", IsActive: true},
 	}
 	mockStore.On("ListActiveUsers", mock.Anything).Return(activeUsers, nil)
-	mockStore.On("IsUserOffDuty", mock.Anything, mock.Anything, mock.Anything).Return(false, nil)
+	mockStore.On("GetOffDutyUsers", mock.Anything, mock.Anything).Return([]*store.User{}, nil)
 	mockStore.On("CreateChore", mock.Anything, mock.Anything).Return(nil)
 
 	// Mock Bot API client
@@ -226,7 +226,7 @@ func TestHandleChore_MissingTelegramID_ShowsRegistrationHint(t *testing.T) {
 		{ID: 10, TelegramUserID: 0, FirstName: "Alice", IsActive: true},
 	}
 	mockStore.On("ListActiveUsers", mock.Anything).Return(activeUsers, nil)
-	mockStore.On("IsUserOffDuty", mock.Anything, mock.Anything, mock.Anything).Return(false, nil)
+	mockStore.On("GetOffDutyUsers", mock.Anything, mock.Anything).Return([]*store.User{}, nil)
 	mockStore.On("CreateChore", mock.Anything, mock.Anything).Return(nil)
 
 	client := NewTestClient(func(req *http.Request) *http.Response {
@@ -275,7 +275,7 @@ func TestHandleChoreInteractive_Success(t *testing.T) {
 		{ID: 11, TelegramUserID: 222, FirstName: "Bob", IsActive: true},
 	}
 	mockStore.On("ListActiveUsers", mock.Anything).Return(activeUsers, nil)
-	mockStore.On("IsUserOffDuty", mock.Anything, mock.Anything, mock.Anything).Return(false, nil)
+	mockStore.On("GetOffDutyUsers", mock.Anything, mock.Anything).Return([]*store.User{}, nil)
 	mockStore.On("CreateChore", mock.Anything, mock.Anything).Return(nil)
 
 	// Send a message with chore description
@@ -542,7 +542,7 @@ func TestHandleChoreInteractive_NoDoubleEscaping(t *testing.T) {
 		{ID: 10, TelegramUserID: 111, FirstName: "Alice", IsActive: true},
 	}
 	mockStore.On("ListActiveUsers", mock.Anything).Return(activeUsers, nil)
-	mockStore.On("IsUserOffDuty", mock.Anything, mock.Anything, mock.Anything).Return(false, nil)
+	mockStore.On("GetOffDutyUsers", mock.Anything, mock.Anything).Return([]*store.User{}, nil)
 	mockStore.On("CreateChore", mock.Anything, mock.Anything).Return(nil)
 
 	// Send a message with HTML special characters
@@ -645,7 +645,7 @@ func TestHandleChore_WeightedSelection(t *testing.T) {
 	}
 
 	mockStore.On("ListActiveUsers", mock.Anything).Return(activeUsers, nil)
-	mockStore.On("IsUserOffDuty", mock.Anything, mock.Anything, mock.Anything).Return(false, nil)
+	mockStore.On("GetOffDutyUsers", mock.Anything, mock.Anything).Return([]*store.User{}, nil)
 	mockStore.On("CreateChore", mock.Anything, mock.Anything).Return(nil)
 
 	// Run 1000 iterations to check distribution

@@ -54,9 +54,7 @@ func TestExplainLastAssignment_RoundRobin(t *testing.T) {
 	mockStore.On("GetCompletedDutiesInRange", ctx, mock.Anything, mock.Anything).Return(duties, nil)
 
 	// User off duty checks
-	mockStore.On("IsUserOffDuty", ctx, int64(1), today).Return(false, nil)
-	mockStore.On("IsUserOffDuty", ctx, int64(2), today).Return(true, nil) // Maria is off duty
-	mockStore.On("IsUserOffDuty", ctx, int64(3), today).Return(false, nil)
+	mockStore.On("GetOffDutyUsers", ctx, today).Return([]*store.User{u2}, nil)
 
     // For calculating volunteer / admin available candidates
     mockStore.On("GetUsersWithVolunteerQueue", ctx).Return([]*store.User{}, nil)
@@ -96,8 +94,8 @@ func TestExplainLastAssignment_Volunteer(t *testing.T) {
 	mockStore.On("ListActiveUsers", ctx).Return([]*store.User{u1, u2}, nil)
 	mockStore.On("GetCompletedDutiesInRange", ctx, mock.Anything, mock.Anything).Return([]*store.Duty{}, nil)
 
-	mockStore.On("IsUserOffDuty", ctx, int64(1), today).Return(false, nil)
-	mockStore.On("IsUserOffDuty", ctx, int64(2), today).Return(false, nil)
+	mockStore.On("GetOffDutyUsers", ctx, today).Return([]*store.User{}, nil)
+	mockStore.On("GetOffDutyUsers", ctx, today).Return([]*store.User{}, nil)
 
 	explanation, err := s.ExplainLastAssignment(ctx)
 
@@ -131,8 +129,8 @@ func TestExplainLastAssignment_Admin(t *testing.T) {
 	mockStore.On("ListActiveUsers", ctx).Return([]*store.User{u1, u2}, nil)
 	mockStore.On("GetCompletedDutiesInRange", ctx, mock.Anything, mock.Anything).Return([]*store.Duty{}, nil)
 
-	mockStore.On("IsUserOffDuty", ctx, int64(1), today).Return(false, nil)
-	mockStore.On("IsUserOffDuty", ctx, int64(2), today).Return(false, nil)
+	mockStore.On("GetOffDutyUsers", ctx, today).Return([]*store.User{}, nil)
+	mockStore.On("GetOffDutyUsers", ctx, today).Return([]*store.User{}, nil)
 
 	explanation, err := s.ExplainLastAssignment(ctx)
 
@@ -167,8 +165,7 @@ func TestExplainLastAssignment_PostDecrementZero(t *testing.T) {
 	mockStore.On("ListActiveUsers", ctx).Return([]*store.User{u1, u2}, nil)
 	mockStore.On("GetCompletedDutiesInRange", ctx, mock.Anything, mock.Anything).Return([]*store.Duty{}, nil)
 
-	mockStore.On("IsUserOffDuty", ctx, int64(1), today).Return(false, nil)
-	mockStore.On("IsUserOffDuty", ctx, int64(2), today).Return(false, nil)
+	mockStore.On("GetOffDutyUsers", ctx, today).Return([]*store.User{}, nil)
 
 	explanation, err := s.ExplainLastAssignment(ctx)
 
@@ -209,8 +206,7 @@ func TestExplainLastAssignment_OffDutyMaxQueue(t *testing.T) {
 	mockStore.On("ListActiveUsers", ctx).Return([]*store.User{u1, u2}, nil)
 	mockStore.On("GetCompletedDutiesInRange", ctx, mock.Anything, mock.Anything).Return([]*store.Duty{}, nil)
 
-	mockStore.On("IsUserOffDuty", ctx, int64(1), today).Return(false, nil)
-	mockStore.On("IsUserOffDuty", ctx, int64(2), today).Return(true, nil) // Maria is off duty
+	mockStore.On("GetOffDutyUsers", ctx, today).Return([]*store.User{u2}, nil)
 
 	explanation, err := s.ExplainLastAssignment(ctx)
 
