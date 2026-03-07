@@ -61,11 +61,13 @@ func GetSchedule(s store.Store) gin.HandlerFunc {
 			adminQueue := 0
 
 			// Only include user details if authorized
-			if isAuthorized && duty.User != nil {
+			if isAuthorized {
 				userID = duty.UserID
-				userName = duty.User.FirstName
-				volunteerQueue = duty.User.VolunteerQueueDays
-				adminQueue = duty.User.AdminQueueDays
+				if duty.User != nil {
+					userName = duty.User.FirstName
+					volunteerQueue = duty.User.VolunteerQueueDays
+					adminQueue = duty.User.AdminQueueDays
+				}
 			} else if duty.User != nil {
 				userName = "***" // Anonymous placeholder
 			}
