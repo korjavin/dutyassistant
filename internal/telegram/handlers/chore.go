@@ -333,12 +333,14 @@ func (h *Handlers) assignChore(chatID int64, fromUserID int64, description strin
 	nowLocal := time.Now().In(loc)
 	deadline := time.Date(nowLocal.Year(), nowLocal.Month(), nowLocal.Day(), 23, 59, 59, 0, loc)
 
+	reminderID := GenerateReminderID(selectedUser.TelegramUserID, time.Now())
+
 	chore := &store.Chore{
 		UserID:      selectedUser.ID,
 		Description: description,
 		AssignedAt:  time.Now(),
 		DeadlineAt:  deadline,
-		ReminderID:  GenerateReminderID(selectedUser.TelegramUserID, time.Now()),
+		ReminderID:  reminderID,
 	}
 	if err := h.Store.CreateChore(context.Background(), chore); err != nil {
 		log.Printf("Failed to create chore in database: %v", err)
@@ -351,7 +353,7 @@ func (h *Handlers) assignChore(chatID int64, fromUserID int64, description strin
 		Description: description, // Store unescaped
 		AssignedAt:  time.Now(),
 		GroupID:     h.GroupID,
-		ReminderID:  GenerateReminderID(selectedUser.TelegramUserID, time.Now()),
+		ReminderID:  reminderID,
 	}
 
 	// SendInitialDM now handles storage internally only on success

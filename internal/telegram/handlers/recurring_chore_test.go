@@ -196,6 +196,7 @@ func TestProcessRecurringChores_Success(t *testing.T) {
 	}
 	mockStore.On("ListActiveUsers", mock.Anything).Return(users, nil)
 	mockStore.On("GetOffDutyUsers", mock.Anything, mock.Anything).Return([]*store.User{}, nil)
+	mockStore.On("CreateChore", mock.Anything, mock.Anything).Return(nil)
 
 	// 3. update next run
 	mockStore.On("UpdateRecurringChoreNextRun", mock.Anything, int64(1), mock.MatchedBy(func(next time.Time) bool {
