@@ -104,7 +104,11 @@ function renderCalendar(scheduleData = {}, prognosisData = {}) {
             iso8601: true,
             selection: { day: 'single' },
             visibility: { theme: 'light', weekend: true, today: true },
-            selected: { dates: dates.map(d => d.date) },
+            selected: {
+                dates: dates.map(d => d.date),
+                month: currentMonth - 1,
+                year: currentYear
+            },
         },
         actions: {
             clickDay(event, self) {
