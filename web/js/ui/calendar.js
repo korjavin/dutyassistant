@@ -5,6 +5,7 @@ import { createDutyCard, createModal, showModal, createLoadingSpinner, createErr
 
 const calendarContainer = document.getElementById('calendar-container');
 let calendar;
+let scheduleLoadSeq = 0;
 
 function isCalendarDebugEnabled() {
     const params = new URLSearchParams(window.location.search);
@@ -53,7 +54,14 @@ function normalizeDateKey(value) {
  */
 async function loadAndDisplaySchedule() {
     const { currentYear, currentMonth } = getState();
-    calendarContainer.innerHTML = createLoadingSpinner();
+    const loadSeq = ++scheduleLoadSeq;
+    const hasCalendarInstance = Boolean(calendar);
+
+    // Important: do not wipe calendar DOM after init, otherwise calendar.update()
+    // can run against removed nodes and produce empty rendering.
+    if (!hasCalendarInstance) {
+        calendarContainer.innerHTML = createLoadingSpinner();
+    }
     calendarDebug('Loading month', { currentYear, currentMonth });
 
     try {
@@ -63,6 +71,12 @@ async function loadAndDisplaySchedule() {
             getUsers(),
             getActiveChores()
         ]);
+
+        // Ignore stale async responses from older month loads.
+        if (loadSeq !== scheduleLoadSeq) {
+            calendarDebug('Skip stale load result', { loadSeq, scheduleLoadSeq, currentYear, currentMonth });
+            return;
+        }
 
         // Display queue summary
         displayQueueSummary(usersData);
@@ -78,11 +92,15 @@ async function loadAndDisplaySchedule() {
             setState({ schedule: { [`${currentYear}-${currentMonth}`]: scheduleData } });
             renderCalendar(scheduleData, prognosisData);
         } else {
-            calendarContainer.innerHTML = createErrorMessage('Could not load schedule.');
+            if (!hasCalendarInstance) {
+                calendarContainer.innerHTML = createErrorMessage('Could not load schedule.');
+            }
         }
     } catch (error) {
         console.error('Error loading schedule:', error);
-        calendarContainer.innerHTML = createErrorMessage('Error loading schedule. Please try again later.');
+        if (!hasCalendarInstance) {
+            calendarContainer.innerHTML = createErrorMessage('Error loading schedule. Please try again later.');
+        }
     }
 }
 
@@ -234,9 +252,16 @@ function renderCalendar(scheduleData = {}, prognosisData = {}) {
             },
             clickArrow(event, self) {
                 // VanillaCalendar updates selectedMonth/selectedYear first, then calls this callback.
+                const { currentYear, currentMonth } = getState();
+                const nextYear = self.selectedYear;
+                const nextMonth = self.selectedMonth + 1;
+                if (currentYear === nextYear && currentMonth === nextMonth) {
+                    // Prevent duplicate reload when calendar emits duplicate arrow callbacks.
+                    return;
+                }
                 setState({
-                    currentYear: self.selectedYear,
-                    currentMonth: self.selectedMonth + 1,
+                    currentYear: nextYear,
+                    currentMonth: nextMonth,
                 });
                 loadAndDisplaySchedule();
             },
