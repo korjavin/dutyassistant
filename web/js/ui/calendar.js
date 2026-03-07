@@ -57,8 +57,7 @@ async function loadAndDisplaySchedule() {
     const loadSeq = ++scheduleLoadSeq;
     const hasCalendarInstance = Boolean(calendar);
 
-    // Important: do not wipe calendar DOM after init, otherwise calendar.update()
-    // can run against removed nodes and produce empty rendering.
+    // Keep previous calendar visible while next month loads.
     if (!hasCalendarInstance) {
         calendarContainer.innerHTML = createLoadingSpinner();
     }
@@ -284,8 +283,16 @@ function renderCalendar(scheduleData = {}, prognosisData = {}) {
     };
 
     if (calendar) {
-        calendar.options = options;
-        calendar.update();
+        // This calendar build expects options on the instance itself.
+        // Updating the custom `calendar.options` field has no effect.
+        Object.assign(calendar, options);
+        calendar.update({
+            year: true,
+            month: true,
+            dates: true,
+            holidays: true,
+            time: true,
+        });
     } else {
         calendar = new VanillaCalendar(calendarContainer, options);
         calendar.init();
