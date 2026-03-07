@@ -6,6 +6,7 @@ import (
 	"html"
 	"log"
 	"math/rand"
+	"os"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -162,7 +163,32 @@ func (h *Handlers) assignRecurringChore(ctx context.Context, chore *store.Recurr
 		log.Printf("Bot API not available for group announcement.")
 	}
 
-	// 6. Send DM to assigned user and schedule reminder (Best Effort)
+	// 6. Save chore to database to be visible in web UI and loaded on restart
+	tz := os.Getenv("CHORE_TIMEZONE")
+	if tz == "" {
+		tz = "Europe/Berlin"
+	}
+	loc, err := time.LoadLocation(tz)
+	if err != nil {
+		loc = time.Local
+	}
+	nowLocal := time.Now().In(loc)
+	deadline := time.Date(nowLocal.Year(), nowLocal.Month(), nowLocal.Day(), 23, 59, 59, 0, loc)
+
+	reminderID := GenerateReminderID(selectedUser.TelegramUserID, time.Now())
+
+	dbChore := &store.Chore{
+		UserID:      selectedUser.ID,
+		Description: chore.Description,
+		AssignedAt:  time.Now(),
+		DeadlineAt:  deadline,
+		ReminderID:  reminderID,
+	}
+	if err := h.Store.CreateChore(ctx, dbChore); err != nil {
+		return fmt.Errorf("failed to save recurring chore to database: %v", err)
+	}
+
+	// 7. Send DM to assigned user and schedule reminder (Best Effort)
 	if h.ChoreReminderManager == nil {
 		log.Printf("Warning: DM reminders are disabled (bot API is not configured), skipping DM for %s", selectedUser.FirstName)
 		return nil
@@ -179,7 +205,7 @@ func (h *Handlers) assignRecurringChore(ctx context.Context, chore *store.Recurr
 		Description: chore.Description,
 		AssignedAt:  time.Now(),
 		GroupID:     h.GroupID,
-		ReminderID:  GenerateReminderID(selectedUser.TelegramUserID, time.Now()),
+		ReminderID:  reminderID,
 	}
 
 	if err := h.ChoreReminderManager.SendInitialDM(assignment); err != nil {
