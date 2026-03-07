@@ -17,7 +17,7 @@ func TestHandleChore_Recurring(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	h := handlers.New(mockStore, nil, 0)
 
-	adminUser := &store.User{ID: 1, TelegramUserID: 123, IsAdmin: true}
+	adminUser := &store.User{ID: 1, TelegramUserID: 123, FirstName: "Admin", IsAdmin: true}
 	mockStore.On("GetUserByTelegramID", mock.Anything, int64(123)).Return(adminUser, nil)
 
 	// We expect a call to create a recurring chore
@@ -27,6 +27,21 @@ func TestHandleChore_Recurring(t *testing.T) {
 		chore := args.Get(1).(*store.RecurringChore)
 		chore.ID = 42
 	})
+
+	berlinLoc, _ := time.LoadLocation("Europe/Berlin")
+	now := time.Now().In(berlinLoc)
+	hour := now.Hour()
+	expectImmediateAssignment := hour >= 10 && hour < 18
+
+	if expectImmediateAssignment {
+		// Immediate assignment mock expectations
+		activeUsers := []*store.User{adminUser}
+		mockStore.On("ListActiveUsers", mock.Anything).Return(activeUsers, nil)
+		mockStore.On("IsUserOffDuty", mock.Anything, adminUser.ID, mock.Anything).Return(false, nil)
+		mockStore.On("CreateChore", mock.Anything, mock.MatchedBy(func(c *store.Chore) bool {
+			return c.Description == "Clean the kitchen" && c.UserID == adminUser.ID
+		})).Return(nil)
+	}
 
 	message := &tgbotapi.Message{
 		Chat: &tgbotapi.Chat{ID: 789},
@@ -40,9 +55,15 @@ func TestHandleChore_Recurring(t *testing.T) {
 	response, err := h.HandleChore(message)
 	assert.NoError(t, err)
 
-	assert.Contains(t, response.Text, "Recurring chore created")
+	if expectImmediateAssignment {
+		assert.Contains(t, response.Text, "Assigned chore to")
+		assert.Contains(t, response.Text, "Admin")
+	} else {
+		assert.NotContains(t, response.Text, "Assigned chore to")
+	}
+
+	assert.Contains(t, response.Text, "Recurring chore scheduled")
 	assert.Contains(t, response.Text, "42")
-	assert.Contains(t, response.Text, "Clean the kitchen")
 	assert.Contains(t, response.Text, "every 5 days")
 }
 
