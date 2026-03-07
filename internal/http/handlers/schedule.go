@@ -56,11 +56,13 @@ func GetSchedule(s store.Store) gin.HandlerFunc {
 		response := make([]dutyResponse, 0, len(duties))
 		for _, duty := range duties {
 			userName := ""
+			userID := int64(0)
 			volunteerQueue := 0
 			adminQueue := 0
 
 			// Only include user details if authorized
 			if isAuthorized && duty.User != nil {
+				userID = duty.UserID
 				userName = duty.User.FirstName
 				volunteerQueue = duty.User.VolunteerQueueDays
 				adminQueue = duty.User.AdminQueueDays
@@ -71,7 +73,7 @@ func GetSchedule(s store.Store) gin.HandlerFunc {
 			response = append(response, dutyResponse{
 				ID:                 duty.ID,
 				Date:               duty.DutyDate.Format(time.RFC3339),
-				UserID:             duty.UserID,
+				UserID:             userID,
 				UserName:           userName,
 				AssignmentType:     string(duty.AssignmentType),
 				VolunteerQueueDays: volunteerQueue,
