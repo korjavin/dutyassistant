@@ -6,11 +6,11 @@ import (
 	"html"
 	"log"
 	"math/rand"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
-	"os"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/korjavin/dutyassistant/internal/store"
@@ -55,25 +55,38 @@ func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 			return tgbotapi.NewMessage(m.Chat.ID, "❌ Chore description cannot be empty."), nil
 		}
 
-		// Calculate next run at 11:00 AM Europe/Berlin today or future
-		berlinLoc, err := time.LoadLocation("Europe/Berlin")
+		// Load configured timezone
+		tz := os.Getenv("CHORE_TIMEZONE")
+		if tz == "" {
+			tz = "Europe/Berlin"
+		}
+		loc, err := time.LoadLocation(tz)
 		if err != nil {
-			log.Printf("Failed to load Europe/Berlin location: %v", err)
-			return tgbotapi.NewMessage(m.Chat.ID, "❌ Internal error determining timezone."), nil
+			log.Printf("Failed to load %s location: %v", tz, err)
+			loc = time.Local
 		}
 
-		now := time.Now().In(berlinLoc)
-		// Check if it's already past 11:00 AM today
-		nextRun := time.Date(now.Year(), now.Month(), now.Day(), 11, 0, 0, 0, berlinLoc)
-		if now.After(nextRun) {
-			// If it's past 11:00 AM, the first run shouldn't be missed immediately.
-			// Let's schedule it for tomorrow + (interval - 1) days
-			nextRun = nextRun.AddDate(0, 0, intervalDays)
+		now := TimeNow().In(loc)
+		hour := now.Hour()
+
+		var nextRun time.Time
+		executeImmediately := false
+
+		// Allowed assignment interval is 10:00 to 18:00
+		if hour >= 10 && hour < 18 {
+			// Within interval: execute immediately, schedule next run exactly N days from now at 10:00 AM
+			executeImmediately = true
+			targetDate := now.AddDate(0, 0, intervalDays)
+			nextRun = time.Date(targetDate.Year(), targetDate.Month(), targetDate.Day(), 10, 0, 0, 0, loc)
+		} else if hour < 10 {
+			// Before 10:00: do not execute immediately, schedule first run at 10:00 today
+			executeImmediately = false
+			nextRun = time.Date(now.Year(), now.Month(), now.Day(), 10, 0, 0, 0, loc)
 		} else {
-			// Wait until 11 AM today or interval? If they create it before 11, let's run it today,
-			// or actually interval from now makes more sense.
-			// Task requirement: N days from now.
-			nextRun = nextRun.AddDate(0, 0, intervalDays)
+			// After 18:00: do not execute immediately, schedule first run at 10:00 tomorrow
+			executeImmediately = false
+			tomorrow := now.AddDate(0, 0, 1)
+			nextRun = time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), 10, 0, 0, 0, loc)
 		}
 
 		chore := &store.RecurringChore{
@@ -88,19 +101,37 @@ func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 			return tgbotapi.NewMessage(m.Chat.ID, "❌ Failed to create recurring chore."), nil
 		}
 
-		escapedDesc := html.EscapeString(description)
+		var msgConfig tgbotapi.MessageConfig
+		if executeImmediately {
+			// Execute the first assignment immediately
+			var err error
+			msgConfig, err = h.assignChore(m.Chat.ID, m.From.ID, description)
+			if err != nil {
+				log.Printf("Failed to assign initial recurring chore: %v", err)
+				return tgbotapi.NewMessage(m.Chat.ID, "❌ Recurring chore created, but failed to assign immediately."), nil
+			}
+		} else {
+			// No immediate execution
+			msgConfig = tgbotapi.NewMessage(m.Chat.ID, "")
+			msgConfig.ParseMode = tgbotapi.ModeHTML
+		}
+
 		nextRunStr := nextRun.Format("2006-01-02 15:04 MST")
 
-		msgText := fmt.Sprintf("✅ <b>Recurring chore created!</b>\n\n"+
+		recurringInfo := fmt.Sprintf("✅ <b>Recurring chore scheduled!</b>\n\n"+
 			"<b>ID:</b> <code>%d</code>\n"+
 			"<b>Description:</b> <i>%s</i>\n"+
 			"<b>Interval:</b> every %d days\n"+
 			"<b>Next Run:</b> %s",
-			chore.ID, escapedDesc, chore.Interval, nextRunStr)
+			chore.ID, html.EscapeString(description), chore.Interval, nextRunStr)
 
-		msg := tgbotapi.NewMessage(m.Chat.ID, msgText)
-		msg.ParseMode = tgbotapi.ModeHTML
-		return msg, nil
+		if executeImmediately {
+			msgConfig.Text += "\n\n" + recurringInfo
+		} else {
+			msgConfig.Text = recurringInfo
+		}
+
+		return msgConfig, nil
 	}
 
 	// 4. One-off chore
@@ -203,7 +234,7 @@ func (h *Handlers) assignChore(chatID int64, fromUserID int64, description strin
 
 		weightedCandidates = append(weightedCandidates, weightedUser{user: u, weight: weight})
 		totalWeight += weight
-		log.Printf("[CHORE] Candidate: %s (ID: %d) - AdminQueueDays: %d, Weight: %.3f", 
+		log.Printf("[CHORE] Candidate: %s (ID: %d) - AdminQueueDays: %d, Weight: %.3f",
 			u.FirstName, u.ID, u.AdminQueueDays, weight)
 	}
 
@@ -218,7 +249,7 @@ func (h *Handlers) assignChore(chatID int64, fromUserID int64, description strin
 	currentWeight := 0.0
 	for i, wu := range weightedCandidates {
 		currentWeight += wu.weight
-		log.Printf("[CHORE] Step %d: Checking %s - cumulative weight: %.3f, target: %.3f", 
+		log.Printf("[CHORE] Step %d: Checking %s - cumulative weight: %.3f, target: %.3f",
 			i+1, wu.user.FirstName, currentWeight, target)
 		if target < currentWeight {
 			selectedUser = wu.user
