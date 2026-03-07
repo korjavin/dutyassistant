@@ -6,6 +6,7 @@
 
 # Exclude build artifacts
 roster-bot
+web/node_modules
 
 # Exclude IDE files
 .idea
