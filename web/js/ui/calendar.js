@@ -232,16 +232,12 @@ function renderCalendar(scheduleData = {}, prognosisData = {}) {
                     });
                 }
             },
-            arrowPrev() {
-                const { currentYear, currentMonth } = getState();
-                const newDate = new Date(currentYear, currentMonth - 2);
-                setState({ currentYear: newDate.getFullYear(), currentMonth: newDate.getMonth() + 1 });
-                loadAndDisplaySchedule();
-            },
-            arrowNext() {
-                const { currentYear, currentMonth } = getState();
-                const newDate = new Date(currentYear, currentMonth);
-                setState({ currentYear: newDate.getFullYear(), currentMonth: newDate.getMonth() + 1 });
+            clickArrow(event, self) {
+                // VanillaCalendar updates selectedMonth/selectedYear first, then calls this callback.
+                setState({
+                    currentYear: self.selectedYear,
+                    currentMonth: self.selectedMonth + 1,
+                });
                 loadAndDisplaySchedule();
             },
             getDays(day, date, HTMLElement, HTMLButtonElement, self) {
