@@ -116,6 +116,10 @@ func (s *SQLiteStore) migrate(ctx context.Context) error {
 		s.db.ExecContext(ctx, alteration)
 	}
 
+	// Clean up legacy uncompleted chores created before bug fix PR #53
+	// This removes chores generated erroneously by recurring tasks before the fix
+	s.db.ExecContext(ctx, `DELETE FROM chores WHERE completed_at IS NULL AND assigned_at < '2026-03-08'`)
+
 	return nil
 }
 
@@ -473,13 +477,13 @@ func (s *SQLiteStore) GetDutiesByMonth(ctx context.Context, year int, month time
 		// Keep duty rows even if related user no longer exists.
 		if userID.Valid {
 			duty.User = &store.User{
-				ID:                userID.Int64,
-				TelegramUserID:    telegramUserID.Int64,
-				FirstName:         firstName.String,
-				IsAdmin:           isAdmin.Valid && isAdmin.Bool,
-				IsActive:          isActive.Valid && isActive.Bool,
+				ID:                 userID.Int64,
+				TelegramUserID:     telegramUserID.Int64,
+				FirstName:          firstName.String,
+				IsAdmin:            isAdmin.Valid && isAdmin.Bool,
+				IsActive:           isActive.Valid && isActive.Bool,
 				VolunteerQueueDays: int(volunteerQueueDays.Int64),
-				AdminQueueDays:    int(adminQueueDays.Int64),
+				AdminQueueDays:     int(adminQueueDays.Int64),
 			}
 			if offDutyStart.Valid {
 				t, _ := time.Parse("2006-01-02", offDutyStart.String)
