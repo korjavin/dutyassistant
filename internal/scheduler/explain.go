@@ -89,14 +89,19 @@ func (s *Scheduler) getDutyCounts(ctx context.Context, date time.Time) (map[int6
 
 // getOffDutyStatuses returns a map of user IDs to their off-duty status on the given date.
 func (s *Scheduler) getOffDutyStatuses(ctx context.Context, users []*store.User, date time.Time) (map[int64]bool, error) {
-	offDutyStatus := make(map[int64]bool)
-	for _, u := range users {
-		off, err := s.store.IsUserOffDuty(ctx, u.ID, date)
-		if err != nil {
-			return nil, err
-		}
-		offDutyStatus[u.ID] = off
+	offDutyUsers, err := s.store.GetOffDutyUsers(ctx, date)
+	if err != nil {
+		return nil, err
 	}
+
+	offDutyStatus := make(map[int64]bool, len(users))
+	for _, u := range users {
+		offDutyStatus[u.ID] = false
+	}
+	for _, u := range offDutyUsers {
+		offDutyStatus[u.ID] = true
+	}
+
 	return offDutyStatus, nil
 }
 

@@ -40,7 +40,7 @@ func TestHandleChore_Recurring_DuringHours(t *testing.T) {
 	// Immediate assignment mock expectations
 	activeUsers := []*store.User{adminUser}
 	mockStore.On("ListActiveUsers", mock.Anything).Return(activeUsers, nil)
-	mockStore.On("IsUserOffDuty", mock.Anything, adminUser.ID, mock.Anything).Return(false, nil)
+	mockStore.On("GetOffDutyUsers", mock.Anything, mock.Anything).Return([]*store.User{}, nil)
 	mockStore.On("CreateChore", mock.Anything, mock.MatchedBy(func(c *store.Chore) bool {
 		return c.Description == "Clean the kitchen" && c.UserID == adminUser.ID
 	})).Return(nil)
@@ -195,7 +195,7 @@ func TestProcessRecurringChores_Success(t *testing.T) {
 		{ID: 1, TelegramUserID: 123, FirstName: "Alice", IsActive: true},
 	}
 	mockStore.On("ListActiveUsers", mock.Anything).Return(users, nil)
-	mockStore.On("IsUserOffDuty", mock.Anything, int64(1), mock.Anything).Return(false, nil)
+	mockStore.On("GetOffDutyUsers", mock.Anything, mock.Anything).Return([]*store.User{}, nil)
 
 	// 3. update next run
 	mockStore.On("UpdateRecurringChoreNextRun", mock.Anything, int64(1), mock.MatchedBy(func(next time.Time) bool {
