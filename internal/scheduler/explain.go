@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/korjavin/dutyassistant/internal/store"
 )
@@ -20,36 +21,61 @@ func (s *Scheduler) ExplainLastAssignment(ctx context.Context) (string, error) {
 		return "Нет данных о последних назначениях.", nil
 	}
 
-	var buf bytes.Buffer
-	buf.WriteString(fmt.Sprintf("Последнее назначение: @%s (%s)\n", lastDuty.User.FirstName, lastDuty.DutyDate.Format("2006-01-02 15:00")))
-
-	// Try to reconstruct the context of the decision for that day.
 	date := lastDuty.DutyDate
-
-	// Re-fetch all available users to determine who was considered
 	allUsers, err := s.store.ListActiveUsers(ctx)
 	if err != nil {
 		return "", fmt.Errorf("failed to get active users: %w", err)
 	}
 
-	offDutyUsers, err := s.store.GetOffDutyUsers(ctx, date)
+	dutyCounts, err := s.getDutyCounts(ctx, date)
 	if err != nil {
-		return "", fmt.Errorf("failed to get off duty users: %w", err)
-	}
-	offDutyMap := make(map[int64]bool)
-	for _, u := range offDutyUsers {
-		offDutyMap[u.ID] = true
+		return "", fmt.Errorf("failed to get duty counts: %w", err)
 	}
 
-	// Calculate considered candidates and exclusions
-	var candidates []string
-	var exclusions []string
+	offDutyStatus, err := s.getOffDutyStatuses(ctx, allUsers, date)
+	if err != nil {
+		return "", fmt.Errorf("failed to check off duty status: %w", err)
+	}
 
-	// Calculate 14 day window for round-robin
+	minCount, maxQueueCount := s.getAssignmentThresholds(lastDuty, allUsers, dutyCounts, offDutyStatus)
+	candidates, exclusions, remainingCandidates := s.categorizeUsers(lastDuty, allUsers, dutyCounts, offDutyStatus, minCount, maxQueueCount)
+
+	var buf bytes.Buffer
+	buf.WriteString(fmt.Sprintf("Последнее назначение: @%s (%s)\n", lastDuty.User.FirstName, date.Format("2006-01-02 15:00")))
+	buf.WriteString(fmt.Sprintf("Кандидаты: %s\n", strings.Join(candidates, ", ")))
+
+	if len(exclusions) > 0 {
+		buf.WriteString("Исключены:\n")
+		for _, exc := range exclusions {
+			buf.WriteString(fmt.Sprintf("%s\n", exc))
+		}
+	}
+
+	if len(remainingCandidates) > 0 {
+		buf.WriteString(fmt.Sprintf("Оставшиеся кандидаты: %s\n", strings.Join(remainingCandidates, ", ")))
+	}
+
+	var finalReason string
+	switch lastDuty.AssignmentType {
+	case store.AssignmentTypeVoluntary:
+		finalReason = "доброволец с наибольшим количеством дней (tie-break случайный при равенстве)."
+	case store.AssignmentTypeAdmin:
+		finalReason = "назначен администратором с наибольшим количеством дней в очереди (tie-break случайный при равенстве)."
+	case store.AssignmentTypeRoundRobin:
+		finalReason = "имел наименьшее число дежурств за 14 дней (tie-break случайный при равенстве)."
+	}
+
+	buf.WriteString(fmt.Sprintf("Итог: назначен @%s, так как %s", lastDuty.User.FirstName, finalReason))
+
+	return buf.String(), nil
+}
+
+// getDutyCounts returns duty counts for each user in the 14 days preceding the given date.
+func (s *Scheduler) getDutyCounts(ctx context.Context, date time.Time) (map[int64]int, error) {
 	start := date.AddDate(0, 0, -14)
 	duties, err := s.store.GetCompletedDutiesInRange(ctx, start, date)
 	if err != nil {
-		return "", fmt.Errorf("failed to get completed duties: %w", err)
+		return nil, err
 	}
 
 	dutyCounts := make(map[int64]int)
@@ -58,12 +84,33 @@ func (s *Scheduler) ExplainLastAssignment(ctx context.Context) (string, error) {
 			dutyCounts[duty.UserID]++
 		}
 	}
+	return dutyCounts, nil
+}
 
-	// Handle max queues for voluntary/admin assignments where decrements occurred
+// getOffDutyStatuses returns a map of user IDs to their off-duty status on the given date.
+func (s *Scheduler) getOffDutyStatuses(ctx context.Context, users []*store.User, date time.Time) (map[int64]bool, error) {
+	offDutyUsers, err := s.store.GetOffDutyUsers(ctx, date)
+	if err != nil {
+		return nil, err
+	}
+
+	offDutyStatus := make(map[int64]bool, len(users))
+	for _, u := range users {
+		offDutyStatus[u.ID] = false
+	}
+	for _, u := range offDutyUsers {
+		offDutyStatus[u.ID] = true
+	}
+
+	return offDutyStatus, nil
+}
+
+// getAssignmentThresholds calculates minCount for round-robin and maxQueueCount for voluntary/admin assignments.
+func (s *Scheduler) getAssignmentThresholds(lastDuty *store.Duty, allUsers []*store.User, dutyCounts map[int64]int, offDutyStatus map[int64]bool) (int, int) {
 	maxQueueCount := 0
 	if lastDuty.AssignmentType == store.AssignmentTypeVoluntary || lastDuty.AssignmentType == store.AssignmentTypeAdmin {
 		for _, u := range allUsers {
-			if offDutyMap[u.ID] {
+			if offDutyStatus[u.ID] {
 				continue
 			}
 
@@ -88,24 +135,45 @@ func (s *Scheduler) ExplainLastAssignment(ctx context.Context) (string, error) {
 	minCount := int(^uint(0) >> 1)
 	if lastDuty.AssignmentType == store.AssignmentTypeRoundRobin {
 		for _, u := range allUsers {
-			if !offDutyMap[u.ID] {
+			if !offDutyStatus[u.ID] {
 				if count := dutyCounts[u.ID]; count < minCount {
 					minCount = count
 				}
 			}
 		}
 	}
+	return minCount, maxQueueCount
+}
+
+// categorizeUsers builds candidates, exclusions, and remainingCandidates lists.
+func (s *Scheduler) categorizeUsers(
+	lastDuty *store.Duty,
+	allUsers []*store.User,
+	dutyCounts map[int64]int,
+	offDutyStatus map[int64]bool,
+	minCount, maxQueueCount int,
+) ([]string, []string, []string) {
+	var candidates []string
+	var exclusions []string
+	var remainingCandidates []string
 
 	for _, user := range allUsers {
 		candidates = append(candidates, fmt.Sprintf("@%s", user.FirstName))
 
-		offDuty := offDutyMap[user.ID]
+		offDuty := offDutyStatus[user.ID]
 
 		if offDuty {
 			exclusions = append(exclusions, fmt.Sprintf("@%s — отсутствует по расписанию", user.FirstName))
-		} else if lastDuty.AssignmentType == store.AssignmentTypeRoundRobin {
-			if count := dutyCounts[user.ID]; count > minCount {
+			continue
+		}
+
+		isRemaining := false
+		if lastDuty.AssignmentType == store.AssignmentTypeRoundRobin {
+			count := dutyCounts[user.ID]
+			if count > minCount {
 				exclusions = append(exclusions, fmt.Sprintf("@%s — %d дежурств за последние 14 дней (минимум %d)", user.FirstName, count, minCount))
+			} else {
+				isRemaining = true
 			}
 		} else if lastDuty.AssignmentType == store.AssignmentTypeVoluntary || lastDuty.AssignmentType == store.AssignmentTypeAdmin {
 			queue := 0
@@ -127,64 +195,18 @@ func (s *Scheduler) ExplainLastAssignment(ctx context.Context) (string, error) {
 				} else {
 					exclusions = append(exclusions, fmt.Sprintf("@%s — %d дней в очереди %s (максимум %d)", user.FirstName, queue, queueType, maxQueueCount))
 				}
+			} else if queue == maxQueueCount && queue > 0 {
+				isRemaining = true
 			}
+		}
+
+		if isRemaining {
+			remainingCandidates = append(remainingCandidates, fmt.Sprintf("@%s", user.FirstName))
 		}
 	}
 
 	sort.Strings(candidates)
-	buf.WriteString(fmt.Sprintf("Кандидаты: %s\n", strings.Join(candidates, ", ")))
+	sort.Strings(remainingCandidates)
 
-	if len(exclusions) > 0 {
-		buf.WriteString("Исключены:\n")
-		for _, exc := range exclusions {
-			buf.WriteString(fmt.Sprintf("%s\n", exc))
-		}
-	}
-
-	// Remaining candidates
-	var remainingCandidates []string
-	for _, user := range allUsers {
-		if offDutyMap[user.ID] {
-			continue
-		}
-		if lastDuty.AssignmentType == store.AssignmentTypeRoundRobin {
-			if dutyCounts[user.ID] == minCount {
-				remainingCandidates = append(remainingCandidates, fmt.Sprintf("@%s", user.FirstName))
-			}
-		} else if lastDuty.AssignmentType == store.AssignmentTypeVoluntary || lastDuty.AssignmentType == store.AssignmentTypeAdmin {
-			queue := 0
-			if lastDuty.AssignmentType == store.AssignmentTypeVoluntary {
-				queue = user.VolunteerQueueDays
-			} else {
-				queue = user.AdminQueueDays
-			}
-
-			if user.ID == lastDuty.UserID {
-				queue++
-			}
-
-			if queue == maxQueueCount && queue > 0 {
-				remainingCandidates = append(remainingCandidates, fmt.Sprintf("@%s", user.FirstName))
-			}
-		}
-	}
-
-	if len(remainingCandidates) > 0 {
-		sort.Strings(remainingCandidates)
-		buf.WriteString(fmt.Sprintf("Оставшиеся кандидаты: %s\n", strings.Join(remainingCandidates, ", ")))
-	}
-
-	var finalReason string
-	switch lastDuty.AssignmentType {
-	case store.AssignmentTypeVoluntary:
-		finalReason = "доброволец с наибольшим количеством дней (tie-break случайный при равенстве)."
-	case store.AssignmentTypeAdmin:
-		finalReason = "назначен администратором с наибольшим количеством дней в очереди (tie-break случайный при равенстве)."
-	case store.AssignmentTypeRoundRobin:
-		finalReason = "имел наименьшее число дежурств за 14 дней (tie-break случайный при равенстве)."
-	}
-
-	buf.WriteString(fmt.Sprintf("Итог: назначен @%s, так как %s", lastDuty.User.FirstName, finalReason))
-
-	return buf.String(), nil
+	return candidates, exclusions, remainingCandidates
 }

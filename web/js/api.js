@@ -1,5 +1,26 @@
 // This module will encapsulate all communication with the backend API.
 
+function isCalendarDebugEnabled() {
+    if (typeof window === 'undefined') {
+        return false;
+    }
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('debugCalendar') === '1') {
+        return true;
+    }
+    try {
+        return window.localStorage?.getItem('debugCalendar') === '1';
+    } catch {
+        return false;
+    }
+}
+
+function calendarDebug(...args) {
+    if (isCalendarDebugEnabled()) {
+        console.log('[CalendarDebug]', ...args);
+    }
+}
+
 /**
  * Gets authentication headers with Telegram Web App initData if available.
  * @returns {object} Headers object with optional Authorization header.
@@ -45,14 +66,25 @@ async function postData(url = '', data = {}) {
  */
 export async function getSchedule(year, month) {
     try {
+        calendarDebug('Request schedule', { year, month });
         const response = await fetch(`/api/v1/schedule/${year}/${month}`, {
             headers: getAuthHeaders()
         });
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        return await response.json();
+        const payload = await response.json();
+        const duties = Array.isArray(payload?.duties) ? payload.duties : [];
+        calendarDebug('Schedule response', {
+            year,
+            month,
+            dutiesCount: duties.length,
+            firstDates: duties.slice(0, 5).map(d => d?.date),
+            lastDates: duties.slice(-5).map(d => d?.date),
+        });
+        return payload;
     } catch (error) {
+        calendarDebug('Schedule request failed', { year, month, error: String(error) });
         console.error("Failed to fetch schedule:", error);
         return null;
     }
@@ -70,8 +102,12 @@ export async function getPrognosis(year, month) {
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        return await response.json();
+        const payload = await response.json();
+        const prognosis = Array.isArray(payload?.prognosis) ? payload.prognosis : [];
+        calendarDebug('Prognosis response', { year, month, prognosisCount: prognosis.length });
+        return payload;
     } catch (error) {
+        calendarDebug('Prognosis request failed', { year, month, error: String(error) });
         console.error("Failed to fetch prognosis:", error);
         return null;
     }

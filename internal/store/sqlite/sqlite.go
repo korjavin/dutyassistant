@@ -424,7 +424,7 @@ func (s *SQLiteStore) GetDutiesByMonth(ctx context.Context, year int, month time
 		       u.id, u.telegram_user_id, u.first_name, u.is_admin, u.is_active,
 		       u.volunteer_queue_days, u.admin_queue_days, u.off_duty_start, u.off_duty_end
 		FROM duties d
-		JOIN users u ON d.user_id = u.id
+		LEFT JOIN users u ON d.user_id = u.id
 		WHERE d.duty_date >= ? AND d.duty_date < ?
 		ORDER BY d.duty_date
 	`
@@ -436,13 +436,20 @@ func (s *SQLiteStore) GetDutiesByMonth(ctx context.Context, year int, month time
 
 	var duties []*store.Duty
 	for rows.Next() {
-		duty := &store.Duty{User: &store.User{}}
+		duty := &store.Duty{}
 		var dutyDateStr, assignmentTypeStr, createdAtStr string
 		var completedAtStr, offDutyStart, offDutyEnd sql.NullString
+		var userID sql.NullInt64
+		var telegramUserID sql.NullInt64
+		var firstName sql.NullString
+		var isAdmin sql.NullBool
+		var isActive sql.NullBool
+		var volunteerQueueDays sql.NullInt64
+		var adminQueueDays sql.NullInt64
 		err := rows.Scan(
 			&duty.ID, &duty.UserID, &dutyDateStr, &assignmentTypeStr, &createdAtStr, &completedAtStr,
-			&duty.User.ID, &duty.User.TelegramUserID, &duty.User.FirstName, &duty.User.IsAdmin, &duty.User.IsActive,
-			&duty.User.VolunteerQueueDays, &duty.User.AdminQueueDays, &offDutyStart, &offDutyEnd,
+			&userID, &telegramUserID, &firstName, &isAdmin, &isActive,
+			&volunteerQueueDays, &adminQueueDays, &offDutyStart, &offDutyEnd,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("could not scan duty row: %w", err)
@@ -462,13 +469,26 @@ func (s *SQLiteStore) GetDutiesByMonth(ctx context.Context, year int, month time
 			}
 			duty.CompletedAt = &t
 		}
-		if offDutyStart.Valid {
-			t, _ := time.Parse("2006-01-02", offDutyStart.String)
-			duty.User.OffDutyStart = &t
-		}
-		if offDutyEnd.Valid {
-			t, _ := time.Parse("2006-01-02", offDutyEnd.String)
-			duty.User.OffDutyEnd = &t
+
+		// Keep duty rows even if related user no longer exists.
+		if userID.Valid {
+			duty.User = &store.User{
+				ID:                userID.Int64,
+				TelegramUserID:    telegramUserID.Int64,
+				FirstName:         firstName.String,
+				IsAdmin:           isAdmin.Valid && isAdmin.Bool,
+				IsActive:          isActive.Valid && isActive.Bool,
+				VolunteerQueueDays: int(volunteerQueueDays.Int64),
+				AdminQueueDays:    int(adminQueueDays.Int64),
+			}
+			if offDutyStart.Valid {
+				t, _ := time.Parse("2006-01-02", offDutyStart.String)
+				duty.User.OffDutyStart = &t
+			}
+			if offDutyEnd.Valid {
+				t, _ := time.Parse("2006-01-02", offDutyEnd.String)
+				duty.User.OffDutyEnd = &t
+			}
 		}
 		duty.AssignmentType = store.AssignmentType(assignmentTypeStr)
 		duties = append(duties, duty)

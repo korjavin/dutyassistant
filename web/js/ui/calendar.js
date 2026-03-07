@@ -5,13 +5,73 @@ import { createDutyCard, createModal, showModal, createLoadingSpinner, createErr
 
 const calendarContainer = document.getElementById('calendar-container');
 let calendar;
+let scheduleLoadSeq = 0;
+const calendarElementId = 'calendar';
+
+function ensureCalendarElement() {
+    let element = document.getElementById(calendarElementId);
+    if (!element) {
+        calendarContainer.innerHTML = `<div id="${calendarElementId}"></div>`;
+        element = document.getElementById(calendarElementId);
+    }
+    return element;
+}
+
+function isCalendarDebugEnabled() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('debugCalendar') === '1') {
+        return true;
+    }
+    try {
+        return window.localStorage?.getItem('debugCalendar') === '1';
+    } catch {
+        return false;
+    }
+}
+
+function calendarDebug(...args) {
+    if (isCalendarDebugEnabled()) {
+        console.log('[CalendarDebug]', ...args);
+    }
+}
+
+/**
+ * Normalizes incoming date values to YYYY-MM-DD keys used in calendar maps.
+ * @param {string} value
+ * @returns {string}
+ */
+function normalizeDateKey(value) {
+    if (!value) {
+        return '';
+    }
+
+    const raw = String(value);
+    const directMatch = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (directMatch) {
+        return directMatch[1];
+    }
+
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) {
+        return '';
+    }
+
+    return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
+}
 
 /**
  * Fetches and displays the schedule for the current month.
  */
 async function loadAndDisplaySchedule() {
     const { currentYear, currentMonth } = getState();
-    calendarContainer.innerHTML = createLoadingSpinner();
+    const loadSeq = ++scheduleLoadSeq;
+    const hasCalendarInstance = Boolean(calendar);
+
+    // Keep previous calendar visible while next month loads.
+    if (!hasCalendarInstance) {
+        calendarContainer.innerHTML = createLoadingSpinner();
+    }
+    calendarDebug('Loading month', { currentYear, currentMonth });
 
     try {
         const [scheduleData, prognosisData, usersData, choresData] = await Promise.all([
@@ -21,19 +81,35 @@ async function loadAndDisplaySchedule() {
             getActiveChores()
         ]);
 
+        // Ignore stale async responses from older month loads.
+        if (loadSeq !== scheduleLoadSeq) {
+            calendarDebug('Skip stale load result', { loadSeq, scheduleLoadSeq, currentYear, currentMonth });
+            return;
+        }
+
         // Display queue summary
         displayQueueSummary(usersData);
         displayPendingChores(choresData);
 
         if (scheduleData) {
+            calendarDebug('Month payload ready', {
+                currentYear,
+                currentMonth,
+                dutiesCount: Array.isArray(scheduleData?.duties) ? scheduleData.duties.length : 0,
+                prognosisCount: Array.isArray(prognosisData?.prognosis) ? prognosisData.prognosis.length : 0,
+            });
             setState({ schedule: { [`${currentYear}-${currentMonth}`]: scheduleData } });
             renderCalendar(scheduleData, prognosisData);
         } else {
-            calendarContainer.innerHTML = createErrorMessage('Could not load schedule.');
+            if (!hasCalendarInstance) {
+                calendarContainer.innerHTML = createErrorMessage('Could not load schedule.');
+            }
         }
     } catch (error) {
         console.error('Error loading schedule:', error);
-        calendarContainer.innerHTML = createErrorMessage('Error loading schedule. Please try again later.');
+        if (!hasCalendarInstance) {
+            calendarContainer.innerHTML = createErrorMessage('Error loading schedule. Please try again later.');
+        }
     }
 }
 
@@ -49,7 +125,10 @@ function renderCalendar(scheduleData = {}, prognosisData = {}) {
     // Add actual duties
     if (scheduleData.duties) {
         scheduleData.duties.forEach(duty => {
-            const date = duty.date.split('T')[0];
+            const date = normalizeDateKey(duty.date);
+            if (!date) {
+                return;
+            }
             if (!dutiesByDate[date]) {
                 dutiesByDate[date] = [];
             }
@@ -79,15 +158,19 @@ function renderCalendar(scheduleData = {}, prognosisData = {}) {
     // Add prognosis for unassigned days
     if (prognosisData.prognosis) {
         prognosisData.prognosis.forEach(prog => {
-            if (!dutiesByDate[prog.date]) {
-                dutiesByDate[prog.date] = [];
+            const date = normalizeDateKey(prog.date);
+            if (!date) {
+                return;
             }
-            dutiesByDate[prog.date].push({
+            if (!dutiesByDate[date]) {
+                dutiesByDate[date] = [];
+            }
+            dutiesByDate[date].push({
                 displayName: prog.user_name,
                 typeClass: 'text-gray-400 italic',
                 assignment_type: 'prognosis (round-robin)',
                 isPrognosis: true,
-                date: prog.date
+                date
             });
         });
     }
@@ -96,6 +179,16 @@ function renderCalendar(scheduleData = {}, prognosisData = {}) {
         date: dateStr,
         CSSClasses: ['has-duty'],
     }));
+    const monthPrefix = `${currentYear}-${String(currentMonth).padStart(2, '0')}-`;
+    const datesInCurrentMonth = dates.map(d => d.date).filter(d => d.startsWith(monthPrefix));
+    calendarDebug('Render month', {
+        currentYear,
+        currentMonth,
+        mappedDatesTotal: dates.length,
+        mappedDatesInCurrentMonth: datesInCurrentMonth.length,
+        sampleInCurrentMonth: datesInCurrentMonth.slice(0, 10),
+        sampleAllDates: dates.map(d => d.date).slice(0, 10),
+    });
 
     const options = {
         type: 'default',
@@ -104,11 +197,18 @@ function renderCalendar(scheduleData = {}, prognosisData = {}) {
             iso8601: true,
             selection: { day: 'single' },
             visibility: { theme: 'light', weekend: true, today: true },
-            selected: { dates: dates.map(d => d.date) },
+            selected: {
+                dates: dates.map(d => d.date),
+                month: currentMonth - 1,
+                year: currentYear
+            },
         },
         actions: {
             clickDay(event, self) {
-                const date = self.selectedDates[0];
+                const date = normalizeDateKey(self.selectedDates?.[0]);
+                if (!date) {
+                    return;
+                }
                 if (dutiesByDate[date]) {
                     const duties = dutiesByDate[date];
                     const content = duties.map(duty => `
@@ -159,20 +259,23 @@ function renderCalendar(scheduleData = {}, prognosisData = {}) {
                     });
                 }
             },
-            arrowPrev() {
+            clickArrow(event, self) {
+                // VanillaCalendar updates selectedMonth/selectedYear first, then calls this callback.
                 const { currentYear, currentMonth } = getState();
-                const newDate = new Date(currentYear, currentMonth - 2);
-                setState({ currentYear: newDate.getFullYear(), currentMonth: newDate.getMonth() + 1 });
-                loadAndDisplaySchedule();
-            },
-            arrowNext() {
-                const { currentYear, currentMonth } = getState();
-                const newDate = new Date(currentYear, currentMonth);
-                setState({ currentYear: newDate.getFullYear(), currentMonth: newDate.getMonth() + 1 });
+                const nextYear = self.selectedYear;
+                const nextMonth = self.selectedMonth + 1;
+                if (currentYear === nextYear && currentMonth === nextMonth) {
+                    // Prevent duplicate reload when calendar emits duplicate arrow callbacks.
+                    return;
+                }
+                setState({
+                    currentYear: nextYear,
+                    currentMonth: nextMonth,
+                });
                 loadAndDisplaySchedule();
             },
             getDays(day, date, HTMLElement, HTMLButtonElement, self) {
-                const dateStr = `${self.selectedYear}-${String(self.selectedMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const dateStr = normalizeDateKey(date) || `${self.selectedYear}-${String(self.selectedMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                 if (dutiesByDate[dateStr]) {
                     const duties = dutiesByDate[dateStr];
                     const namesHTML = duties.map(duty => {
@@ -189,13 +292,16 @@ function renderCalendar(scheduleData = {}, prognosisData = {}) {
         },
     };
 
+    // Recreate calendar instance on every render to avoid stale closures
+    // and duplicated internal handlers from month-to-month updates.
     if (calendar) {
-        calendar.options = options;
-        calendar.update();
-    } else {
-        calendar = new VanillaCalendar(calendarContainer, options);
-        calendar.init();
+        calendar.destroy();
+        calendar = null;
     }
+
+    const calendarElement = ensureCalendarElement();
+    calendar = new VanillaCalendar(calendarElement, options);
+    calendar.init();
 }
 
 /**
@@ -309,9 +415,7 @@ export function initializeCalendar() {
         currentMonth: today.getMonth() + 1,
     });
 
-    if (!document.getElementById('calendar')) {
-        calendarContainer.innerHTML = '<div id="calendar"></div>';
-    }
+    ensureCalendarElement();
 
     loadAndDisplaySchedule();
 }

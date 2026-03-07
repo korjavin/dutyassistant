@@ -1,10 +1,15 @@
 package handlers
 
 import (
+	"time"
+
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/korjavin/dutyassistant/internal/scheduler"
 	"github.com/korjavin/dutyassistant/internal/store"
 )
+
+// TimeNow allows overriding time.Now in tests.
+var TimeNow = time.Now
 
 // Handlers holds dependencies for command handlers, such as the database store
 // and the business logic scheduler. This approach centralizes dependencies.
