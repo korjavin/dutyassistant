@@ -128,7 +128,7 @@ func TestGetSchedule(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	router := setupTestServer(mockStore)
 
-	t.Run("success", func(t *testing.T) {
+	t.Run("unauthorized", func(t *testing.T) {
 		year, month := 2023, 10
 		dutyDate, _ := time.Parse("2006-01-02", "2023-10-25")
 		expectedDuties := []*store.Duty{
@@ -142,7 +142,6 @@ func TestGetSchedule(t *testing.T) {
 		router.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
-		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response struct {
 			Duties []struct {
@@ -155,8 +154,95 @@ func TestGetSchedule(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotEmpty(t, response.Duties)
 		assert.Equal(t, int64(1), response.Duties[0].ID)
+		assert.Equal(t, int64(0), response.Duties[0].UserID) // Should be 0 when unauthorized
+		mockStore.AssertExpectations(t)
+	})
+
+	t.Run("success", func(t *testing.T) {
+		year, month := 2023, 10
+		dutyDate, _ := time.Parse("2006-01-02", "2023-10-25")
+		expectedDuties := []*store.Duty{
+			{
+				ID:       1,
+				UserID:   101,
+				DutyDate: dutyDate,
+				User: &store.User{
+					FirstName: "Alice",
+				},
+			},
+		}
+
+		mockStore.On("GetDutiesByMonth", mock.Anything, year, time.Month(month)).Return(expectedDuties, nil).Once()
+
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/api/v1/schedule/2023/10", nil)
+
+		// Provide authentication context
+		user := &store.User{ID: 1, TelegramUserID: 123, IsActive: true}
+		ctx := context.WithValue(req.Context(), middleware.UserKey, user)
+		req = req.WithContext(ctx)
+
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response struct {
+			Duties []struct {
+				ID       int64  `json:"id"`
+				UserID   int64  `json:"user_id"`
+				UserName string `json:"user_name"`
+				Date     string `json:"date"`
+			} `json:"duties"`
+		}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		assert.NotEmpty(t, response.Duties)
+		assert.Equal(t, int64(1), response.Duties[0].ID)
 		assert.Equal(t, int64(101), response.Duties[0].UserID)
-		// mockStore.AssertExpectations(t)
+		assert.Equal(t, "Alice", response.Duties[0].UserName)
+		mockStore.AssertExpectations(t)
+	})
+
+	t.Run("authorized without user object", func(t *testing.T) {
+		year, month := 2023, 10
+		dutyDate, _ := time.Parse("2006-01-02", "2023-10-25")
+		expectedDuties := []*store.Duty{
+			{
+				ID:       1,
+				UserID:   101,
+				DutyDate: dutyDate,
+				User:     nil, // No User object eagerly-loaded
+			},
+		}
+
+		mockStore.On("GetDutiesByMonth", mock.Anything, year, time.Month(month)).Return(expectedDuties, nil).Once()
+
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/api/v1/schedule/2023/10", nil)
+
+		// Provide authentication context
+		user := &store.User{ID: 1, TelegramUserID: 123, IsActive: true}
+		ctx := context.WithValue(req.Context(), middleware.UserKey, user)
+		req = req.WithContext(ctx)
+
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response struct {
+			Duties []struct {
+				ID       int64  `json:"id"`
+				UserID   int64  `json:"user_id"`
+				UserName string `json:"user_name"`
+				Date     string `json:"date"`
+			} `json:"duties"`
+		}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		assert.NotEmpty(t, response.Duties)
+		assert.Equal(t, int64(1), response.Duties[0].ID)
+		assert.Equal(t, int64(101), response.Duties[0].UserID)
+		assert.Equal(t, "", response.Duties[0].UserName)
 		mockStore.AssertExpectations(t)
 	})
 
