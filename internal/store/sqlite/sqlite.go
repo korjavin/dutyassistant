@@ -80,6 +80,7 @@ func (s *SQLiteStore) migrate(ctx context.Context) error {
 			assigned_at TEXT NOT NULL,
 			deadline_at TEXT NOT NULL,
 			completed_at TEXT,
+			cancelled_at TEXT,
 			reminder_id TEXT UNIQUE NOT NULL,
 			FOREIGN KEY(user_id) REFERENCES users(id)
 		);
@@ -109,6 +110,7 @@ func (s *SQLiteStore) migrate(ctx context.Context) error {
 		`ALTER TABLE users ADD COLUMN off_duty_start TEXT`,
 		`ALTER TABLE users ADD COLUMN off_duty_end TEXT`,
 		`ALTER TABLE duties ADD COLUMN completed_at TEXT`,
+		`ALTER TABLE chores ADD COLUMN cancelled_at TEXT`,
 	}
 
 	for _, alteration := range alterations {

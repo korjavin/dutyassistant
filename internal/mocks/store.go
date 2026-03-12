@@ -270,6 +270,16 @@ func (m *MockStore) GetLastChoreDigestDate(ctx context.Context) (string, error) 
 	return args.String(0), args.Error(1)
 }
 
+func (m *MockStore) CancelChore(ctx context.Context, id int64) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
+func (m *MockStore) ListActiveChores(ctx context.Context) ([]*store.Chore, error) {
+	args := m.Called(ctx)
+	return args.Get(0).([]*store.Chore), args.Error(1)
+}
+
 func (m *MockStore) SetLastChoreDigestDate(ctx context.Context, date string) error {
 	args := m.Called(ctx, date)
 	return args.Error(0)

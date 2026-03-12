@@ -242,3 +242,60 @@ func TestRoundRobin(t *testing.T) {
 		t.Errorf("Expected 1 admin queue user (user2), got %d users", len(admins))
 	}
 }
+
+func TestChoreCancellation(t *testing.T) {
+	s := setupTestDB(t)
+	ctx := context.Background()
+
+	// Prerequisite: Create a user
+	user := &store.User{TelegramUserID: 112233, FirstName: "Chore Worker", IsActive: true}
+	if err := s.CreateUser(ctx, user); err != nil {
+		t.Fatalf("Failed to create user for chore test: %v", err)
+	}
+
+	// 1. Create a Chore
+	chore := &store.Chore{
+		UserID:      user.ID,
+		Description: "Take out the trash",
+		AssignedAt:  time.Now(),
+		DeadlineAt:  time.Now().Add(24 * time.Hour),
+		ReminderID:  "reminder-123",
+	}
+	err := s.CreateChore(ctx, chore)
+	if err != nil {
+		t.Fatalf("CreateChore failed: %v", err)
+	}
+	if chore.ID == 0 {
+		t.Fatal("Expected chore ID to be set")
+	}
+
+	// 2. List Active Chores
+	activeChores, err := s.ListActiveChores(ctx)
+	if err != nil {
+		t.Fatalf("ListActiveChores failed: %v", err)
+	}
+	if len(activeChores) != 1 {
+		t.Errorf("Expected 1 active chore, got %d", len(activeChores))
+	}
+
+	// 3. Cancel the Chore
+	err = s.CancelChore(ctx, chore.ID)
+	if err != nil {
+		t.Fatalf("CancelChore failed: %v", err)
+	}
+
+	// 4. Verify it's no longer active
+	activeChoresAfter, err := s.ListActiveChores(ctx)
+	if err != nil {
+		t.Fatalf("ListActiveChores after cancel failed: %v", err)
+	}
+	if len(activeChoresAfter) != 0 {
+		t.Errorf("Expected 0 active chores after cancellation, got %d", len(activeChoresAfter))
+	}
+
+	// 5. Try to cancel again (should fail)
+	err = s.CancelChore(ctx, chore.ID)
+	if err == nil {
+		t.Errorf("Expected an error when cancelling an already cancelled chore")
+	}
+}

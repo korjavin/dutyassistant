@@ -11,14 +11,19 @@ import (
 
 // CreateChore creates a new chore in the database.
 func (s *SQLiteStore) CreateChore(ctx context.Context, chore *store.Chore) error {
-	query := `INSERT INTO chores (user_id, description, assigned_at, deadline_at, completed_at, reminder_id) VALUES (?, ?, ?, ?, ?, ?)`
+	query := `INSERT INTO chores (user_id, description, assigned_at, deadline_at, completed_at, cancelled_at, reminder_id) VALUES (?, ?, ?, ?, ?, ?, ?)`
 
 	var completedAt interface{}
 	if chore.CompletedAt != nil {
 		completedAt = chore.CompletedAt.UTC().Format(time.RFC3339)
 	}
 
-	res, err := s.db.ExecContext(ctx, query, chore.UserID, chore.Description, chore.AssignedAt.UTC().Format(time.RFC3339), chore.DeadlineAt.UTC().Format(time.RFC3339), completedAt, chore.ReminderID)
+	var cancelledAt interface{}
+	if chore.CancelledAt != nil {
+		cancelledAt = chore.CancelledAt.UTC().Format(time.RFC3339)
+	}
+
+	res, err := s.db.ExecContext(ctx, query, chore.UserID, chore.Description, chore.AssignedAt.UTC().Format(time.RFC3339), chore.DeadlineAt.UTC().Format(time.RFC3339), completedAt, cancelledAt, chore.ReminderID)
 	if err != nil {
 		return fmt.Errorf("could not insert chore: %w", err)
 	}
@@ -33,7 +38,7 @@ func (s *SQLiteStore) CreateChore(ctx context.Context, chore *store.Chore) error
 // GetChoreByReminderID retrieves a chore by its unique reminder ID.
 func (s *SQLiteStore) GetChoreByReminderID(ctx context.Context, reminderID string) (*store.Chore, error) {
 	query := `
-		SELECT c.id, c.user_id, c.description, c.assigned_at, c.deadline_at, c.completed_at, c.reminder_id,
+		SELECT c.id, c.user_id, c.description, c.assigned_at, c.deadline_at, c.completed_at, c.cancelled_at, c.reminder_id,
 		       u.id, u.telegram_user_id, u.first_name, u.is_admin, u.is_active
 		FROM chores c
 		JOIN users u ON c.user_id = u.id
@@ -43,14 +48,14 @@ func (s *SQLiteStore) GetChoreByReminderID(ctx context.Context, reminderID strin
 	return scanChoreWithUser(row)
 }
 
-// GetActiveChores retrieves all chores that are not completed.
+// GetActiveChores retrieves all chores that are not completed and not cancelled.
 func (s *SQLiteStore) GetActiveChores(ctx context.Context) ([]*store.Chore, error) {
 	query := `
-		SELECT c.id, c.user_id, c.description, c.assigned_at, c.deadline_at, c.completed_at, c.reminder_id,
+		SELECT c.id, c.user_id, c.description, c.assigned_at, c.deadline_at, c.completed_at, c.cancelled_at, c.reminder_id,
 		       u.id, u.telegram_user_id, u.first_name, u.is_admin, u.is_active
 		FROM chores c
 		JOIN users u ON c.user_id = u.id
-		WHERE c.completed_at IS NULL
+		WHERE c.completed_at IS NULL AND c.cancelled_at IS NULL
 		ORDER BY c.deadline_at ASC
 	`
 	rows, err := s.db.QueryContext(ctx, query)
@@ -65,11 +70,11 @@ func (s *SQLiteStore) GetActiveChores(ctx context.Context) ([]*store.Chore, erro
 // GetOverdueChores retrieves all active chores where the deadline has passed.
 func (s *SQLiteStore) GetOverdueChores(ctx context.Context) ([]*store.Chore, error) {
 	query := `
-		SELECT c.id, c.user_id, c.description, c.assigned_at, c.deadline_at, c.completed_at, c.reminder_id,
+		SELECT c.id, c.user_id, c.description, c.assigned_at, c.deadline_at, c.completed_at, c.cancelled_at, c.reminder_id,
 		       u.id, u.telegram_user_id, u.first_name, u.is_admin, u.is_active
 		FROM chores c
 		JOIN users u ON c.user_id = u.id
-		WHERE c.completed_at IS NULL AND c.deadline_at < ?
+		WHERE c.completed_at IS NULL AND c.cancelled_at IS NULL AND c.deadline_at < ?
 		ORDER BY c.deadline_at ASC
 	`
 	now := time.Now().UTC().Format(time.RFC3339)
@@ -92,6 +97,28 @@ func (s *SQLiteStore) CompleteChoreByReminderID(ctx context.Context, reminderID 
 	return nil
 }
 
+// CancelChore marks a chore as cancelled.
+func (s *SQLiteStore) CancelChore(ctx context.Context, id int64) error {
+	query := `UPDATE chores SET cancelled_at = ? WHERE id = ? AND completed_at IS NULL AND cancelled_at IS NULL`
+	res, err := s.db.ExecContext(ctx, query, time.Now().UTC().Format(time.RFC3339), id)
+	if err != nil {
+		return fmt.Errorf("could not cancel chore: %w", err)
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("could not check affected rows: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("chore not found or already completed/cancelled")
+	}
+	return nil
+}
+
+// ListActiveChores retrieves all active regular chores.
+func (s *SQLiteStore) ListActiveChores(ctx context.Context) ([]*store.Chore, error) {
+	return s.GetActiveChores(ctx)
+}
+
 // GetTopOverdueChores retrieves the most frequently overdue chore descriptions.
 func (s *SQLiteStore) GetTopOverdueChores(ctx context.Context, limit int) ([]*store.ChoreStat, error) {
 	// For simplicity, we just return the most recently overdue chores or most frequently.
@@ -101,7 +128,7 @@ func (s *SQLiteStore) GetTopOverdueChores(ctx context.Context, limit int) ([]*st
 	query := `
 		SELECT description, COUNT(*) as cnt
 		FROM chores
-		WHERE deadline_at < COALESCE(completed_at, ?)
+		WHERE cancelled_at IS NULL AND deadline_at < COALESCE(completed_at, ?)
 		GROUP BY description
 		ORDER BY cnt DESC
 		LIMIT ?
@@ -158,10 +185,10 @@ func (s *SQLiteStore) GetTopCompletedChoresUsers(ctx context.Context, limit int)
 func scanChoreWithUser(row *sql.Row) (*store.Chore, error) {
 	chore := &store.Chore{User: &store.User{}}
 	var assignedAtStr, deadlineAtStr string
-	var completedAtStr sql.NullString
+	var completedAtStr, cancelledAtStr sql.NullString
 
 	err := row.Scan(
-		&chore.ID, &chore.UserID, &chore.Description, &assignedAtStr, &deadlineAtStr, &completedAtStr, &chore.ReminderID,
+		&chore.ID, &chore.UserID, &chore.Description, &assignedAtStr, &deadlineAtStr, &completedAtStr, &cancelledAtStr, &chore.ReminderID,
 		&chore.User.ID, &chore.User.TelegramUserID, &chore.User.FirstName, &chore.User.IsAdmin, &chore.User.IsActive,
 	)
 	if err != nil {
@@ -177,6 +204,10 @@ func scanChoreWithUser(row *sql.Row) (*store.Chore, error) {
 		t, _ := time.Parse(time.RFC3339, completedAtStr.String)
 		chore.CompletedAt = &t
 	}
+	if cancelledAtStr.Valid {
+		t, _ := time.Parse(time.RFC3339, cancelledAtStr.String)
+		chore.CancelledAt = &t
+	}
 	return chore, nil
 }
 
@@ -185,10 +216,10 @@ func scanChoreRowsWithUser(rows *sql.Rows) ([]*store.Chore, error) {
 	for rows.Next() {
 		chore := &store.Chore{User: &store.User{}}
 		var assignedAtStr, deadlineAtStr string
-		var completedAtStr sql.NullString
+		var completedAtStr, cancelledAtStr sql.NullString
 
 		err := rows.Scan(
-			&chore.ID, &chore.UserID, &chore.Description, &assignedAtStr, &deadlineAtStr, &completedAtStr, &chore.ReminderID,
+			&chore.ID, &chore.UserID, &chore.Description, &assignedAtStr, &deadlineAtStr, &completedAtStr, &cancelledAtStr, &chore.ReminderID,
 			&chore.User.ID, &chore.User.TelegramUserID, &chore.User.FirstName, &chore.User.IsAdmin, &chore.User.IsActive,
 		)
 		if err != nil {
@@ -200,6 +231,10 @@ func scanChoreRowsWithUser(rows *sql.Rows) ([]*store.Chore, error) {
 		if completedAtStr.Valid {
 			t, _ := time.Parse(time.RFC3339, completedAtStr.String)
 			chore.CompletedAt = &t
+		}
+		if cancelledAtStr.Valid {
+			t, _ := time.Parse(time.RFC3339, cancelledAtStr.String)
+			chore.CancelledAt = &t
 		}
 		chores = append(chores, chore)
 	}

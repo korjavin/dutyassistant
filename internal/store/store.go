@@ -46,6 +46,7 @@ type Chore struct {
 	AssignedAt  time.Time
 	DeadlineAt  time.Time
 	CompletedAt *time.Time
+	CancelledAt *time.Time
 	ReminderID  string
 	User        *User
 }
@@ -118,6 +119,8 @@ type Store interface {
 	GetActiveChores(ctx context.Context) ([]*Chore, error)
 	GetOverdueChores(ctx context.Context) ([]*Chore, error)
 	CompleteChoreByReminderID(ctx context.Context, reminderID string) error
+	CancelChore(ctx context.Context, id int64) error
+	ListActiveChores(ctx context.Context) ([]*Chore, error)
 	GetTopOverdueChores(ctx context.Context, limit int) ([]*ChoreStat, error)
 	GetTopCompletedChoresUsers(ctx context.Context, limit int) ([]*UserChoreStat, error)
 	GetLastChoreDigestDate(ctx context.Context) (string, error)
