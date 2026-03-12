@@ -61,9 +61,9 @@ notification as when a user self-completes.
 **Files:**
 - Modify: `internal/telegram/bot.go`
 
-- [ ] Add `case "complete"` route to handleCommand() switch
-- [ ] Add `case "complete_chore"` route to handleCallbackQuery() switch
-- [ ] Run project test suite - must pass before task 4
+- [x] Add `case "complete"` route to handleCommand() switch
+- [x] Add `case "complete_chore"` route to handleCallbackQuery() switch
+- [x] Run project test suite - must pass before task 4
 
 ### Task 4: Update help message
 

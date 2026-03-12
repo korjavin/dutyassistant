@@ -210,6 +210,8 @@ func (b *Bot) handleCommand(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 		return b.handlers.HandleVacation(m)
 	case "toggle_active", "toggleactive":
 		return b.handlers.HandleToggleActive(m)
+	case "complete":
+		return b.handlers.HandleComplete(m)
 	default:
 		msg := tgbotapi.NewMessage(m.Chat.ID, "Unknown command. Use /help for a list of commands.")
 		return msg, nil
@@ -263,6 +265,8 @@ func (b *Bot) handleCallbackQuery(q *tgbotapi.CallbackQuery) (tgbotapi.Chattable
 		return b.handlers.HandleChoreDoneCallback(q)
 	case "chore_remind":
 		return b.handlers.HandleChoreRemindCallback(q)
+	case "complete_chore":
+		return b.handlers.HandleCompleteChoreCallback(q)
 	default:
 		log.Printf("Unknown callback action: %s", action)
 		return nil, nil
