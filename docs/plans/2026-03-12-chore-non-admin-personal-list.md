@@ -65,10 +65,10 @@ When a non-admin user sends `/chore`, instead of getting "admin only" message, t
 
 ### Task 4: Verify acceptance criteria
 
-- [ ] Manual test: non-admin user sends `/chore`, receives list of their active chores with descriptions and assignment times
-- [ ] Manual test: admin sends `/chore <description>`, behavior unchanged
-- [ ] Run full test suite: `go test ./...`
-- [ ] Run linter: `go vet ./...`
+- [x] Manual test: non-admin user sends `/chore`, receives list of their active chores with descriptions and assignment times
+- [x] Manual test: admin sends `/chore <description>`, behavior unchanged
+- [x] Run full test suite: `go test ./...`
+- [x] Run linter: `go vet ./...`
 
 ### Task 5: Update documentation
 
