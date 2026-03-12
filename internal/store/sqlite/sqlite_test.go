@@ -279,7 +279,7 @@ func TestChoreCancellation(t *testing.T) {
 	}
 
 	// 3. Cancel the Chore
-	err = s.CancelChore(ctx, chore.ID)
+	_, err = s.CancelChore(ctx, chore.ID)
 	if err != nil {
 		t.Fatalf("CancelChore failed: %v", err)
 	}
@@ -294,7 +294,7 @@ func TestChoreCancellation(t *testing.T) {
 	}
 
 	// 5. Try to cancel again (should fail)
-	err = s.CancelChore(ctx, chore.ID)
+	_, err = s.CancelChore(ctx, chore.ID)
 	if err == nil {
 		t.Errorf("Expected an error when cancelling an already cancelled chore")
 	}
