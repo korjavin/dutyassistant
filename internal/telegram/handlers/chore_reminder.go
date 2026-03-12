@@ -161,6 +161,15 @@ func (crm *ChoreReminderManager) CompleteChore(reminderID string) {
 	log.Printf("Marked chore %s as completed", reminderID)
 }
 
+// CancelChore removes a cancelled chore from active tracking
+func (crm *ChoreReminderManager) CancelChore(reminderID string) {
+	crm.mu.Lock()
+	defer crm.mu.Unlock()
+
+	delete(crm.activeChores, reminderID)
+	log.Printf("Removed cancelled chore %s from tracking", reminderID)
+}
+
 // SendCompletionToGroup sends a completion message to the group chat
 func (crm *ChoreReminderManager) SendCompletionToGroup(assignment *ChoreAssignment) error {
 	if crm.bot == nil {

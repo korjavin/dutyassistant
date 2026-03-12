@@ -481,6 +481,12 @@ func (m *mockStore) GetTopCompletedChoresUsers(ctx context.Context, limit int) (
 func (m *mockStore) GetLastChoreDigestDate(ctx context.Context) (string, error) {
 	return "", nil
 }
+func (m *mockStore) CancelChore(ctx context.Context, id int64) (*store.Chore, error) {
+	return nil, nil
+}
+func (m *mockStore) ListActiveChores(ctx context.Context) ([]*store.Chore, error) {
+	return nil, nil
+}
 func (m *mockStore) SetLastChoreDigestDate(ctx context.Context, date string) error {
 	return nil
 }

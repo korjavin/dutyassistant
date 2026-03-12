@@ -217,3 +217,84 @@ func TestProcessRecurringChores_Success(t *testing.T) {
 	// Ensure methods were called
 	mockStore.AssertExpectations(t)
 }
+
+func TestHandleList_Task(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.New(mockStore, nil, 0)
+
+	adminUser := &store.User{ID: 1, TelegramUserID: 123, IsAdmin: true}
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(123)).Return(adminUser, nil)
+
+	chores := []*store.Chore{
+		{ID: 1, Description: "Foo Task", AssignedAt: time.Now(), User: &store.User{FirstName: "Alice"}},
+		{ID: 2, Description: "Bar Task", AssignedAt: time.Now(), User: &store.User{FirstName: "Bob"}},
+	}
+
+	mockStore.On("ListActiveChores", mock.Anything).Return(chores, nil)
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 789},
+		From: &tgbotapi.User{ID: 123},
+		Text: "/list task",
+		Entities: []tgbotapi.MessageEntity{
+			{Type: "bot_command", Offset: 0, Length: 5},
+		},
+	}
+
+	response, err := h.HandleList(message)
+	assert.NoError(t, err)
+
+	assert.Contains(t, response.Text, "Foo Task")
+	assert.Contains(t, response.Text, "Alice")
+	assert.Contains(t, response.Text, "Bar Task")
+	assert.Contains(t, response.Text, "Bob")
+}
+
+func TestHandleCancel_Task(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.New(mockStore, nil, 0)
+
+	adminUser := &store.User{ID: 1, TelegramUserID: 123, IsAdmin: true}
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(123)).Return(adminUser, nil)
+
+	chore := &store.Chore{ID: 42, ReminderID: "rem-123"}
+	mockStore.On("CancelChore", mock.Anything, int64(42)).Return(chore, nil)
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 789},
+		From: &tgbotapi.User{ID: 123},
+		Text: "/cancel task 42",
+		Entities: []tgbotapi.MessageEntity{
+			{Type: "bot_command", Offset: 0, Length: 7},
+		},
+	}
+
+	response, err := h.HandleCancel(message)
+	assert.NoError(t, err)
+
+	assert.Contains(t, response.Text, "Regular chore 42 cancelled successfully")
+}
+
+func TestHandleCancel_Task_ErrorCases(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.New(mockStore, nil, 0)
+
+	adminUser := &store.User{ID: 1, TelegramUserID: 123, IsAdmin: true}
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(123)).Return(adminUser, nil)
+
+	mockStore.On("CancelChore", mock.Anything, int64(99)).Return(nil, assert.AnError)
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 789},
+		From: &tgbotapi.User{ID: 123},
+		Text: "/cancel task 99",
+		Entities: []tgbotapi.MessageEntity{
+			{Type: "bot_command", Offset: 0, Length: 7},
+		},
+	}
+
+	response, err := h.HandleCancel(message)
+	assert.NoError(t, err)
+
+	assert.Contains(t, response.Text, "Failed to cancel regular chore (not found, already completed, or cancelled)")
+}
