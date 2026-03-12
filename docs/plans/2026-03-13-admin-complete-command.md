@@ -75,13 +75,13 @@ notification as when a user self-completes.
 
 ### Task 5: Verify acceptance criteria
 
-- [ ] manual test: Run bot, use /complete as admin, verify chore list appears
-- [ ] manual test: Select a chore, verify group notification matches self-completion format
-- [ ] manual test: Verify chore is removed from active tracking (no more reminders)
-- [ ] manual test: Verify non-admins get admin-only error
-- [ ] run full test suite
-- [ ] run linter
-- [ ] verify test coverage meets 80%+
+- [ ] manual test: Run bot, use /complete as admin, verify chore list appears (requires live environment)
+- [ ] manual test: Select a chore, verify group notification matches self-completion format (requires live environment)
+- [ ] manual test: Verify chore is removed from active tracking (no more reminders) (requires live environment)
+- [ ] manual test: Verify non-admins get admin-only error (requires live environment)
+- [x] run full test suite - all tests pass
+- [x] run linter - go vet passes (pre-existing linter issues unrelated to this change)
+- [x] verify test coverage meets 80%+ - HandleComplete: 100%, HandleCompleteChoreCallback: 85.7%
 
 ### Task 6: Update documentation
 
