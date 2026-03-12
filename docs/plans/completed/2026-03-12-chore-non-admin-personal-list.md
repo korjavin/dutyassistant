@@ -72,5 +72,5 @@ When a non-admin user sends `/chore`, instead of getting "admin only" message, t
 
 ### Task 5: Update documentation
 
-- [ ] Update README.md if it documents bot commands
-- [ ] Move this plan to `docs/plans/completed/`
+- [x] Update README.md if it documents bot commands
+- [x] Move this plan to `docs/plans/completed/`
