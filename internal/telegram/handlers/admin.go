@@ -1048,3 +1048,86 @@ func (h *Handlers) HandleComplete(m *tgbotapi.Message) (tgbotapi.MessageConfig, 
 	msg.ReplyMarkup = keyboard
 	return msg, nil
 }
+
+// HandleCompleteChoreCallback handles the callback when a chore is selected for completion by admin.
+func (h *Handlers) HandleCompleteChoreCallback(q *tgbotapi.CallbackQuery) (tgbotapi.EditMessageTextConfig, error) {
+	// Extract reminderID from callback data: "complete_chore:reminderID"
+	parts := strings.Split(q.Data, ":")
+	if len(parts) != 2 {
+		log.Printf("Invalid callback data format: %s", q.Data)
+		edit := tgbotapi.NewEditMessageText(
+			q.Message.Chat.ID,
+			q.Message.MessageID,
+			"❌ Error: Invalid callback data.",
+		)
+		return edit, nil
+	}
+
+	reminderID := parts[1]
+
+	if h.ChoreReminderManager == nil {
+		edit := tgbotapi.NewEditMessageText(
+			q.Message.Chat.ID,
+			q.Message.MessageID,
+			"❌ Error: Reminder manager not configured.",
+		)
+		return edit, nil
+	}
+
+	// Get chore by reminderID from database
+	chore, err := h.Store.GetChoreByReminderID(context.Background(), reminderID)
+	if err != nil {
+		log.Printf("Failed to get chore by reminderID %s: %v", reminderID, err)
+		edit := tgbotapi.NewEditMessageText(
+			q.Message.Chat.ID,
+			q.Message.MessageID,
+			"❌ Error: Could not find chore.",
+		)
+		return edit, nil
+	}
+
+	if chore == nil || chore.User == nil {
+		edit := tgbotapi.NewEditMessageText(
+			q.Message.Chat.ID,
+			q.Message.MessageID,
+			"❌ Error: Chore not found or has no assigned user.",
+		)
+		return edit, nil
+	}
+
+	// Create assignment from chore
+	assignment := &ChoreAssignment{
+		UserID:      chore.User.TelegramUserID,
+		UserName:    chore.User.FirstName,
+		Description: chore.Description,
+		AssignedAt:  chore.AssignedAt,
+		GroupID:     h.GroupID,
+		ReminderID:  reminderID,
+	}
+
+	// Send completion message to group
+	if err := h.ChoreReminderManager.SendCompletionToGroup(assignment); err != nil {
+		log.Printf("Failed to send completion message to group: %v", err)
+	}
+
+	// Mark as completed in database
+	if err := h.Store.CompleteChoreByReminderID(context.Background(), reminderID); err != nil {
+		log.Printf("Failed to complete chore in database: %v", err)
+	}
+
+	// Remove from active tracking
+	h.ChoreReminderManager.CompleteChore(reminderID)
+
+	// Update the message to show completion confirmation
+	// Escape HTML at display time (chore.Description and chore.User.FirstName are stored unescaped)
+	escapedDesc := html.EscapeString(chore.Description)
+	escapedName := html.EscapeString(chore.User.FirstName)
+	edit := tgbotapi.NewEditMessageText(
+		q.Message.Chat.ID,
+		q.Message.MessageID,
+		fmt.Sprintf("✅ <b>Chore Completed!</b>\n\nMarked <b>%s</b>'s chore as completed:\n\n<i>%s</i>\n\nThe group has been notified!", escapedName, escapedDesc),
+	)
+	edit.ParseMode = tgbotapi.ModeHTML
+
+	return edit, nil
+}

@@ -46,15 +46,15 @@ notification as when a user self-completes.
 **Files:**
 - Modify: `internal/telegram/handlers/admin.go`
 
-- [ ] Add `HandleCompleteChoreCallback(q *tgbotapi.CallbackQuery)` function
-- [ ] Parse reminderID from callback data
-- [ ] Get chore by reminderID using `h.Store.GetChoreByReminderID(ctx, reminderID)`
-- [ ] Send group notification using `h.ChoreReminderManager.SendCompletionToGroup(assignment)`
-- [ ] Mark chore as complete using `h.Store.CompleteChoreByReminderID(ctx, reminderID)`
-- [ ] Remove from active tracking using `h.ChoreReminderManager.CompleteChore(reminderID)`
-- [ ] Update callback message to show completion confirmation
-- [ ] Write unit tests for HandleCompleteChoreCallback
-- [ ] Run project test suite - must pass before task 3
+- [x] Add `HandleCompleteChoreCallback(q *tgbotapi.CallbackQuery)` function
+- [x] Parse reminderID from callback data
+- [x] Get chore by reminderID using `h.Store.GetChoreByReminderID(ctx, reminderID)`
+- [x] Send group notification using `h.ChoreReminderManager.SendCompletionToGroup(assignment)`
+- [x] Mark chore as complete using `h.Store.CompleteChoreByReminderID(ctx, reminderID)`
+- [x] Remove from active tracking using `h.ChoreReminderManager.CompleteChore(reminderID)`
+- [x] Update callback message to show completion confirmation
+- [x] Write unit tests for HandleCompleteChoreCallback
+- [x] Run project test suite - must pass before task 3
 
 ### Task 3: Register command and callback in bot router
 

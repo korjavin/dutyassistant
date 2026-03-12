@@ -1,7 +1,11 @@
 package handlers_test
 
 import (
+	"bytes"
 	"errors"
+	"io"
+	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -318,6 +322,244 @@ func TestHandleComplete_ChoreWithoutUser(t *testing.T) {
 	// Should have no buttons since the only chore had no user
 	inlineKeyboard := msg.ReplyMarkup.(tgbotapi.InlineKeyboardMarkup)
 	assert.Len(t, inlineKeyboard.InlineKeyboard, 0)
+
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleCompleteChoreCallback_Success(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
+	mockScheduler := new(mocks.MockScheduler)
+	groupID := int64(-1001234567890)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, groupID, 123)
+
+	// Mock Bot API client
+	client := NewTestClient(func(req *http.Request) *http.Response {
+		if strings.Contains(req.URL.String(), "sendMessage") {
+			return &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(bytes.NewBufferString(`{"ok":true, "result": {"message_id": 1, "chat": {"id": -1001234567890}}}`)),
+				Header:     make(http.Header),
+			}
+		}
+		if strings.Contains(req.URL.String(), "getMe") {
+			return &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(bytes.NewBufferString(`{"ok":true, "result": {"id": 123456, "is_bot": true, "first_name": "TestBot"}}`)),
+				Header:     make(http.Header),
+			}
+		}
+		return &http.Response{StatusCode: 404, Body: io.NopCloser(bytes.NewBufferString(`{}`)), Header: make(http.Header)}
+	})
+
+	bot, err := tgbotapi.NewBotAPIWithClient("TOKEN", tgbotapi.APIEndpoint, client)
+	assert.NoError(t, err)
+	h.SetBot(bot)
+
+	// The ChoreReminderManager is initialized when SetBot is called
+	callback := &tgbotapi.CallbackQuery{
+		ID: "callback_123",
+		Message: &tgbotapi.Message{
+			Chat:      &tgbotapi.Chat{ID: 789},
+			MessageID: 456,
+		},
+		Data: "complete_chore:reminder_1",
+	}
+
+	// Create sample chore with user
+	now := time.Now()
+	alice := &store.User{ID: 2, FirstName: "Alice", TelegramUserID: 222}
+
+	chore := &store.Chore{
+		ID:          1,
+		UserID:      2,
+		Description: "Clean the kitchen",
+		AssignedAt:  now,
+		ReminderID:  "reminder_1",
+		User:        alice,
+	}
+
+	mockStore.On("GetChoreByReminderID", mock.Anything, "reminder_1").Return(chore, nil)
+	mockStore.On("CompleteChoreByReminderID", mock.Anything, "reminder_1").Return(nil)
+
+	edit, err := h.HandleCompleteChoreCallback(callback)
+	assert.NoError(t, err)
+	assert.Contains(t, edit.Text, "Chore Completed!")
+	assert.Contains(t, edit.Text, "Alice")
+	assert.Contains(t, edit.Text, "Clean the kitchen")
+	assert.Equal(t, tgbotapi.ModeHTML, edit.ParseMode)
+	assert.Equal(t, int64(789), edit.ChatID)
+	assert.Equal(t, 456, edit.MessageID)
+
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleCompleteChoreCallback_InvalidCallbackData(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
+	mockScheduler := new(mocks.MockScheduler)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
+
+	// Mock Bot API client
+	client := NewTestClient(func(req *http.Request) *http.Response {
+		if strings.Contains(req.URL.String(), "getMe") {
+			return &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(bytes.NewBufferString(`{"ok":true, "result": {"id": 123456, "is_bot": true, "first_name": "TestBot"}}`)),
+				Header:     make(http.Header),
+			}
+		}
+		return &http.Response{StatusCode: 404, Body: io.NopCloser(bytes.NewBufferString(`{}`)), Header: make(http.Header)}
+	})
+
+	bot, err := tgbotapi.NewBotAPIWithClient("TOKEN", tgbotapi.APIEndpoint, client)
+	assert.NoError(t, err)
+	h.SetBot(bot)
+
+	callback := &tgbotapi.CallbackQuery{
+		ID: "callback_123",
+		Message: &tgbotapi.Message{
+			Chat:      &tgbotapi.Chat{ID: 789},
+			MessageID: 456,
+		},
+		Data: "invalid_data", // Invalid format
+	}
+
+	edit, err := h.HandleCompleteChoreCallback(callback)
+	assert.NoError(t, err)
+	assert.Contains(t, edit.Text, "Error: Invalid callback data.")
+	assert.Equal(t, int64(789), edit.ChatID)
+	assert.Equal(t, 456, edit.MessageID)
+}
+
+func TestHandleCompleteChoreCallback_ChoreNotFound(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
+	mockScheduler := new(mocks.MockScheduler)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
+
+	// Mock Bot API client
+	client := NewTestClient(func(req *http.Request) *http.Response {
+		if strings.Contains(req.URL.String(), "getMe") {
+			return &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(bytes.NewBufferString(`{"ok":true, "result": {"id": 123456, "is_bot": true, "first_name": "TestBot"}}`)),
+				Header:     make(http.Header),
+			}
+		}
+		return &http.Response{StatusCode: 404, Body: io.NopCloser(bytes.NewBufferString(`{}`)), Header: make(http.Header)}
+	})
+
+	bot, err := tgbotapi.NewBotAPIWithClient("TOKEN", tgbotapi.APIEndpoint, client)
+	assert.NoError(t, err)
+	h.SetBot(bot)
+
+	callback := &tgbotapi.CallbackQuery{
+		ID: "callback_123",
+		Message: &tgbotapi.Message{
+			Chat:      &tgbotapi.Chat{ID: 789},
+			MessageID: 456,
+		},
+		Data: "complete_chore:nonexistent",
+	}
+
+	mockStore.On("GetChoreByReminderID", mock.Anything, "nonexistent").Return(nil, errors.New("not found"))
+
+	edit, err := h.HandleCompleteChoreCallback(callback)
+	assert.NoError(t, err)
+	assert.Contains(t, edit.Text, "Error: Could not find chore.")
+
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleCompleteChoreCallback_ChoreWithoutUser(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
+	mockScheduler := new(mocks.MockScheduler)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
+
+	// Mock Bot API client
+	client := NewTestClient(func(req *http.Request) *http.Response {
+		if strings.Contains(req.URL.String(), "getMe") {
+			return &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(bytes.NewBufferString(`{"ok":true, "result": {"id": 123456, "is_bot": true, "first_name": "TestBot"}}`)),
+				Header:     make(http.Header),
+			}
+		}
+		return &http.Response{StatusCode: 404, Body: io.NopCloser(bytes.NewBufferString(`{}`)), Header: make(http.Header)}
+	})
+
+	bot, err := tgbotapi.NewBotAPIWithClient("TOKEN", tgbotapi.APIEndpoint, client)
+	assert.NoError(t, err)
+	h.SetBot(bot)
+
+	callback := &tgbotapi.CallbackQuery{
+		ID: "callback_123",
+		Message: &tgbotapi.Message{
+			Chat:      &tgbotapi.Chat{ID: 789},
+			MessageID: 456,
+		},
+		Data: "complete_chore:reminder_no_user",
+	}
+
+	// Create chore without user
+	now := time.Now()
+	chore := &store.Chore{
+		ID:          1,
+		UserID:      2,
+		Description: "Orphaned chore",
+		AssignedAt:  now,
+		ReminderID:  "reminder_no_user",
+		User:        nil,
+	}
+
+	mockStore.On("GetChoreByReminderID", mock.Anything, "reminder_no_user").Return(chore, nil)
+
+	edit, err := h.HandleCompleteChoreCallback(callback)
+	assert.NoError(t, err)
+	assert.Contains(t, edit.Text, "Error: Chore not found or has no assigned user.")
+
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleCompleteChoreCallback_NilChore(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
+	mockScheduler := new(mocks.MockScheduler)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
+
+	// Mock Bot API client
+	client := NewTestClient(func(req *http.Request) *http.Response {
+		if strings.Contains(req.URL.String(), "getMe") {
+			return &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(bytes.NewBufferString(`{"ok":true, "result": {"id": 123456, "is_bot": true, "first_name": "TestBot"}}`)),
+				Header:     make(http.Header),
+			}
+		}
+		return &http.Response{StatusCode: 404, Body: io.NopCloser(bytes.NewBufferString(`{}`)), Header: make(http.Header)}
+	})
+
+	bot, err := tgbotapi.NewBotAPIWithClient("TOKEN", tgbotapi.APIEndpoint, client)
+	assert.NoError(t, err)
+	h.SetBot(bot)
+
+	callback := &tgbotapi.CallbackQuery{
+		ID: "callback_123",
+		Message: &tgbotapi.Message{
+			Chat:      &tgbotapi.Chat{ID: 789},
+			MessageID: 456,
+		},
+		Data: "complete_chore:nil_chore",
+	}
+
+	mockStore.On("GetChoreByReminderID", mock.Anything, "nil_chore").Return(nil, nil)
+
+	edit, err := h.HandleCompleteChoreCallback(callback)
+	assert.NoError(t, err)
+	// When chore is nil, we return a generic error message
+	assert.Contains(t, edit.Text, "Error: Chore not found or has no assigned user.")
 
 	mockStore.AssertExpectations(t)
 }
