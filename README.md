@@ -103,6 +103,8 @@ The project uses GitHub Actions for automated builds and deployments. On push to
 - `/modify` or `/change` - Change duty assignment for a date (interactive date + user selection)
 - `/offduty` - Set off-duty period for a user (interactive user selection, text date input)
 - `/toggleactive` - Toggle user active/inactive status (interactive user selection with status indicators)
+- `/unassign` - Remove days from a user's admin queue (interactive user + days selection)
+- `/vacation [on|off]` - Toggle vacation mode to pause all duty assignments (interactive button UI when no argument provided)
 - `/users` - List all users with their queues and status
 
 ### Interactive UX

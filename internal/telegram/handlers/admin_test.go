@@ -183,15 +183,14 @@ func TestHandleComplete_NotAdmin(t *testing.T) {
 }
 
 func TestHandleComplete_NoActiveChores(t *testing.T) {
-	_, _, h := setupAdminTest(t)
+	mockStore := new(mocks.MockStore)
+	h := handlers.New(mockStore, nil, 0)
 
 	message := &tgbotapi.Message{
 		Chat: &tgbotapi.Chat{ID: 789},
 		From: &tgbotapi.User{ID: 123},
 	}
 
-	mockStore := new(mocks.MockStore)
-	h = handlers.New(mockStore, nil, 0)
 
 	adminUser := &store.User{ID: 1, TelegramUserID: 123, IsAdmin: true}
 	mockStore.On("GetUserByTelegramID", mock.Anything, int64(123)).Return(adminUser, nil)
@@ -317,11 +316,9 @@ func TestHandleComplete_ChoreWithoutUser(t *testing.T) {
 
 	msg, err := h.HandleComplete(message)
 	assert.NoError(t, err)
-	assert.Contains(t, msg.Text, "Mark Chore as Completed")
-
-	// Should have no buttons since the only chore had no user
-	inlineKeyboard := msg.ReplyMarkup.(tgbotapi.InlineKeyboardMarkup)
-	assert.Len(t, inlineKeyboard.InlineKeyboard, 0)
+	// All chores had no assigned user, so treated same as no active chores
+	assert.Contains(t, msg.Text, "No active chores found")
+	assert.Nil(t, msg.ReplyMarkup)
 
 	mockStore.AssertExpectations(t)
 }

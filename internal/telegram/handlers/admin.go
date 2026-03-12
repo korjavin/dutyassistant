@@ -1028,11 +1028,8 @@ func (h *Handlers) HandleComplete(m *tgbotapi.Message) (tgbotapi.MessageConfig, 
 			deadlineStr = chore.DeadlineAt.Format("15:04")
 		}
 
-		// Escape HTML at display time (chore.Description and chore.User.FirstName are stored unescaped)
-		escapedDesc := html.EscapeString(chore.Description)
-		escapedName := html.EscapeString(chore.User.FirstName)
-
-		buttonLabel := fmt.Sprintf("%s - %s @%s", escapedName, escapedDesc, deadlineStr)
+		// Button labels are plain text - use raw values (no HTML escaping)
+		buttonLabel := fmt.Sprintf("%s - %s @%s", chore.User.FirstName, chore.Description, deadlineStr)
 		row := []tgbotapi.InlineKeyboardButton{
 			tgbotapi.NewInlineKeyboardButtonData(
 				buttonLabel,
@@ -1040,6 +1037,10 @@ func (h *Handlers) HandleComplete(m *tgbotapi.Message) (tgbotapi.MessageConfig, 
 			),
 		}
 		buttons = append(buttons, row)
+	}
+
+	if len(buttons) == 0 {
+		return tgbotapi.NewMessage(m.Chat.ID, "✨ No active chores found! All clear."), nil
 	}
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
