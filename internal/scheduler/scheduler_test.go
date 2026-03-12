@@ -462,6 +462,9 @@ func (m *mockStore) GetChoreByReminderID(ctx context.Context, reminderID string)
 func (m *mockStore) GetActiveChores(ctx context.Context) ([]*store.Chore, error) {
 	return nil, nil
 }
+func (m *mockStore) GetActiveChoresByUserID(ctx context.Context, userID int64) ([]*store.Chore, error) {
+	return nil, nil
+}
 func (m *mockStore) GetOverdueChores(ctx context.Context) ([]*store.Chore, error) {
 	return nil, nil
 }

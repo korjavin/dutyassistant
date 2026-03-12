@@ -251,6 +251,13 @@ func (m *MockStore) GetActiveChores(ctx context.Context) ([]*store.Chore, error)
 	}
 	return args.Get(0).([]*store.Chore), args.Error(1)
 }
+func (m *MockStore) GetActiveChoresByUserID(ctx context.Context, userID int64) ([]*store.Chore, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*store.Chore), args.Error(1)
+}
 func (m *MockStore) GetOverdueChores(ctx context.Context) ([]*store.Chore, error) {
 	args := m.Called(ctx)
 	if args.Get(0) == nil {
