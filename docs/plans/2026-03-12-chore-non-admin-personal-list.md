@@ -60,8 +60,8 @@ When a non-admin user sends `/chore`, instead of getting "admin only" message, t
 **Files:**
 - Modify: `internal/telegram/handlers/commands.go`
 
-- [ ] Update `helpMessage` to document that non-admins can use `/chore` to see their assigned chores
-- [ ] Run `go test ./...` — must pass
+- [x] Update `helpMessage` to document that non-admins can use `/chore` to see their assigned chores
+- [x] Run `go test ./...` — must pass
 
 ### Task 4: Verify acceptance criteria
 
