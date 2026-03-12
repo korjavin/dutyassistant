@@ -520,6 +520,67 @@ func TestHandleCompleteChoreCallback_ChoreWithoutUser(t *testing.T) {
 	mockStore.AssertExpectations(t)
 }
 
+func TestHandleCompleteChoreCallback_DBFailure(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
+	mockScheduler := new(mocks.MockScheduler)
+	groupID := int64(-1001234567890)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, groupID, 123)
+
+	client := NewTestClient(func(req *http.Request) *http.Response {
+		if strings.Contains(req.URL.String(), "sendMessage") {
+			return &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(bytes.NewBufferString(`{"ok":true, "result": {"message_id": 1, "chat": {"id": -1001234567890}}}`)),
+				Header:     make(http.Header),
+			}
+		}
+		if strings.Contains(req.URL.String(), "getMe") {
+			return &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(bytes.NewBufferString(`{"ok":true, "result": {"id": 123456, "is_bot": true, "first_name": "TestBot"}}`)),
+				Header:     make(http.Header),
+			}
+		}
+		return &http.Response{StatusCode: 404, Body: io.NopCloser(bytes.NewBufferString(`{}`)), Header: make(http.Header)}
+	})
+
+	bot, err := tgbotapi.NewBotAPIWithClient("TOKEN", tgbotapi.APIEndpoint, client)
+	assert.NoError(t, err)
+	h.SetBot(bot)
+
+	callback := &tgbotapi.CallbackQuery{
+		ID: "callback_123",
+		Message: &tgbotapi.Message{
+			Chat:      &tgbotapi.Chat{ID: 789},
+			MessageID: 456,
+		},
+		Data: "complete_chore:reminder_1",
+	}
+
+	now := time.Now()
+	alice := &store.User{ID: 2, FirstName: "Alice", TelegramUserID: 222}
+	chore := &store.Chore{
+		ID:          1,
+		UserID:      2,
+		Description: "Clean the kitchen",
+		AssignedAt:  now,
+		ReminderID:  "reminder_1",
+		User:        alice,
+	}
+
+	mockStore.On("GetChoreByReminderID", mock.Anything, "reminder_1").Return(chore, nil)
+	mockStore.On("CompleteChoreByReminderID", mock.Anything, "reminder_1").Return(errors.New("db error"))
+
+	edit, err := h.HandleCompleteChoreCallback(callback)
+	assert.NoError(t, err)
+	assert.Contains(t, edit.Text, "Error: Failed to mark chore as completed.")
+	assert.Equal(t, int64(789), edit.ChatID)
+	assert.Equal(t, 456, edit.MessageID)
+
+	mockStore.AssertExpectations(t)
+}
+
 func TestHandleCompleteChoreCallback_NilChore(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)

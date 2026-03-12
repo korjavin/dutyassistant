@@ -1106,14 +1106,22 @@ func (h *Handlers) HandleCompleteChoreCallback(q *tgbotapi.CallbackQuery) (tgbot
 		ReminderID:  reminderID,
 	}
 
-	// Send completion message to group
+	// Send completion message to group (best-effort)
+	groupNotified := true
 	if err := h.ChoreReminderManager.SendCompletionToGroup(assignment); err != nil {
 		log.Printf("Failed to send completion message to group: %v", err)
+		groupNotified = false
 	}
 
 	// Mark as completed in database
 	if err := h.Store.CompleteChoreByReminderID(context.Background(), reminderID); err != nil {
 		log.Printf("Failed to complete chore in database: %v", err)
+		edit := tgbotapi.NewEditMessageText(
+			q.Message.Chat.ID,
+			q.Message.MessageID,
+			"❌ Error: Failed to mark chore as completed. Please try again.",
+		)
+		return edit, nil
 	}
 
 	// Remove from active tracking
@@ -1123,10 +1131,14 @@ func (h *Handlers) HandleCompleteChoreCallback(q *tgbotapi.CallbackQuery) (tgbot
 	// Escape HTML at display time (chore.Description and chore.User.FirstName are stored unescaped)
 	escapedDesc := html.EscapeString(chore.Description)
 	escapedName := html.EscapeString(chore.User.FirstName)
+	confirmationText := fmt.Sprintf("✅ <b>Chore Completed!</b>\n\nMarked <b>%s</b>'s chore as completed:\n\n<i>%s</i>", escapedName, escapedDesc)
+	if groupNotified {
+		confirmationText += "\n\nThe group has been notified!"
+	}
 	edit := tgbotapi.NewEditMessageText(
 		q.Message.Chat.ID,
 		q.Message.MessageID,
-		fmt.Sprintf("✅ <b>Chore Completed!</b>\n\nMarked <b>%s</b>'s chore as completed:\n\n<i>%s</i>\n\nThe group has been notified!", escapedName, escapedDesc),
+		confirmationText,
 	)
 	edit.ParseMode = tgbotapi.ModeHTML
 
