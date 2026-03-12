@@ -41,7 +41,7 @@ func (h *Handlers) HandleChoreDoneCallback(q *tgbotapi.CallbackQuery) (tgbotapi.
 		edit := tgbotapi.NewEditMessageText(
 			q.Message.Chat.ID,
 			q.Message.MessageID,
-			"❌ This chore assignment was not found or has expired.",
+			"❌ This chore assignment was not found, cancelled, or has expired.",
 		)
 		return edit, nil
 	}
@@ -103,7 +103,7 @@ func (h *Handlers) HandleChoreRemindCallback(q *tgbotapi.CallbackQuery) (tgbotap
 		edit := tgbotapi.NewEditMessageText(
 			q.Message.Chat.ID,
 			q.Message.MessageID,
-			"❌ This chore assignment was not found or has expired.",
+			"❌ This chore assignment was not found, cancelled, or has expired.",
 		)
 		return edit, nil
 	}

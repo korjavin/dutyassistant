@@ -97,21 +97,31 @@ func (s *SQLiteStore) CompleteChoreByReminderID(ctx context.Context, reminderID 
 	return nil
 }
 
-// CancelChore marks a chore as cancelled.
-func (s *SQLiteStore) CancelChore(ctx context.Context, id int64) error {
+// CancelChore marks a chore as cancelled. Returns the updated chore.
+func (s *SQLiteStore) CancelChore(ctx context.Context, id int64) (*store.Chore, error) {
 	query := `UPDATE chores SET cancelled_at = ? WHERE id = ? AND completed_at IS NULL AND cancelled_at IS NULL`
 	res, err := s.db.ExecContext(ctx, query, time.Now().UTC().Format(time.RFC3339), id)
 	if err != nil {
-		return fmt.Errorf("could not cancel chore: %w", err)
+		return nil, fmt.Errorf("could not cancel chore: %w", err)
 	}
 	rowsAffected, err := res.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("could not check affected rows: %w", err)
+		return nil, fmt.Errorf("could not check affected rows: %w", err)
 	}
 	if rowsAffected == 0 {
-		return fmt.Errorf("chore not found or already completed/cancelled")
+		return nil, fmt.Errorf("chore not found or already completed/cancelled")
 	}
-	return nil
+
+	// Fetch and return the cancelled chore so callers know the ReminderID
+	getQuery := `
+		SELECT c.id, c.user_id, c.description, c.assigned_at, c.deadline_at, c.completed_at, c.cancelled_at, c.reminder_id,
+		       u.id, u.telegram_user_id, u.first_name, u.is_admin, u.is_active
+		FROM chores c
+		JOIN users u ON c.user_id = u.id
+		WHERE c.id = ?
+	`
+	row := s.db.QueryRowContext(ctx, getQuery, id)
+	return scanChoreWithUser(row)
 }
 
 // ListActiveChores retrieves all active regular chores.

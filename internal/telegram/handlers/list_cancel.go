@@ -133,8 +133,13 @@ func (h *Handlers) HandleCancel(m *tgbotapi.Message) (tgbotapi.MessageConfig, er
 			return tgbotapi.NewMessage(m.Chat.ID, "❌ Invalid task ID format. Use /cancel task <id>"), nil
 		}
 
-		if err := h.Store.CancelChore(context.Background(), choreID); err != nil {
+		chore, err := h.Store.CancelChore(context.Background(), choreID)
+		if err != nil {
 			return tgbotapi.NewMessage(m.Chat.ID, "❌ Failed to cancel regular chore (not found, already completed, or cancelled)."), nil
+		}
+
+		if h.ChoreReminderManager != nil && chore != nil && chore.ReminderID != "" {
+			h.ChoreReminderManager.CancelChore(chore.ReminderID)
 		}
 
 		msg := tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("✅ <b>Regular chore %d cancelled successfully.</b>", choreID))

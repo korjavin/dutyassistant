@@ -119,7 +119,7 @@ type Store interface {
 	GetActiveChores(ctx context.Context) ([]*Chore, error)
 	GetOverdueChores(ctx context.Context) ([]*Chore, error)
 	CompleteChoreByReminderID(ctx context.Context, reminderID string) error
-	CancelChore(ctx context.Context, id int64) error
+	CancelChore(ctx context.Context, id int64) (*Chore, error)
 	ListActiveChores(ctx context.Context) ([]*Chore, error)
 	GetTopOverdueChores(ctx context.Context, limit int) ([]*ChoreStat, error)
 	GetTopCompletedChoresUsers(ctx context.Context, limit int) ([]*UserChoreStat, error)
