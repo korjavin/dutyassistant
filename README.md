@@ -89,6 +89,7 @@ The project uses GitHub Actions for automated builds and deployments. On push to
 - `/status` - View your duty statistics and queue status
 - `/schedule` - View the current month's duty schedule
 - `/volunteer` - Volunteer for duty (shows interactive day selection buttons)
+- `/chore` - View your currently assigned active chores
 - `/explain` - Explain how the most recent dish hero duty was assigned
 
 ### Admin Commands
