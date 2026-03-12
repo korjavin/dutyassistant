@@ -85,6 +85,6 @@ notification as when a user self-completes.
 
 ### Task 6: Update documentation
 
-- [ ] update README.md if user-facing changes (add /complete to command list)
-- [ ] update CLAUDE.md if internal patterns changed
-- [ ] move this plan to `docs/plans/completed/`
+- [x] update README.md if user-facing changes (add /complete to command list)
+- [x] update CLAUDE.md if internal patterns changed (N/A - CLAUDE.md does not exist)
+- [x] move this plan to `docs/plans/completed/`

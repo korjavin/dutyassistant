@@ -98,6 +98,7 @@ The project uses GitHub Actions for automated builds and deployments. On push to
 - `/cancel chore <id>` - Deactivate a periodic chore.
 - `/list task` - View all active regular (one-off) chores with their IDs.
 - `/cancel task <id>` - Deactivate a regular (one-off) chore.
+- `/complete` - Mark any active chore as completed (interactive chore selection)
 - `/modify` or `/change` - Change duty assignment for a date (interactive date + user selection)
 - `/offduty` - Set off-duty period for a user (interactive user selection, text date input)
 - `/toggleactive` - Toggle user active/inactive status (interactive user selection with status indicators)
