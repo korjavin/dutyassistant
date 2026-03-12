@@ -16,15 +16,54 @@ import (
 	"github.com/korjavin/dutyassistant/internal/store"
 )
 
-// HandleChore handles the /chore command for admins. Format: /chore [description] [/<N>d]
+// HandleChore handles the /chore command.
+// For non-admins: Shows their active chores.
+// For admins: Format: /chore [description] [/<N>d]
 // It assigns a random active user to the described chore.
 // If the /<N>d suffix is provided, it sets up a recurring chore.
 // If no description is provided, it enters interactive mode.
 func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
 	// 1. Admin check
 	isAdmin, err := h.checkAdmin(m.From.ID)
+
 	if err != nil || !isAdmin {
-		return tgbotapi.NewMessage(m.Chat.ID, adminOnlyMessage), nil
+		// Non-admin path: list personal active chores
+		user, err := h.Store.GetUserByTelegramID(context.Background(), m.From.ID)
+		if err != nil || user == nil {
+			msg := tgbotapi.NewMessage(m.Chat.ID, "Could not find your user profile. Please use /start first.")
+			return msg, nil
+		}
+
+		chores, err := h.Store.GetActiveChoresByUserID(context.Background(), user.ID)
+		if err != nil {
+			log.Printf("Failed to get active chores for user %d: %v", user.ID, err)
+			return tgbotapi.NewMessage(m.Chat.ID, "Sorry, something went wrong while fetching your chores."), nil
+		}
+
+		if len(chores) == 0 {
+			return tgbotapi.NewMessage(m.Chat.ID, "🎉 You have no active chores right now!"), nil
+		}
+
+		var sb strings.Builder
+		sb.WriteString("📋 <b>Your Active Chores:</b>\n\n")
+
+		tz := os.Getenv("CHORE_TIMEZONE")
+		if tz == "" {
+			tz = "Europe/Berlin"
+		}
+		loc, err := time.LoadLocation(tz)
+		if err != nil {
+			loc = time.Local
+		}
+
+		for i, chore := range chores {
+			assignedAt := chore.AssignedAt.In(loc).Format("2006-01-02 15:04")
+			sb.WriteString(fmt.Sprintf("%d. <i>%s</i> (Assigned: %s)\n", i+1, html.EscapeString(chore.Description), assignedAt))
+		}
+
+		msg := tgbotapi.NewMessage(m.Chat.ID, sb.String())
+		msg.ParseMode = tgbotapi.ModeHTML
+		return msg, nil
 	}
 
 	args := strings.TrimSpace(m.CommandArguments())

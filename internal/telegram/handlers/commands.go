@@ -25,7 +25,8 @@ const (
 		"/status - Show your current duty statistics.\n" +
 		"/schedule - View the duty schedule for the current month.\n" +
 		"/volunteer <days> - Add days to your volunteer queue.\n" +
-		"/explain - Explain how the last assignment was made.\n\n" +
+		"/explain - Explain how the last assignment was made.\n" +
+		"/chore - View your currently assigned chores.\n\n" +
 		"*Admin Commands:*\n" +
 		"/chore <description> [/<N>d] - Assign a chore to a random active user (optional: make it periodic every N days).\n" +
 		"/list chore - List active periodic chores.\n" +

@@ -17,25 +17,73 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-func TestHandleChore_NotAdmin(t *testing.T) {
+func TestHandleChore_NonAdmin_NoChores(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
-	// Create handlers with groupID=0
+	h := handlers.New(mockStore, nil, 0)
+
+	// User is not admin
+	nonAdminUser := &store.User{ID: 2, TelegramUserID: 456, IsAdmin: false}
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return(nonAdminUser, nil)
+	mockStore.On("GetActiveChoresByUserID", mock.Anything, int64(2)).Return([]*store.Chore{}, nil)
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 789},
+		From: &tgbotapi.User{ID: 456},
+		Text: "/chore",
+	}
+
+	msg, err := h.HandleChore(message)
+	assert.NoError(t, err)
+	assert.Contains(t, msg.Text, "You have no active chores right now!")
+}
+
+func TestHandleChore_NonAdmin_WithChores(t *testing.T) {
+	mockStore := new(mocks.MockStore)
 	h := handlers.New(mockStore, nil, 0)
 
 	// User is not admin
 	nonAdminUser := &store.User{ID: 2, TelegramUserID: 456, IsAdmin: false}
 	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return(nonAdminUser, nil)
 
+	// Has one chore
+	chores := []*store.Chore{
+		{
+			ID:          1,
+			UserID:      2,
+			Description: "Take out the trash <script>",
+			AssignedAt:  time.Now(),
+		},
+	}
+	mockStore.On("GetActiveChoresByUserID", mock.Anything, int64(2)).Return(chores, nil)
+
 	message := &tgbotapi.Message{
 		Chat: &tgbotapi.Chat{ID: 789},
 		From: &tgbotapi.User{ID: 456},
-		Text: "/chore Clean setup",
+		Text: "/chore",
 	}
 
 	msg, err := h.HandleChore(message)
 	assert.NoError(t, err)
-	assert.Equal(t, "Sorry, this command is for admins only.", msg.Text)
+	assert.Contains(t, msg.Text, "Your Active Chores")
+	assert.Contains(t, msg.Text, "Take out the trash &lt;script&gt;")
+}
+
+func TestHandleChore_NonAdmin_UserNotRegistered(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.New(mockStore, nil, 0)
+
+	// User is not admin and not in DB
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return((*store.User)(nil), nil)
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 789},
+		From: &tgbotapi.User{ID: 456},
+		Text: "/chore",
+	}
+
+	msg, err := h.HandleChore(message)
+	assert.NoError(t, err)
+	assert.Contains(t, msg.Text, "Could not find your user profile")
 }
 
 func TestHandleChore_NoArgs_EntersInteractiveMode(t *testing.T) {
