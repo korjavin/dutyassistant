@@ -3,6 +3,7 @@ package handlers_test
 import (
 	"errors"
 	"testing"
+	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/korjavin/dutyassistant/internal/mocks"
@@ -158,4 +159,165 @@ func TestHandleAssign_InvalidDays(t *testing.T) {
 	msg, err := h.HandleAssign(message)
 	assert.NoError(t, err)
 	assert.Contains(t, msg.Text, "is not a valid number of days")
+}
+
+func TestHandleComplete_NotAdmin(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.New(mockStore, nil, 0)
+
+	nonAdminUser := &store.User{ID: 2, TelegramUserID: 456, IsAdmin: false}
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return(nonAdminUser, nil)
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 789},
+		From: &tgbotapi.User{ID: 456},
+	}
+
+	msg, err := h.HandleComplete(message)
+	assert.NoError(t, err)
+	assert.Equal(t, "Sorry, this command is for admins only.", msg.Text)
+}
+
+func TestHandleComplete_NoActiveChores(t *testing.T) {
+	_, _, h := setupAdminTest(t)
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 789},
+		From: &tgbotapi.User{ID: 123},
+	}
+
+	mockStore := new(mocks.MockStore)
+	h = handlers.New(mockStore, nil, 0)
+
+	adminUser := &store.User{ID: 1, TelegramUserID: 123, IsAdmin: true}
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(123)).Return(adminUser, nil)
+	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
+
+	msg, err := h.HandleComplete(message)
+	assert.NoError(t, err)
+	assert.Contains(t, msg.Text, "No active chores found")
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleComplete_WithActiveChores(t *testing.T) {
+	mockStore, _, h := setupAdminTest(t)
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 789},
+		From: &tgbotapi.User{ID: 123},
+	}
+
+	// Create sample chores
+	now := time.Now()
+	deadline := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 0, time.UTC)
+
+	alice := &store.User{ID: 2, FirstName: "Alice", TelegramUserID: 222}
+	bob := &store.User{ID: 3, FirstName: "Bob", TelegramUserID: 333}
+
+	chores := []*store.Chore{
+		{
+			ID:          1,
+			UserID:      2,
+			Description: "Clean the kitchen",
+			AssignedAt:  now,
+			DeadlineAt:  deadline,
+			ReminderID:  "reminder_1",
+			User:        alice,
+		},
+		{
+			ID:          2,
+			UserID:      3,
+			Description: "Take out trash",
+			AssignedAt:  now,
+			DeadlineAt:  deadline,
+			ReminderID:  "reminder_2",
+			User:        bob,
+		},
+	}
+
+	mockStore.On("GetActiveChores", mock.Anything).Return(chores, nil)
+
+	msg, err := h.HandleComplete(message)
+	assert.NoError(t, err)
+	assert.Contains(t, msg.Text, "Mark Chore as Completed")
+	assert.Contains(t, msg.Text, "Select a chore")
+	assert.Equal(t, tgbotapi.ModeHTML, msg.ParseMode)
+
+	// Check inline keyboard buttons
+	assert.NotNil(t, msg.ReplyMarkup)
+	inlineKeyboard := msg.ReplyMarkup.(tgbotapi.InlineKeyboardMarkup)
+	assert.Len(t, inlineKeyboard.InlineKeyboard, 2) // 2 chores = 2 buttons
+
+	// Check first button
+	button1 := inlineKeyboard.InlineKeyboard[0][0]
+	assert.Equal(t, "Alice - Clean the kitchen @23:59", button1.Text)
+	if button1.CallbackData != nil {
+		assert.Equal(t, "complete_chore:reminder_1", *button1.CallbackData)
+	} else {
+		t.Fatal("CallbackData is nil for button1")
+	}
+
+	// Check second button
+	button2 := inlineKeyboard.InlineKeyboard[1][0]
+	assert.Equal(t, "Bob - Take out trash @23:59", button2.Text)
+	if button2.CallbackData != nil {
+		assert.Equal(t, "complete_chore:reminder_2", *button2.CallbackData)
+	} else {
+		t.Fatal("CallbackData is nil for button2")
+	}
+
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleComplete_StoreError(t *testing.T) {
+	mockStore, _, h := setupAdminTest(t)
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 789},
+		From: &tgbotapi.User{ID: 123},
+	}
+
+	mockStore.On("GetActiveChores", mock.Anything).Return(nil, errors.New("database error"))
+
+	msg, err := h.HandleComplete(message)
+	assert.NoError(t, err)
+	assert.Contains(t, msg.Text, "Failed to retrieve active chores")
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleComplete_ChoreWithoutUser(t *testing.T) {
+	mockStore, _, h := setupAdminTest(t)
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 789},
+		From: &tgbotapi.User{ID: 123},
+	}
+
+	// Create chore without user (should be skipped)
+	now := time.Now()
+	deadline := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 0, time.UTC)
+
+	chores := []*store.Chore{
+		{
+			ID:          1,
+			UserID:      2,
+			Description: "Chore without user",
+			AssignedAt:  now,
+			DeadlineAt:  deadline,
+			ReminderID:  "reminder_1",
+			User:        nil, // No user - should be skipped
+		},
+	}
+
+	mockStore.On("GetActiveChores", mock.Anything).Return(chores, nil)
+
+	msg, err := h.HandleComplete(message)
+	assert.NoError(t, err)
+	assert.Contains(t, msg.Text, "Mark Chore as Completed")
+
+	// Should have no buttons since the only chore had no user
+	inlineKeyboard := msg.ReplyMarkup.(tgbotapi.InlineKeyboardMarkup)
+	assert.Len(t, inlineKeyboard.InlineKeyboard, 0)
+
+	mockStore.AssertExpectations(t)
 }

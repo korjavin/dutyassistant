@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"html"
 	"log"
 	"strings"
 	"time"
@@ -993,4 +994,57 @@ func (h *Handlers) HandleVacationCallback(q *tgbotapi.CallbackQuery) (tgbotapi.E
 	)
 	edit.ParseMode = tgbotapi.ModeHTML
 	return edit, nil
+}
+
+// HandleComplete handles the /complete command for admins.
+// Shows a list of all active chores with inline buttons for selection.
+func (h *Handlers) HandleComplete(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
+	isAdmin, err := h.checkAdmin(m.From.ID)
+	if err != nil || !isAdmin {
+		return tgbotapi.NewMessage(m.Chat.ID, adminOnlyMessage), nil
+	}
+
+	chores, err := h.Store.GetActiveChores(context.Background())
+	if err != nil {
+		log.Printf("Failed to get active chores: %v", err)
+		return tgbotapi.NewMessage(m.Chat.ID, "Failed to retrieve active chores."), nil
+	}
+
+	if len(chores) == 0 {
+		msg := tgbotapi.NewMessage(m.Chat.ID, "✨ No active chores found! All clear.")
+		return msg, nil
+	}
+
+	// Create inline keyboard with chore buttons
+	var buttons [][]tgbotapi.InlineKeyboardButton
+	for _, chore := range chores {
+		if chore.User == nil {
+			continue
+		}
+
+		// Format deadline for display
+		deadlineStr := ""
+		if !chore.DeadlineAt.IsZero() {
+			deadlineStr = chore.DeadlineAt.Format("15:04")
+		}
+
+		// Escape HTML at display time (chore.Description and chore.User.FirstName are stored unescaped)
+		escapedDesc := html.EscapeString(chore.Description)
+		escapedName := html.EscapeString(chore.User.FirstName)
+
+		buttonLabel := fmt.Sprintf("%s - %s @%s", escapedName, escapedDesc, deadlineStr)
+		row := []tgbotapi.InlineKeyboardButton{
+			tgbotapi.NewInlineKeyboardButtonData(
+				buttonLabel,
+				fmt.Sprintf("complete_chore:%s", chore.ReminderID),
+			),
+		}
+		buttons = append(buttons, row)
+	}
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
+	msg := tgbotapi.NewMessage(m.Chat.ID, "✅ <b>Mark Chore as Completed</b>\n\nSelect a chore to mark as completed:")
+	msg.ParseMode = tgbotapi.ModeHTML
+	msg.ReplyMarkup = keyboard
+	return msg, nil
 }

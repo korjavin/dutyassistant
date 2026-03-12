@@ -33,13 +33,13 @@ notification as when a user self-completes.
 **Files:**
 - Modify: `internal/telegram/handlers/admin.go`
 
-- [ ] Add `HandleComplete(m *tgbotapi.Message)` function that checks admin status
-- [ ] Fetch all active chores using `h.Store.GetActiveChores(ctx)`
-- [ ] If no active chores, return message saying so
-- [ ] Create inline keyboard with chore buttons showing: description, assigned user, deadline
-- [ ] Use callback data format: `complete_chore:reminderID`
-- [ ] Write unit tests for HandleComplete (with mock store)
-- [ ] Run project test suite - must pass before task 2
+- [x] Add `HandleComplete(m *tgbotapi.Message)` function that checks admin status
+- [x] Fetch all active chores using `h.Store.GetActiveChores(ctx)`
+- [x] If no active chores, return message saying so
+- [x] Create inline keyboard with chore buttons showing: description, assigned user, deadline
+- [x] Use callback data format: `complete_chore:reminderID`
+- [x] Write unit tests for HandleComplete (with mock store)
+- [x] Run project test suite - must pass before task 2
 
 ### Task 2: Create HandleCompleteChoreCallback handler
 
