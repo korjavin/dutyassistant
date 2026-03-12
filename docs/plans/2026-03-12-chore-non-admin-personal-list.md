@@ -45,15 +45,15 @@ When a non-admin user sends `/chore`, instead of getting "admin only" message, t
 - Modify: `internal/telegram/handlers/chore.go`
 - Modify: `internal/telegram/handlers/chore_test.go`
 
-- [ ] In `HandleChore`, replace the early-return `adminOnlyMessage` block with: look up calling user by telegram ID, fetch their active chores via `GetActiveChoresByUserID`, format a list showing description and `assigned_at` per chore, return it
-- [ ] If user not found in DB, return a message directing them to use `/start`
-- [ ] If user has no active chores, return a friendly "no active chores" message
-- [ ] HTML-escape descriptions in the output
-- [ ] Write tests in `chore_test.go`:
+- [x] In `HandleChore`, replace the early-return `adminOnlyMessage` block with: look up calling user by telegram ID, fetch their active chores via `GetActiveChoresByUserID`, format a list showing description and `assigned_at` per chore, return it
+- [x] If user not found in DB, return a message directing them to use `/start`
+- [x] If user has no active chores, return a friendly "no active chores" message
+- [x] HTML-escape descriptions in the output
+- [x] Write tests in `chore_test.go`:
   - `TestHandleChore_NonAdmin_NoChores` — non-admin with no chores sees "no active chores" message
   - `TestHandleChore_NonAdmin_WithChores` — non-admin with active chores sees formatted list with description and assigned time
   - `TestHandleChore_NonAdmin_UserNotRegistered` — non-admin not in DB sees "/start" prompt
-- [ ] Run `go test ./internal/telegram/...` — must pass
+- [x] Run `go test ./internal/telegram/...` — must pass
 
 ### Task 3: Update help text
 
