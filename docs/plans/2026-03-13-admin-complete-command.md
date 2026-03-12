@@ -70,8 +70,8 @@ notification as when a user self-completes.
 **Files:**
 - Modify: `internal/telegram/handlers/commands.go`
 
-- [ ] Add `/complete - Admin: Mark any active chore as completed` to helpMessage admin commands section
-- [ ] Run project test suite - must pass before task 5
+- [x] Add `/complete - Admin: Mark any active chore as completed` to helpMessage admin commands section
+- [x] Run project test suite - must pass before task 5
 
 ### Task 5: Verify acceptance criteria
 
