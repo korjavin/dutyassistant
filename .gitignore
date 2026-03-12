@@ -30,3 +30,5 @@ node_modules/
 # Test coverage
 coverage.out
 coverage.html
+# ralphex progress logs
+.ralphex/progress/
