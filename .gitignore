@@ -32,3 +32,4 @@ coverage.out
 coverage.html
 # ralphex progress logs
 .ralphex/progress/
+roster.db
