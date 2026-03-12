@@ -33,11 +33,11 @@ When a non-admin user sends `/chore`, instead of getting "admin only" message, t
 - Modify: `internal/mocks/store.go`
 - Modify: `internal/store/sqlite/sqlite_chore_test.go`
 
-- [ ] Add `GetActiveChoresByUserID(ctx context.Context, userID int64) ([]*Chore, error)` to `Store` interface in `store.go`
-- [ ] Implement in `sqlite/chores.go`: query chores where `user_id = ?` and `completed_at IS NULL`, join users table, reuse `scanChoreRowsWithUser`
-- [ ] Add mock method to `internal/mocks/store.go`
-- [ ] Write tests in `sqlite_chore_test.go` covering: returns empty list for user with no chores, returns only incomplete chores for the user, does not return another user's chores
-- [ ] Run `go test ./internal/store/...` — must pass
+- [x] Add `GetActiveChoresByUserID(ctx context.Context, userID int64) ([]*Chore, error)` to `Store` interface in `store.go`
+- [x] Implement in `sqlite/chores.go`: query chores where `user_id = ?` and `completed_at IS NULL`, join users table, reuse `scanChoreRowsWithUser`
+- [x] Add mock method to `internal/mocks/store.go`
+- [x] Write tests in `sqlite_chore_test.go` covering: returns empty list for user with no chores, returns only incomplete chores for the user, does not return another user's chores
+- [x] Run `go test ./internal/store/...` — must pass
 
 ### Task 2: Modify HandleChore for non-admin users
 
