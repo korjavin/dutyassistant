@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"html"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -126,13 +127,14 @@ func (h *Handlers) HandleRatingsCalendar(m *tgbotapi.Message) (tgbotapi.MessageC
 	if err != nil {
 		return tgbotapi.NewMessage(m.Chat.ID, genericErrorMessage), nil
 	}
-	if len(participants) == 0 {
-		return tgbotapi.NewMessage(m.Chat.ID, "No active participants are available for rating right now."), nil
-	}
 
 	ratings, err := h.Store.GetCurrentMonthParticipantRatings(context.Background(), now)
 	if err != nil {
 		return tgbotapi.NewMessage(m.Chat.ID, genericErrorMessage), nil
+	}
+	participants = mergeCalendarParticipants(participants, ratings)
+	if len(participants) == 0 {
+		return tgbotapi.NewMessage(m.Chat.ID, "No active participants are available for rating right now."), nil
 	}
 
 	text := formatRatingsCalendar(participants, ratings, now)
@@ -234,6 +236,49 @@ func sessionParticipants(users []*store.User) []ratingSessionParticipant {
 		})
 	}
 	return participants
+}
+
+func mergeCalendarParticipants(participants []*store.User, ratings []*store.ParticipantDailyRating) []*store.User {
+	merged := make([]*store.User, 0, len(participants))
+	seen := make(map[int64]struct{}, len(participants))
+	for _, participant := range participants {
+		if participant == nil {
+			continue
+		}
+		merged = append(merged, participant)
+		seen[participant.ID] = struct{}{}
+	}
+
+	var ratedOnly []*store.User
+	for _, rating := range ratings {
+		if rating == nil || rating.ParticipantID == 0 {
+			continue
+		}
+		if _, ok := seen[rating.ParticipantID]; ok {
+			continue
+		}
+		seen[rating.ParticipantID] = struct{}{}
+		ratedOnly = append(ratedOnly, &store.User{
+			ID:        rating.ParticipantID,
+			FirstName: rating.ParticipantName,
+		})
+	}
+
+	slices.SortFunc(ratedOnly, func(a, b *store.User) int {
+		if cmp := strings.Compare(strings.ToLower(a.FirstName), strings.ToLower(b.FirstName)); cmp != 0 {
+			return cmp
+		}
+		switch {
+		case a.ID < b.ID:
+			return -1
+		case a.ID > b.ID:
+			return 1
+		default:
+			return 0
+		}
+	})
+
+	return append(merged, ratedOnly...)
 }
 
 func sessionParticipantsFromSession(session *Session) ([]ratingSessionParticipant, bool) {
