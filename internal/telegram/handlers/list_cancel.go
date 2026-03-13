@@ -101,6 +101,10 @@ func (h *Handlers) HandleCancel(m *tgbotapi.Message) (tgbotapi.MessageConfig, er
 	}
 
 	args := strings.TrimSpace(m.CommandArguments())
+	if args == "" {
+		return h.HandleCancelInteractive(m)
+	}
+
 	parts := strings.Fields(args)
 
 	if len(parts) == 2 && strings.ToLower(parts[0]) == "chore" {

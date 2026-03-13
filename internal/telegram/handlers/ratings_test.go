@@ -13,7 +13,7 @@ import (
 
 func TestHandleRatingsCalendar_PopulatedMonth(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := NewWithAdminID(mockStore, nil, 0, 123)
+	h := NewWithAdminID(mockStore, nil, 0, 123, nil)
 
 	originalNow := TimeNow
 	TimeNow = func() time.Time {
@@ -56,7 +56,7 @@ func TestHandleRatingsCalendar_PopulatedMonth(t *testing.T) {
 
 func TestHandleRatingsCalendar_EmptyMonth(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := NewWithAdminID(mockStore, nil, 0, 123)
+	h := NewWithAdminID(mockStore, nil, 0, 123, nil)
 
 	originalNow := TimeNow
 	TimeNow = func() time.Time {
@@ -87,7 +87,7 @@ func TestHandleRatingsCalendar_EmptyMonth(t *testing.T) {
 
 func TestHandleRatingsCalendar_KeepsPreviouslyRatedInactiveParticipants(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := NewWithAdminID(mockStore, nil, 0, 123)
+	h := NewWithAdminID(mockStore, nil, 0, 123, nil)
 
 	originalNow := TimeNow
 	TimeNow = func() time.Time {
@@ -120,7 +120,7 @@ func TestHandleRatingsCalendar_KeepsPreviouslyRatedInactiveParticipants(t *testi
 
 func TestHandleRatingsCalendar_IncludesPreviouslyRatedInactiveParticipants(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := NewWithAdminID(mockStore, nil, 0, 123)
+	h := NewWithAdminID(mockStore, nil, 0, 123, nil)
 
 	originalNow := TimeNow
 	TimeNow = func() time.Time {
@@ -154,7 +154,7 @@ func TestHandleRatingsCalendar_IncludesPreviouslyRatedInactiveParticipants(t *te
 
 func TestHandleRatingsCalendar_SortsCombinedParticipantsInStableOrder(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := NewWithAdminID(mockStore, nil, 0, 123)
+	h := NewWithAdminID(mockStore, nil, 0, 123, nil)
 
 	originalNow := TimeNow
 	TimeNow = func() time.Time {
@@ -188,7 +188,7 @@ func TestHandleRatingsCalendar_SortsCombinedParticipantsInStableOrder(t *testing
 
 func TestHandleRatingsCalendar_AdminAccessControl(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := NewWithAdminID(mockStore, nil, 0, 123)
+	h := NewWithAdminID(mockStore, nil, 0, 123, nil)
 
 	msg, err := h.HandleRatingsCalendar(&tgbotapi.Message{
 		Chat: &tgbotapi.Chat{ID: 802},
@@ -200,7 +200,7 @@ func TestHandleRatingsCalendar_AdminAccessControl(t *testing.T) {
 
 func TestPrepareDailyRatingsReminder_SkipsWithoutParticipants(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := NewWithAdminID(mockStore, nil, 0, 123)
+	h := NewWithAdminID(mockStore, nil, 0, 123, nil)
 
 	mockStore.On("GetParticipantsForRating", mock.Anything).Return([]*store.User{}, nil).Once()
 
@@ -217,7 +217,7 @@ func TestPrepareDailyRatingsReminder_SkipsWithoutParticipants(t *testing.T) {
 
 func TestPrepareDailyRatingsReminder_NonAdminGetsAdminOnlyMessage(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := NewWithAdminID(mockStore, nil, 0, 123)
+	h := NewWithAdminID(mockStore, nil, 0, 123, nil)
 
 	msg, ok, err := h.PrepareDailyRatingsReminder(901, 456, time.Date(2026, time.March, 13, 20, 50, 0, 0, time.UTC))
 	assert.NoError(t, err)
@@ -233,7 +233,7 @@ func TestPrepareDailyRatingsReminder_NonAdminGetsAdminOnlyMessage(t *testing.T) 
 
 func TestPrepareDailyRatingsReminder_DoesNotOverrideExistingNonRatingsSession(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := NewWithAdminID(mockStore, nil, 0, 123)
+	h := NewWithAdminID(mockStore, nil, 0, 123, nil)
 
 	h.SessionManager.StartSession(902, 123, SessionTypeChoreCreation)
 
@@ -252,7 +252,7 @@ func TestPrepareDailyRatingsReminder_DoesNotOverrideExistingNonRatingsSession(t 
 
 func TestPrepareDailyRatingsReminder_ExcludesConfiguredAdminParticipant(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := NewWithAdminID(mockStore, nil, 0, 123)
+	h := NewWithAdminID(mockStore, nil, 0, 123, nil)
 
 	participants := []*store.User{
 		{ID: 1, TelegramUserID: 123, FirstName: "Admin"},
@@ -279,7 +279,7 @@ func TestPrepareDailyRatingsReminder_ExcludesConfiguredAdminParticipant(t *testi
 
 func TestStartDailyRatingsSession_BuildsStablePrompt(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := NewWithAdminID(mockStore, nil, 0, 123)
+	h := NewWithAdminID(mockStore, nil, 0, 123, nil)
 
 	participants := []*store.User{
 		{ID: 10, FirstName: "Alice"},
@@ -308,7 +308,7 @@ func TestStartDailyRatingsSession_BuildsStablePrompt(t *testing.T) {
 
 func TestStartDailyRatingsSession_NoParticipants(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := NewWithAdminID(mockStore, nil, 0, 123)
+	h := NewWithAdminID(mockStore, nil, 0, 123, nil)
 
 	mockStore.On("GetParticipantsForRating", mock.Anything).Return([]*store.User{}, nil).Once()
 
@@ -321,7 +321,7 @@ func TestStartDailyRatingsSession_NoParticipants(t *testing.T) {
 
 func TestHandleDailyRatingsInteractive_ValidSubmission(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := NewWithAdminID(mockStore, nil, 0, 123)
+	h := NewWithAdminID(mockStore, nil, 0, 123, nil)
 
 	ratingDate := time.Date(2026, time.March, 13, 20, 50, 0, 0, time.UTC)
 	participants := []*store.User{
@@ -360,7 +360,7 @@ func TestHandleDailyRatingsInteractive_ValidSubmission(t *testing.T) {
 
 func TestHandleDailyRatingsInteractive_InvalidCount(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := NewWithAdminID(mockStore, nil, 0, 123)
+	h := NewWithAdminID(mockStore, nil, 0, 123, nil)
 
 	ratingDate := time.Date(2026, time.March, 13, 0, 0, 0, 0, time.UTC)
 	participants := []*store.User{
@@ -389,7 +389,7 @@ func TestHandleDailyRatingsInteractive_InvalidCount(t *testing.T) {
 
 func TestHandleDailyRatingsInteractive_InvalidRange(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := NewWithAdminID(mockStore, nil, 0, 123)
+	h := NewWithAdminID(mockStore, nil, 0, 123, nil)
 
 	ratingDate := time.Date(2026, time.March, 13, 0, 0, 0, 0, time.UTC)
 	participants := []*store.User{
@@ -417,7 +417,7 @@ func TestHandleDailyRatingsInteractive_InvalidRange(t *testing.T) {
 
 func TestHandleDailyRatingsInteractive_ExpiredSessionMissingParticipants(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := NewWithAdminID(mockStore, nil, 0, 123)
+	h := NewWithAdminID(mockStore, nil, 0, 123, nil)
 
 	h.SessionManager.StartSession(705, 123, SessionTypeDailyRatings)
 	session, exists := h.SessionManager.GetSession(705)
@@ -438,7 +438,7 @@ func TestHandleDailyRatingsInteractive_ExpiredSessionMissingParticipants(t *test
 
 func TestHandleDailyRatingsInteractive_ExpiredSessionMissingDate(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := NewWithAdminID(mockStore, nil, 0, 123)
+	h := NewWithAdminID(mockStore, nil, 0, 123, nil)
 
 	h.SessionManager.StartSession(706, 123, SessionTypeDailyRatings)
 	session, exists := h.SessionManager.GetSession(706)
@@ -461,7 +461,7 @@ func TestHandleDailyRatingsInteractive_ExpiredSessionMissingDate(t *testing.T) {
 
 func TestHandleDailyRatingsInteractive_UnauthorizedSenderIgnored(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := NewWithAdminID(mockStore, nil, 0, 123)
+	h := NewWithAdminID(mockStore, nil, 0, 123, nil)
 
 	ratingDate := time.Date(2026, time.March, 13, 0, 0, 0, 0, time.UTC)
 	participants := []*store.User{
@@ -489,7 +489,7 @@ func TestHandleDailyRatingsInteractive_UnauthorizedSenderIgnored(t *testing.T) {
 
 func TestHandleDailyRatingsInteractive_OverwriteCorrection(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := NewWithAdminID(mockStore, nil, 0, 123)
+	h := NewWithAdminID(mockStore, nil, 0, 123, nil)
 
 	ratingDate := time.Date(2026, time.March, 13, 0, 0, 0, 0, time.UTC)
 	participants := []*store.User{
@@ -529,7 +529,7 @@ func TestHandleDailyRatingsInteractive_OverwriteCorrection(t *testing.T) {
 
 func TestHandleDailyRatingsInteractive_SaveFailureReturnsGenericError(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := NewWithAdminID(mockStore, nil, 0, 123)
+	h := NewWithAdminID(mockStore, nil, 0, 123, nil)
 
 	ratingDate := time.Date(2026, time.March, 13, 0, 0, 0, 0, time.UTC)
 	participants := []*store.User{
@@ -559,7 +559,7 @@ func TestHandleDailyRatingsInteractive_SaveFailureReturnsGenericError(t *testing
 
 func TestHandleDailyRatingsInteractive_RejectsSubmissionAfterMonthEndCutoff(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := NewWithAdminID(mockStore, nil, 0, 123)
+	h := NewWithAdminID(mockStore, nil, 0, 123, nil)
 
 	originalNow := TimeNow
 	TimeNow = func() time.Time {
@@ -596,7 +596,7 @@ func TestHandleDailyRatingsInteractive_RejectsSubmissionAfterMonthEndCutoff(t *t
 
 func TestBuildMonthlyRatingsWinnersAnnouncement_LastDayFormatting(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := NewWithAdminID(mockStore, nil, -1001, 123)
+	h := NewWithAdminID(mockStore, nil, -1001, 123, nil)
 
 	now := time.Date(2026, time.March, 31, 21, 0, 0, 0, time.UTC)
 	totals := []*store.ParticipantMonthlyTotal{
@@ -625,7 +625,7 @@ func TestBuildMonthlyRatingsWinnersAnnouncement_LastDayFormatting(t *testing.T) 
 
 func TestBuildMonthlyRatingsWinnersAnnouncement_NotLastDaySkips(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := NewWithAdminID(mockStore, nil, -1001, 123)
+	h := NewWithAdminID(mockStore, nil, -1001, 123, nil)
 
 	msg, ok, err := h.BuildMonthlyRatingsWinnersAnnouncement(time.Date(2026, time.March, 30, 21, 0, 0, 0, time.UTC))
 	assert.NoError(t, err)
@@ -652,7 +652,7 @@ func TestNormalizeRatingDate_UsesBerlinCalendarDay(t *testing.T) {
 
 func TestHandleRatingsCalendar_UsesBerlinDateBoundary(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := NewWithAdminID(mockStore, nil, 0, 123)
+	h := NewWithAdminID(mockStore, nil, 0, 123, nil)
 
 	originalNow := TimeNow
 	TimeNow = func() time.Time {
@@ -682,7 +682,7 @@ func TestHandleRatingsCalendar_UsesBerlinDateBoundary(t *testing.T) {
 
 func TestHandleRatingsCalendar_ExcludesConfiguredAdminParticipant(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := NewWithAdminID(mockStore, nil, 0, 123)
+	h := NewWithAdminID(mockStore, nil, 0, 123, nil)
 
 	originalNow := TimeNow
 	TimeNow = func() time.Time {
@@ -713,7 +713,7 @@ func TestHandleRatingsCalendar_ExcludesConfiguredAdminParticipant(t *testing.T) 
 
 func TestBuildMonthlyRatingsWinnersAnnouncement_WaitsForInFlightSave(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := NewWithAdminID(mockStore, nil, -1001, 123)
+	h := NewWithAdminID(mockStore, nil, -1001, 123, nil)
 
 	originalNow := TimeNow
 	TimeNow = func() time.Time {

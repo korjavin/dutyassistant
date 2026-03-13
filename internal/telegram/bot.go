@@ -46,6 +46,14 @@ func (b *Bot) SendMessage(chatID int64, text string) error {
 	return err
 }
 
+// SendMessageHTML sends a text message with HTML formatting to a specific chat ID.
+func (b *Bot) SendMessageHTML(chatID int64, text string) error {
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ParseMode = tgbotapi.ModeHTML
+	_, err := b.api.Send(msg)
+	return err
+}
+
 // SendMessageMarkdown sends a text message with MarkdownV2 formatting to a specific chat ID.
 func (b *Bot) SendMessageMarkdown(chatID int64, text string) error {
 	msg := tgbotapi.NewMessage(chatID, text)
@@ -286,6 +294,18 @@ func (b *Bot) handleCallbackQuery(q *tgbotapi.CallbackQuery) (tgbotapi.Chattable
 		return b.handlers.HandleCompleteChoreCallback(q)
 	case "edit_chore":
 		return b.handlers.HandleEditChoreCallback(q)
+	case "chore_action":
+		return b.handlers.HandleChoreActionCallback(q)
+	case "chore_delete":
+		return b.handlers.HandleChoreDeleteCallback(q)
+	case "chore_delete_confirm":
+		return b.handlers.HandleChoreDeleteConfirmCallback(q)
+	case "cancel_assignment":
+		return b.handlers.HandleCancelAssignmentCallback(q)
+	case "cancel_assignment_confirm":
+		return b.handlers.HandleCancelAssignmentConfirmCallback(q)
+	case "cancel_flow":
+		return b.handlers.HandleCancelFlow(q)
 	default:
 		log.Printf("Unknown callback action: %s", action)
 		return nil, nil

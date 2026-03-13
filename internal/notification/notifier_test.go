@@ -144,7 +144,7 @@ func setupNotifierTest(t *testing.T) (*Notifier, *MockStore, *MockScheduler, *Mo
 	mockScheduler := new(MockScheduler)
 	mockBot := new(MockTelegramBot)
 
-	notifier := NewNotifier(mockStore, mockScheduler, mockBot, 12345, "0 16 * * *", loc)
+	notifier := NewNotifier(mockStore, mockScheduler, mockBot, 12345, "0 16 * * *", loc, nil)
 
 	// Set a fixed time for predictable testing.
 	// This is a Thursday, so "tomorrow" will be a Friday.

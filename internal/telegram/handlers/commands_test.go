@@ -13,7 +13,7 @@ import (
 
 func TestHandleStart_NewUser(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := handlers.New(mockStore, nil, 0)
+	h := handlers.New(mockStore, nil, 0, nil)
 
 	message := &tgbotapi.Message{
 		Chat: &tgbotapi.Chat{ID: 123},
@@ -33,7 +33,7 @@ func TestHandleStart_NewUser(t *testing.T) {
 
 func TestHandleStart_ExistingUser(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := handlers.New(mockStore, nil, 0)
+	h := handlers.New(mockStore, nil, 0, nil)
 
 	message := &tgbotapi.Message{
 		Chat: &tgbotapi.Chat{ID: 123},
@@ -54,7 +54,7 @@ func TestHandleStart_ExistingUser(t *testing.T) {
 
 func TestHandleStart_BackfillsConfiguredAdminFlagsForExistingUser(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := handlers.NewWithAdminID(mockStore, nil, 0, 456)
+	h := handlers.NewWithAdminID(mockStore, nil, 0, 456, nil)
 
 	message := &tgbotapi.Message{
 		Chat: &tgbotapi.Chat{ID: 123},
@@ -80,20 +80,20 @@ func TestHandleStart_BackfillsConfiguredAdminFlagsForExistingUser(t *testing.T) 
 }
 
 func TestHandleHelp(t *testing.T) {
-	h := handlers.New(nil, nil, 0)
+	h := handlers.New(nil, nil, 0, nil)
 	message := &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: 123}}
 
 	msg, err := h.HandleHelp(message)
 	assert.NoError(t, err)
-	assert.Contains(t, msg.Text, "Here are the available commands:")
-	assert.Contains(t, msg.Text, "/complete - Admin: Mark any active chore as completed")
+	assert.Contains(t, msg.Text, "/cancel - Cancel a duty, active chore, or recurring chore.")
+	assert.Contains(t, msg.Text, "/complete - Mark any active chore as completed.")
 	assert.Contains(t, msg.Text, "/ratings - Show the current month's participant rating calendar.")
 	assert.Equal(t, tgbotapi.ModeMarkdown, msg.ParseMode)
 }
 
 func TestHandleStatus_Success(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := handlers.New(mockStore, nil, 0)
+	h := handlers.New(mockStore, nil, 0, nil)
 
 	message := &tgbotapi.Message{
 		Chat: &tgbotapi.Chat{ID: 123},
@@ -115,7 +115,7 @@ func TestHandleStatus_Success(t *testing.T) {
 
 func TestHandleStatus_UserNotFound(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := handlers.New(mockStore, nil, 0)
+	h := handlers.New(mockStore, nil, 0, nil)
 
 	message := &tgbotapi.Message{
 		Chat: &tgbotapi.Chat{ID: 123},

@@ -17,7 +17,7 @@ func TestHandleCommand_Chore(t *testing.T) {
 	mockScheduler := new(mocks.MockScheduler)
 
 	// Create handlers with AdminID=123, GroupID=0
-	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123, nil)
 
 	// Create bot with handlers
 	bot := &Bot{
@@ -66,7 +66,7 @@ func TestBot_HandleUpdate_SessionCancel(t *testing.T) {
 	// Or we can just call handleUpdate and observe the session state changing!
 
 	// Create handlers
-	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123, nil)
 
 	// Create bot
 	// We pass a dummy token, it won't actually connect in this test unless it calls b.api.Send
@@ -124,7 +124,7 @@ func TestBot_HandleUpdate_GlobalCancelDuringSession(t *testing.T) {
 	mockScheduler := new(mocks.MockScheduler)
 
 	// Create handlers
-	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123, nil)
 
 	// Mock getting user to satisfy admin check in HandleCancel
 	adminUser := &store.User{ID: 1, TelegramUserID: 123, IsAdmin: true}
@@ -182,7 +182,7 @@ func TestBot_HandleUpdate_GlobalCancelDuringSession(t *testing.T) {
 
 func TestHandleMessage_DailyRatingsSession(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := handlers.NewWithAdminID(mockStore, nil, 0, 123)
+	h := handlers.NewWithAdminID(mockStore, nil, 0, 123, nil)
 	bot := &Bot{handlers: h}
 
 	ratingDate := time.Date(2026, time.March, 13, 20, 50, 0, 0, time.UTC)

@@ -13,6 +13,7 @@ import (
 	"github.com/robfig/cron/v3"
 
 	httpserver "github.com/korjavin/dutyassistant/internal/http"
+	"github.com/korjavin/dutyassistant/internal/llm"
 	"github.com/korjavin/dutyassistant/internal/notification"
 	"github.com/korjavin/dutyassistant/internal/scheduler"
 	"github.com/korjavin/dutyassistant/internal/store/sqlite"
@@ -34,6 +35,10 @@ func main() {
 	dishGroupIDStr := getEnv("DISH_GROUP", "0")
 	dishGroupID := parseInt64(dishGroupIDStr, 0)
 
+	openaiAPIKey := getEnv("OPENAI_API_KEY", "")
+	openaiURL := getEnv("OPENAI_URL", "")
+	openaiTimeout := parseInt64(getEnv("OPENAI_TIMEOUT_SECONDS", "10"), 10)
+
 	// Initialize database
 	log.Println("Initializing database at", dbPath)
 	ctx := context.Background()
@@ -46,14 +51,18 @@ func main() {
 	log.Println("Initializing scheduler...")
 	sched := scheduler.NewScheduler(store)
 
+	// Initialize LLM client
+	log.Println("Initializing LLM client...")
+	llmClient := llm.NewClient(openaiAPIKey, openaiURL, int(openaiTimeout))
+
 	// Initialize Telegram handlers
 	log.Println("Initializing Telegram handlers...")
 	var telegramHandlers *handlers.Handlers
 	if adminID != 0 {
 		log.Printf("Admin ID configured: %d", adminID)
-		telegramHandlers = handlers.NewWithAdminID(store, sched, dishGroupID, adminID)
+		telegramHandlers = handlers.NewWithAdminID(store, sched, dishGroupID, adminID, llmClient)
 	} else {
-		telegramHandlers = handlers.New(store, sched, dishGroupID)
+		telegramHandlers = handlers.New(store, sched, dishGroupID, llmClient)
 	}
 
 	// Initialize and start Telegram bot
@@ -114,9 +123,14 @@ func main() {
 		if duty.User.TelegramUserID != 0 {
 			log.Printf("[CRON] Preparing DM for user %s (TelegramID: %d)", duty.User.FirstName, duty.User.TelegramUserID)
 			dmMsg := notification.FormatDMToAssignee(duty)
+
+			if llmClient != nil {
+				dmMsg = llmClient.RefineMessage(context.Background(), "friendly congratulatory DM to person assigned chore", dmMsg)
+			}
+
 			log.Printf("[CRON] DM message content: %s", dmMsg)
 
-			if err := bot.SendMessageMarkdown(duty.User.TelegramUserID, dmMsg); err != nil {
+			if err := bot.SendMessageHTML(duty.User.TelegramUserID, dmMsg); err != nil {
 				log.Printf("[CRON] ERROR: Failed to send DM to user %d: %v", duty.User.TelegramUserID, err)
 				// Log failure to database
 				if dbErr := store.LogNotification(context.Background(), duty.DutyDate, duty.UserID, "DM", "FAILED", err.Error()); dbErr != nil {
@@ -141,9 +155,14 @@ func main() {
 		if dishGroupID != 0 {
 			log.Printf("[CRON] Preparing group message for chat %d", dishGroupID)
 			groupMsg := notification.FormatDutyAssignedMessage(duty)
+
+			if llmClient != nil {
+				groupMsg = llmClient.RefineMessage(context.Background(), "congratulate duty assignee proudly", groupMsg)
+			}
+
 			log.Printf("[CRON] Group message content: %s", groupMsg)
 
-			if err := bot.SendMessageMarkdown(dishGroupID, groupMsg); err != nil {
+			if err := bot.SendMessageHTML(dishGroupID, groupMsg); err != nil {
 				log.Printf("[CRON] ERROR: Failed to send group notification to chat %d: %v", dishGroupID, err)
 				// Log failure to database
 				if dbErr := store.LogNotification(context.Background(), duty.DutyDate, duty.UserID, "GROUP", "FAILED", err.Error()); dbErr != nil {

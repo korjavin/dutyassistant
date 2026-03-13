@@ -146,6 +146,10 @@ func (h *Handlers) HandleUnassign(m *tgbotapi.Message) (tgbotapi.MessageConfig, 
 			buttons = append(buttons, row)
 		}
 
+		buttons = append(buttons, []tgbotapi.InlineKeyboardButton{
+			tgbotapi.NewInlineKeyboardButtonData("❌ Cancel", "cancel_flow"),
+		})
+
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
 		msg := tgbotapi.NewMessage(m.Chat.ID, "📋 <b>Remove days from admin queue</b>\n\nSelect a user:")
 		msg.ParseMode = tgbotapi.ModeHTML
@@ -684,6 +688,10 @@ func (h *Handlers) HandleUnassignUserCallback(q *tgbotapi.CallbackQuery) (tgbota
 		),
 	})
 
+	buttons = append(buttons, []tgbotapi.InlineKeyboardButton{
+		tgbotapi.NewInlineKeyboardButtonData("❌ Cancel", "cancel_flow"),
+	})
+
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
 	edit := tgbotapi.NewEditMessageText(
 		q.Message.Chat.ID,
@@ -1042,6 +1050,10 @@ func (h *Handlers) HandleComplete(m *tgbotapi.Message) (tgbotapi.MessageConfig, 
 	if len(buttons) == 0 {
 		return tgbotapi.NewMessage(m.Chat.ID, "✨ No active chores found! All clear."), nil
 	}
+
+	buttons = append(buttons, []tgbotapi.InlineKeyboardButton{
+		tgbotapi.NewInlineKeyboardButtonData("❌ Cancel", "cancel_flow"),
+	})
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
 	msg := tgbotapi.NewMessage(m.Chat.ID, "✅ <b>Mark Chore as Completed</b>\n\nSelect a chore to mark as completed:")

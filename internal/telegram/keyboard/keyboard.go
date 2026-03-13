@@ -16,6 +16,24 @@ const (
 	ActionIgnore    = "ignore"
 )
 
+// ChoreMenu creates the interactive inline keyboard for the /chore command.
+func ChoreMenu() tgbotapi.InlineKeyboardMarkup {
+	return tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("📋 List Chores", "chore_action:list"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("➕ Create Chore", "chore_action:create"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🗑 Delete Chore", "chore_action:delete"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("❌ Cancel", "cancel_flow"),
+		),
+	)
+}
+
 // Calendar creates an inline keyboard markup for a given month and year.
 // Assigns each user a number and shows number+emoji on calendar days.
 // The allUsers parameter allows showing queue info even when there are no duties yet.

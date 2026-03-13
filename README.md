@@ -28,6 +28,9 @@ To run the Duty Assistant Bot, you need to set the following environment variabl
 | `DATABASE_PATH`      | The path to the SQLite database file. | No       | `/app/data/roster.db` |
 | `DISH_GROUP`        | Telegram chat ID for the main group, used for group duty and month-end participant rating announcements. | No       | `0` |
 | `DNS_NAME`           | The DNS name for the web interface.   | No       |                      |
+| `OPENAI_API_KEY`     | The OpenAI API key for LLM-refined messages.  | No       |                      |
+| `OPENAI_URL`         | The OpenAI API base URL (can be customized).  | No       | `https://api.openai.com/v1` |
+| `OPENAI_TIMEOUT_SECONDS` | Timeout in seconds for LLM API calls.     | No       | `10`                 |
 
 ## Running with Docker
 
@@ -98,11 +101,9 @@ The project uses GitHub Actions for automated builds and deployments. On push to
 ### Admin Commands
 - `/assign` - Assign days to a user's admin queue (interactive user + days selection)
 - `/chore <description> [/<N>d]` - Assign a one-off chore to a random user or make it periodic every `N` days.
-- `/list chore` - View all active periodic chores with their schedule.
-- `/cancel chore <id>` - Deactivate a periodic chore.
-- `/list task` - View all active regular (one-off) chores with their IDs.
-- `/cancel task <id>` - Deactivate a regular (one-off) chore.
-- `/complete` - Mark any active chore as completed (interactive chore selection)
+- `/list` - View all active periodic chores or regular tasks (`/list chore` or `/list task`).
+- `/cancel` - Cancel a duty, active chore, or recurring chore (interactive item selection).
+- `/complete` - Mark any active chore as completed (interactive chore selection).
 - `/modify` or `/change` - Change duty assignment for a date (interactive date + user selection)
 - `/offduty` - Set off-duty period for a user (interactive user selection, text date input)
 - `/toggleactive` - Toggle user active/inactive status (interactive user selection with status indicators)
