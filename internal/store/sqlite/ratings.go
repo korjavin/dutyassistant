@@ -78,6 +78,9 @@ func (s *SQLiteStore) GetParticipantsForRating(ctx context.Context) ([]*store.Us
 		}
 		users = append(users, user)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("could not iterate participants for rating: %w", err)
+	}
 
 	return users, nil
 }
@@ -114,6 +117,9 @@ func (s *SQLiteStore) GetMonthlyParticipantTotals(ctx context.Context, year int,
 		}
 		totals = append(totals, total)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("could not iterate monthly participant totals: %w", err)
+	}
 
 	return totals, nil
 }
@@ -138,6 +144,9 @@ func (s *SQLiteStore) getParticipantRatingsBetween(ctx context.Context, start ti
 			return nil, err
 		}
 		ratings = append(ratings, rating)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("could not iterate participant ratings: %w", err)
 	}
 
 	return ratings, nil
