@@ -52,6 +52,33 @@ func TestHandleStart_ExistingUser(t *testing.T) {
 	mockStore.AssertExpectations(t)
 }
 
+func TestHandleStart_BackfillsConfiguredAdminFlagsForExistingUser(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.NewWithAdminID(mockStore, nil, 0, 456)
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 123},
+		From: &tgbotapi.User{ID: 456, FirstName: "AdminUser"},
+	}
+
+	existingUser := &store.User{
+		ID:             1,
+		TelegramUserID: 456,
+		FirstName:      "AdminUser",
+		IsAdmin:        false,
+		IsActive:       true,
+	}
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return(existingUser, nil)
+	mockStore.On("UpdateUser", mock.Anything, mock.MatchedBy(func(u *store.User) bool {
+		return u.ID == 1 && u.IsAdmin && !u.IsActive
+	})).Return(nil)
+
+	msg, err := h.HandleStart(message)
+	assert.NoError(t, err)
+	assert.Contains(t, msg.Text, "Welcome to the Roster Bot!")
+	mockStore.AssertExpectations(t)
+}
+
 func TestHandleHelp(t *testing.T) {
 	h := handlers.New(nil, nil, 0)
 	message := &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: 123}}

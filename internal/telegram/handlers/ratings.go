@@ -34,11 +34,16 @@ func (h *Handlers) PrepareDailyRatingsReminder(chatID, userID int64, ratingDate 
 		msg := tgbotapi.NewMessage(chatID, adminOnlyMessage)
 		return &msg, true, nil
 	}
+	if session, exists := h.SessionManager.GetSession(chatID); exists && session.Type != SessionTypeDailyRatings {
+		msg := tgbotapi.NewMessage(chatID, "Finish your current admin workflow before submitting participant ratings.")
+		return &msg, true, nil
+	}
 
 	participants, err := h.Store.GetParticipantsForRating(context.Background())
 	if err != nil {
 		return nil, false, err
 	}
+	participants = h.filterRatingParticipants(participants)
 	if len(participants) == 0 {
 		return nil, false, nil
 	}
@@ -91,6 +96,10 @@ func (h *Handlers) HandleDailyRatingsInteractive(m *tgbotapi.Message) (tgbotapi.
 		h.SessionManager.EndSession(m.Chat.ID)
 		return tgbotapi.NewMessage(m.Chat.ID, "The rating session expired. Please start a new rating prompt."), nil
 	}
+
+	h.ratingsMu.Lock()
+	defer h.ratingsMu.Unlock()
+
 	if !ratingSubmissionWindowOpen(ratingDate, TimeNow()) {
 		h.SessionManager.EndSession(m.Chat.ID)
 		return tgbotapi.NewMessage(m.Chat.ID, "The rating session expired. Please start a new rating prompt."), nil
@@ -132,6 +141,7 @@ func (h *Handlers) HandleRatingsCalendar(m *tgbotapi.Message) (tgbotapi.MessageC
 	if err != nil {
 		return tgbotapi.NewMessage(m.Chat.ID, genericErrorMessage), nil
 	}
+	participants = h.filterRatingParticipants(participants)
 
 	ratings, err := h.Store.GetCurrentMonthParticipantRatings(context.Background(), now)
 	if err != nil {
@@ -220,6 +230,9 @@ func (h *Handlers) BuildMonthlyRatingsWinnersAnnouncement(now time.Time) (*tgbot
 		return nil, false, nil
 	}
 
+	h.ratingsMu.Lock()
+	defer h.ratingsMu.Unlock()
+
 	totals, err := h.Store.GetMonthlyParticipantTotals(context.Background(), normalizedNow.Year(), normalizedNow.Month())
 	if err != nil {
 		return nil, false, err
@@ -227,6 +240,20 @@ func (h *Handlers) BuildMonthlyRatingsWinnersAnnouncement(now time.Time) (*tgbot
 
 	msg := tgbotapi.NewMessage(h.GroupID, formatMonthlyRatingsWinnersDigest(totals, normalizedNow))
 	return &msg, true, nil
+}
+
+func (h *Handlers) filterRatingParticipants(users []*store.User) []*store.User {
+	filtered := make([]*store.User, 0, len(users))
+	for _, user := range users {
+		if user == nil {
+			continue
+		}
+		if h.AdminID != 0 && user.TelegramUserID == h.AdminID {
+			continue
+		}
+		filtered = append(filtered, user)
+	}
+	return filtered
 }
 
 func sessionParticipants(users []*store.User) []ratingSessionParticipant {

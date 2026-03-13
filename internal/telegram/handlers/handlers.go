@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"sync"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -21,6 +22,7 @@ type Handlers struct {
 	Bot                  *tgbotapi.BotAPI      // Bot API instance for sending notifications
 	SessionManager       *SessionManager       // Session manager for interactive commands
 	ChoreReminderManager *ChoreReminderManager // Chore reminder manager
+	ratingsMu            sync.Mutex
 }
 
 // SetBot sets the bot API instance for the handlers.

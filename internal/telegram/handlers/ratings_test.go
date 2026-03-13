@@ -231,6 +231,52 @@ func TestPrepareDailyRatingsReminder_NonAdminGetsAdminOnlyMessage(t *testing.T) 
 	mockStore.AssertNotCalled(t, "GetParticipantsForRating", mock.Anything)
 }
 
+func TestPrepareDailyRatingsReminder_DoesNotOverrideExistingNonRatingsSession(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := NewWithAdminID(mockStore, nil, 0, 123)
+
+	h.SessionManager.StartSession(902, 123, SessionTypeChoreCreation)
+
+	msg, ok, err := h.PrepareDailyRatingsReminder(902, 123, time.Date(2026, time.March, 13, 20, 50, 0, 0, time.UTC))
+	assert.NoError(t, err)
+	assert.True(t, ok)
+	assert.NotNil(t, msg)
+	assert.Equal(t, "Finish your current admin workflow before submitting participant ratings.", msg.Text)
+
+	session, exists := h.SessionManager.GetSession(902)
+	assert.True(t, exists)
+	assert.Equal(t, SessionTypeChoreCreation, session.Type)
+
+	mockStore.AssertNotCalled(t, "GetParticipantsForRating", mock.Anything)
+}
+
+func TestPrepareDailyRatingsReminder_ExcludesConfiguredAdminParticipant(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := NewWithAdminID(mockStore, nil, 0, 123)
+
+	participants := []*store.User{
+		{ID: 1, TelegramUserID: 123, FirstName: "Admin"},
+		{ID: 2, TelegramUserID: 999, FirstName: "Alice"},
+	}
+	mockStore.On("GetParticipantsForRating", mock.Anything).Return(participants, nil).Once()
+
+	msg, ok, err := h.PrepareDailyRatingsReminder(903, 123, time.Date(2026, time.March, 13, 20, 50, 0, 0, time.UTC))
+	assert.NoError(t, err)
+	assert.True(t, ok)
+	assert.NotNil(t, msg)
+	assert.Contains(t, msg.Text, "1. Alice")
+	assert.NotContains(t, msg.Text, "Admin")
+
+	session, exists := h.SessionManager.GetSession(903)
+	assert.True(t, exists)
+	storedParticipants, ok := sessionParticipantsFromSession(session)
+	assert.True(t, ok)
+	assert.Len(t, storedParticipants, 1)
+	assert.Equal(t, int64(2), storedParticipants[0].ID)
+
+	mockStore.AssertExpectations(t)
+}
+
 func TestStartDailyRatingsSession_BuildsStablePrompt(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	h := NewWithAdminID(mockStore, nil, 0, 123)
@@ -630,6 +676,98 @@ func TestHandleRatingsCalendar_UsesBerlinDateBoundary(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Contains(t, msg.Text, "Participant ratings for March 2026")
 	assert.Contains(t, msg.Text, "Showing 2026-03-01 through 2026-03-01.")
+
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleRatingsCalendar_ExcludesConfiguredAdminParticipant(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := NewWithAdminID(mockStore, nil, 0, 123)
+
+	originalNow := TimeNow
+	TimeNow = func() time.Time {
+		return time.Date(2026, time.March, 2, 12, 0, 0, 0, time.UTC)
+	}
+	defer func() {
+		TimeNow = originalNow
+	}()
+
+	participants := []*store.User{
+		{ID: 1, TelegramUserID: 123, FirstName: "Admin"},
+		{ID: 2, TelegramUserID: 999, FirstName: "Alice"},
+	}
+
+	mockStore.On("GetParticipantsForRating", mock.Anything).Return(participants, nil).Once()
+	mockStore.On("GetCurrentMonthParticipantRatings", mock.Anything, time.Date(2026, time.March, 2, 0, 0, 0, 0, time.UTC)).Return([]*store.ParticipantDailyRating{}, nil).Once()
+
+	msg, err := h.HandleRatingsCalendar(&tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 806},
+		From: &tgbotapi.User{ID: 123},
+	})
+	assert.NoError(t, err)
+	assert.Contains(t, msg.Text, "Date        Alice")
+	assert.NotContains(t, msg.Text, "Admin")
+
+	mockStore.AssertExpectations(t)
+}
+
+func TestBuildMonthlyRatingsWinnersAnnouncement_WaitsForInFlightSave(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := NewWithAdminID(mockStore, nil, -1001, 123)
+
+	originalNow := TimeNow
+	TimeNow = func() time.Time {
+		return time.Date(2026, time.March, 31, 18, 59, 0, 0, time.UTC)
+	}
+	defer func() {
+		TimeNow = originalNow
+	}()
+
+	participants := []*store.User{
+		{ID: 10, FirstName: "Alice"},
+	}
+	saveStarted := make(chan struct{})
+	releaseSave := make(chan struct{})
+
+	mockStore.On("GetParticipantsForRating", mock.Anything).Return(participants, nil).Once()
+	mockStore.On("SaveDailyParticipantRatings", mock.Anything, time.Date(2026, time.March, 31, 0, 0, 0, 0, time.UTC), mock.Anything).Run(func(args mock.Arguments) {
+		close(saveStarted)
+		<-releaseSave
+	}).Return(nil).Once()
+	mockStore.On("GetMonthlyParticipantTotals", mock.Anything, 2026, time.March).Return([]*store.ParticipantMonthlyTotal{
+		{ParticipantID: 10, ParticipantName: "Alice", TotalScore: 5, DaysRated: 1},
+	}, nil).Once()
+
+	_, err := h.StartDailyRatingsSession(807, 123, time.Date(2026, time.March, 31, 18, 50, 0, 0, time.UTC))
+	assert.NoError(t, err)
+
+	saveDone := make(chan struct{})
+	go func() {
+		defer close(saveDone)
+		_, _ = h.HandleDailyRatingsInteractive(&tgbotapi.Message{
+			Chat: &tgbotapi.Chat{ID: 807},
+			From: &tgbotapi.User{ID: 123},
+			Text: "5",
+		})
+	}()
+
+	<-saveStarted
+
+	announcementDone := make(chan struct{})
+	go func() {
+		defer close(announcementDone)
+		_, _, _ = h.BuildMonthlyRatingsWinnersAnnouncement(time.Date(2026, time.March, 31, 19, 0, 0, 0, time.UTC))
+	}()
+
+	select {
+	case <-announcementDone:
+		t.Fatal("announcement should wait for the in-flight rating save")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	close(releaseSave)
+	<-saveDone
+	<-announcementDone
 
 	mockStore.AssertExpectations(t)
 }

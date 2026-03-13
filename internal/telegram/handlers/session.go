@@ -15,6 +15,7 @@ const (
 
 // Session represents an active user session
 type Session struct {
+	mu        sync.RWMutex
 	Type      SessionType
 	ChatID    int64
 	UserID    int64
@@ -83,11 +84,15 @@ func (sm *SessionManager) TouchSession(chatID int64) {
 
 // SetData sets a value in the session data
 func (s *Session) SetData(key string, value interface{}) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.Data[key] = value
 }
 
 // GetData retrieves a value from session data
 func (s *Session) GetData(key string) (interface{}, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	val, ok := s.Data[key]
 	return val, ok
 }
