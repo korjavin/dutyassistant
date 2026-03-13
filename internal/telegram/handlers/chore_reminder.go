@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"context"
-	"github.com/korjavin/dutyassistant/internal/store"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/korjavin/dutyassistant/internal/store"
 )
 
 // ChoreAssignment represents an active chore assignment

@@ -298,3 +298,157 @@ func TestHandleCancel_Task_ErrorCases(t *testing.T) {
 
 	assert.Contains(t, response.Text, "Failed to cancel regular chore (not found, already completed, or cancelled)")
 }
+
+func TestHandleEdit_Recurring_Success(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.New(mockStore, nil, 0)
+
+	adminUser := &store.User{ID: 1, TelegramUserID: 123, IsAdmin: true}
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(123)).Return(adminUser, nil)
+
+	chore := &store.RecurringChore{ID: 1, Description: "Old Foo", IsActive: true}
+	mockStore.On("GetRecurringChore", mock.Anything, int64(1)).Return(chore, nil)
+	mockStore.On("UpdateRecurringChoreDescription", mock.Anything, int64(1), "New Foo Description").Return(nil)
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 789},
+		From: &tgbotapi.User{ID: 123},
+		Text: "/edit chore 1 New Foo Description",
+		Entities: []tgbotapi.MessageEntity{
+			{Type: "bot_command", Offset: 0, Length: 5},
+		},
+	}
+
+	response, err := h.HandleEdit(message)
+	assert.NoError(t, err)
+
+	assert.Contains(t, response.Text, "Periodic chore description updated")
+	assert.Contains(t, response.Text, "Old Foo")
+	assert.Contains(t, response.Text, "New Foo Description")
+}
+
+func TestHandleEdit_Recurring_InvalidFormat(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.New(mockStore, nil, 0)
+
+	adminUser := &store.User{ID: 1, TelegramUserID: 123, IsAdmin: true}
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(123)).Return(adminUser, nil)
+
+	tests := []struct {
+		name string
+		text string
+		want string
+	}{
+		{
+			name: "Missing description",
+			text: "/edit chore 1",
+			want: "Use /edit chore <id> <new description>",
+		},
+		{
+			name: "Invalid ID",
+			text: "/edit chore abc new desc",
+			want: "❌ Invalid chore ID format",
+		},
+		{
+			name: "Wrong subcommand",
+			text: "/edit task 1 new desc",
+			want: "Use /edit chore <id> <new description>",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			message := &tgbotapi.Message{
+				Chat: &tgbotapi.Chat{ID: 789},
+				From: &tgbotapi.User{ID: 123},
+				Text: tt.text,
+				Entities: []tgbotapi.MessageEntity{
+					{Type: "bot_command", Offset: 0, Length: 5},
+				},
+			}
+
+			response, err := h.HandleEdit(message)
+			assert.NoError(t, err)
+			assert.Contains(t, response.Text, tt.want)
+		})
+	}
+}
+
+func TestHandleEdit_Recurring_NonAdmin(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.New(mockStore, nil, 0)
+
+	normalUser := &store.User{ID: 1, TelegramUserID: 456, IsAdmin: false}
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return(normalUser, nil)
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 789},
+		From: &tgbotapi.User{ID: 456},
+		Text: "/edit chore 1 New Foo Description",
+		Entities: []tgbotapi.MessageEntity{
+			{Type: "bot_command", Offset: 0, Length: 5},
+		},
+	}
+
+	response, err := h.HandleEdit(message)
+	assert.NoError(t, err)
+
+	assert.Contains(t, response.Text, "Sorry, this command is for admins only.")
+}
+
+func TestHandleEdit_Recurring_NotFoundOrInactive(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.New(mockStore, nil, 0)
+
+	adminUser := &store.User{ID: 1, TelegramUserID: 123, IsAdmin: true}
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(123)).Return(adminUser, nil)
+
+	tests := []struct {
+		name  string
+		chore *store.RecurringChore
+		err   error
+	}{
+		{
+			name:  "Not found",
+			chore: nil,
+			err:   nil,
+		},
+		{
+			name:  "Inactive",
+			chore: &store.RecurringChore{ID: 1, IsActive: false},
+			err:   nil,
+		},
+		{
+			name:  "DB Error",
+			chore: nil,
+			err:   assert.AnError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset mock
+			mockStore.ExpectedCalls = nil
+			mockStore.On("GetUserByTelegramID", mock.Anything, int64(123)).Return(adminUser, nil)
+			mockStore.On("GetRecurringChore", mock.Anything, int64(1)).Return(tt.chore, tt.err)
+
+			message := &tgbotapi.Message{
+				Chat: &tgbotapi.Chat{ID: 789},
+				From: &tgbotapi.User{ID: 123},
+				Text: "/edit chore 1 new desc",
+				Entities: []tgbotapi.MessageEntity{
+					{Type: "bot_command", Offset: 0, Length: 5},
+				},
+			}
+
+			response, err := h.HandleEdit(message)
+			assert.NoError(t, err)
+
+			if tt.err != nil {
+				assert.Contains(t, response.Text, "Failed to retrieve")
+			} else {
+				assert.Contains(t, response.Text, "not found or already cancelled")
+			}
+		})
+	}
+}

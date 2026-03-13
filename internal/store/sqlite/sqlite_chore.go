@@ -177,6 +177,29 @@ func (s *SQLiteStore) UpdateRecurringChoreNextRun(ctx context.Context, id int64,
 	return err
 }
 
+// UpdateRecurringChoreDescription updates the description for a recurring chore.
+func (s *SQLiteStore) UpdateRecurringChoreDescription(ctx context.Context, id int64, description string) error {
+	query := `
+		UPDATE recurring_chores
+		SET description = ?
+		WHERE id = ? AND is_active = 1
+	`
+	result, err := s.db.ExecContext(ctx, query, description, id)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return sql.ErrNoRows // Could use a custom not found error here if desired
+	}
+
+	return nil
+}
+
 // CancelRecurringChore sets a recurring chore to inactive.
 func (s *SQLiteStore) CancelRecurringChore(ctx context.Context, id int64) error {
 	query := `

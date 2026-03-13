@@ -389,3 +389,8 @@ func (m *MockStore) CancelRecurringChore(ctx context.Context, id int64) error {
 	args := m.Called(ctx, id)
 	return args.Error(0)
 }
+
+func (m *MockStore) UpdateRecurringChoreDescription(ctx context.Context, id int64, description string) error {
+	args := m.Called(ctx, id, description)
+	return args.Error(0)
+}

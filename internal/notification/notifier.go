@@ -2,10 +2,10 @@ package notification
 
 import (
 	"context"
-	"html"
-	"strings"
 	"fmt"
+	"html"
 	"log"
+	"strings"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -131,6 +131,7 @@ func (n *Notifier) checkAndNotify() {
 		}
 	}
 }
+
 // SendDailyChoreSummary sends a daily summary of overdue chores.
 func SendDailyChoreSummary(ctx context.Context, bot *tgbotapi.BotAPI, db store.Store, groupID int64, isCron bool, timezone string) error {
 	todayStr := time.Now().UTC().Format("2006-01-02")

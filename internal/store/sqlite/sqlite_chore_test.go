@@ -52,6 +52,13 @@ func TestRecurringChores(t *testing.T) {
 	fetchedChore, _ = s.GetRecurringChore(ctx, chore.ID)
 	assert.Equal(t, newNextRun.Unix(), fetchedChore.NextRunAt.Unix())
 
+	// 4.5. Update description
+	err = s.UpdateRecurringChoreDescription(ctx, chore.ID, "Take out trash and recycling")
+	require.NoError(t, err)
+
+	fetchedChore, _ = s.GetRecurringChore(ctx, chore.ID)
+	assert.Equal(t, "Take out trash and recycling", fetchedChore.Description)
+
 	// 5. Get due recurring chores
 	dueChores, err := s.GetDueRecurringChores(ctx, now)
 	require.NoError(t, err)
@@ -78,6 +85,13 @@ func TestRecurringChores(t *testing.T) {
 
 	// Test canceling non-existent chore
 	err = s.CancelRecurringChore(ctx, 999)
+	assert.Equal(t, sql.ErrNoRows, err)
+
+	// Test updating description of canceled/non-existent chore
+	err = s.UpdateRecurringChoreDescription(ctx, chore.ID, "Should fail")
+	assert.Equal(t, sql.ErrNoRows, err)
+
+	err = s.UpdateRecurringChoreDescription(ctx, 999, "Should fail")
 	assert.Equal(t, sql.ErrNoRows, err)
 }
 
