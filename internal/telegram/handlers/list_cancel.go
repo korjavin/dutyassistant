@@ -9,6 +9,7 @@ import (
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/korjavin/dutyassistant/internal/telegram/keyboard"
 )
 
 // HandleList handles the /list command for admins. Format: /list chore
@@ -20,6 +21,12 @@ func (h *Handlers) HandleList(m *tgbotapi.Message) (tgbotapi.MessageConfig, erro
 	}
 
 	args := strings.TrimSpace(m.CommandArguments())
+
+	if args == "" {
+		msg := tgbotapi.NewMessage(m.Chat.ID, "Select which type of chores you want to list:")
+		msg.ReplyMarkup = keyboard.ListMenu()
+		return msg, nil
+	}
 
 	if strings.ToLower(args) == "chore" {
 		chores, err := h.Store.GetActiveRecurringChores(context.Background())
@@ -90,6 +97,88 @@ func (h *Handlers) HandleList(m *tgbotapi.Message) (tgbotapi.MessageConfig, erro
 	}
 
 	return tgbotapi.NewMessage(m.Chat.ID, "Unknown list command. Use /list chore to list periodic chores or /list task to list regular chores."), nil
+}
+
+// HandleListCallback handles interactive /list menu selections
+func (h *Handlers) HandleListCallback(q *tgbotapi.CallbackQuery) (tgbotapi.Chattable, error) {
+	// 1. Admin check
+	isAdmin, err := h.checkAdmin(q.From.ID)
+	if err != nil || !isAdmin {
+		return nil, nil // Silently ignore for non-admins
+	}
+
+	parts := strings.Split(q.Data, ":")
+	if len(parts) != 2 {
+		return nil, nil
+	}
+
+	listType := parts[1]
+
+	var sb strings.Builder
+	berlinLoc, err := time.LoadLocation("Europe/Berlin")
+	if err != nil {
+		berlinLoc = time.UTC // fallback
+	}
+
+	if listType == "chore" {
+		chores, err := h.Store.GetActiveRecurringChores(context.Background())
+		if err != nil {
+			msg := tgbotapi.NewEditMessageTextAndMarkup(q.Message.Chat.ID, q.Message.MessageID, "❌ Failed to retrieve recurring chores.", tgbotapi.InlineKeyboardMarkup{InlineKeyboard: make([][]tgbotapi.InlineKeyboardButton, 0)})
+			return msg, nil
+		}
+
+		if len(chores) == 0 {
+			msg := tgbotapi.NewEditMessageTextAndMarkup(q.Message.Chat.ID, q.Message.MessageID, "No active recurring chores found.", tgbotapi.InlineKeyboardMarkup{InlineKeyboard: make([][]tgbotapi.InlineKeyboardButton, 0)})
+			return msg, nil
+		}
+
+		sb.WriteString("📋 <b>Active Recurring Chores:</b>\n\n")
+		for _, chore := range chores {
+			escapedDesc := html.EscapeString(chore.Description)
+			nextRunStr := chore.NextRunAt.In(berlinLoc).Format("2006-01-02 15:04 MST")
+			sb.WriteString(fmt.Sprintf("<b>ID:</b> <code>%d</code>\n", chore.ID))
+			sb.WriteString(fmt.Sprintf("<b>Description:</b> <i>%s</i>\n", escapedDesc))
+			sb.WriteString(fmt.Sprintf("<b>Interval:</b> every %d days\n", chore.Interval))
+			sb.WriteString(fmt.Sprintf("<b>Next Run:</b> %s\n\n", nextRunStr))
+		}
+	} else if listType == "task" {
+		chores, err := h.Store.ListActiveChores(context.Background())
+		if err != nil {
+			msg := tgbotapi.NewEditMessageTextAndMarkup(q.Message.Chat.ID, q.Message.MessageID, "❌ Failed to retrieve active regular chores.", tgbotapi.InlineKeyboardMarkup{InlineKeyboard: make([][]tgbotapi.InlineKeyboardButton, 0)})
+			return msg, nil
+		}
+
+		if len(chores) == 0 {
+			msg := tgbotapi.NewEditMessageTextAndMarkup(q.Message.Chat.ID, q.Message.MessageID, "No active regular chores found.", tgbotapi.InlineKeyboardMarkup{InlineKeyboard: make([][]tgbotapi.InlineKeyboardButton, 0)})
+			return msg, nil
+		}
+
+		sb.WriteString("📋 <b>Active Regular Chores:</b>\n\n")
+		for _, chore := range chores {
+			escapedDesc := html.EscapeString(chore.Description)
+			assignedAtStr := chore.AssignedAt.In(berlinLoc).Format("2006-01-02 15:04 MST")
+			assignedUser := "Unknown"
+			if chore.User != nil {
+				assignedUser = html.EscapeString(chore.User.FirstName)
+			}
+			sb.WriteString(fmt.Sprintf("<b>ID:</b> <code>%d</code>\n", chore.ID))
+			sb.WriteString(fmt.Sprintf("<b>Description:</b> <i>%s</i>\n", escapedDesc))
+			sb.WriteString(fmt.Sprintf("<b>Assigned to:</b> %s\n", assignedUser))
+			sb.WriteString(fmt.Sprintf("<b>Assigned at:</b> %s\n\n", assignedAtStr))
+		}
+	} else {
+		return nil, nil // Ignore unknown types
+	}
+
+	// Update the original message and clear the keyboard
+	editMsg := tgbotapi.NewEditMessageTextAndMarkup(
+		q.Message.Chat.ID,
+		q.Message.MessageID,
+		sb.String(),
+		tgbotapi.InlineKeyboardMarkup{InlineKeyboard: make([][]tgbotapi.InlineKeyboardButton, 0)},
+	)
+	editMsg.ParseMode = tgbotapi.ModeHTML
+	return editMsg, nil
 }
 
 // HandleCancel handles the /cancel command for admins. Format: /cancel chore <id>
