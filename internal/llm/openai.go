@@ -15,28 +15,49 @@ import (
 
 // Client is an adapter for calling the OpenAI chat completion API.
 type Client struct {
-	apiKey     string
-	baseURL    string
-	httpClient *http.Client
+	apiKey      string
+	baseURL     string
+	model       string
+	temperature float64
+	httpClient  *http.Client
 }
 
 // NewClient creates a new LLM client. If apiKey is empty, it returns nil,
 // effectively disabling the LLM features.
-func NewClient(apiKey, baseURL string, timeoutSeconds int) *Client {
+func NewClient(apiKey, baseURL string, timeoutSeconds int, model string, temperature *float64) *Client {
 	if apiKey == "" {
 		return nil
 	}
 	if baseURL == "" {
 		baseURL = "https://api.openai.com/v1"
 	}
+	if model == "" {
+		model = "gpt-4o-mini"
+	}
+
+	temp := 0.7
+	if temperature != nil {
+		temp = *temperature
+	}
+
 	timeout := time.Duration(timeoutSeconds) * time.Second
 	return &Client{
-		apiKey:  apiKey,
-		baseURL: baseURL,
+		apiKey:      apiKey,
+		baseURL:     baseURL,
+		model:       model,
+		temperature: temp,
 		httpClient: &http.Client{
 			Timeout: timeout,
 		},
 	}
+}
+
+// Config returns the current configuration of the LLM client.
+func (c *Client) Config() (string, float64, string) {
+	if c == nil {
+		return "", 0, ""
+	}
+	return c.model, c.temperature, c.baseURL
 }
 
 // chatMessage represents a single message in the chat API.
@@ -120,12 +141,12 @@ If formatting text, ONLY use Telegram-supported HTML tags (<b>, <i>, <a>, <code>
 	userPrompt := fmt.Sprintf("Intent: %s\nOriginal Message: %s", intent, vanilla)
 
 	reqBody := chatRequest{
-		Model: "gpt-4o-mini", // default fast/cheap model
+		Model: c.model,
 		Messages: []chatMessage{
 			{Role: "system", Content: systemPrompt},
 			{Role: "user", Content: userPrompt},
 		},
-		Temperature: 0.7,
+		Temperature: c.temperature,
 	}
 
 	jsonBody, err := json.Marshal(reqBody)

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -38,6 +39,14 @@ func main() {
 	openaiAPIKey := getEnv("OPENAI_API_KEY", "")
 	openaiURL := getEnv("OPENAI_URL", "")
 	openaiTimeout := parseInt64(getEnv("OPENAI_TIMEOUT_SECONDS", "10"), 10)
+	openaiModel := getEnv("OPENAI_MODEL", "gpt-4o-mini")
+
+	var openaiTemperature *float64
+	if tempStr := os.Getenv("OPENAI_TEMPERATURE"); tempStr != "" {
+		if temp, err := strconv.ParseFloat(tempStr, 64); err == nil {
+			openaiTemperature = &temp
+		}
+	}
 
 	// Initialize database
 	log.Println("Initializing database at", dbPath)
@@ -53,7 +62,13 @@ func main() {
 
 	// Initialize LLM client
 	log.Println("Initializing LLM client...")
-	llmClient := llm.NewClient(openaiAPIKey, openaiURL, int(openaiTimeout))
+	llmClient := llm.NewClient(openaiAPIKey, openaiURL, int(openaiTimeout), openaiModel, openaiTemperature)
+	if llmClient != nil {
+		model, temp, url := llmClient.Config()
+		log.Printf("LLM Client: Enabled (Provider: OpenAI, Model: %s, Temperature: %.2f, BaseURL: %s)", model, temp, url)
+	} else {
+		log.Println("LLM Client: Disabled (OPENAI_API_KEY not set)")
+	}
 
 	// Initialize Telegram handlers
 	log.Println("Initializing Telegram handlers...")
