@@ -104,7 +104,7 @@ Implement a monthly participant rating flow in the Telegram bot: every day at 20
 - Modify: `README.md`
 - Modify: `docs/plans/2026-03-13-monthly-participant-rating-contest.md`
 
-- [ ] Update `README.md` with the new admin commands, daily reminder behavior, and month-end announcement behavior if they are user-facing
-- [ ] Note any internal conventions only if the implementation introduces a durable new pattern that future contributors must follow
-- [ ] Move this plan to `docs/plans/completed/` after implementation is finished
+- [x] Update `README.md` with the new admin commands, daily reminder behavior, and month-end announcement behavior if they are user-facing
+- [x] Note any internal conventions only if the implementation introduces a durable new pattern that future contributors must follow
+- [x] Move this plan to `docs/plans/completed/` after implementation is finished
 ---
