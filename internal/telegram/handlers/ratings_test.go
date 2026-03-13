@@ -321,7 +321,7 @@ func TestStartDailyRatingsSession_NoParticipants(t *testing.T) {
 
 func TestHandleDailyRatingsInteractive_SendsGroupNotification(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := NewWithAdminID(mockStore, nil, -1001, 123)
+	h := NewWithAdminID(mockStore, nil, -1001, 123, nil)
 
 	ratingDate := time.Date(2026, time.March, 13, 20, 50, 0, 0, time.UTC)
 	participants := []*store.User{

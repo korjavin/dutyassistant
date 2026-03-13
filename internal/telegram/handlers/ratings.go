@@ -3,8 +3,8 @@ package handlers
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"html"
+	"log/slog"
 	"slices"
 	"strconv"
 	"strings"

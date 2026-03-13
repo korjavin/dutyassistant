@@ -52,6 +52,98 @@ func TestSanitizeTelegramHTML(t *testing.T) {
 	}
 }
 
+func TestTranslateToEnglish(t *testing.T) {
+	ctx := context.Background()
+	text := "Помыть посуду"
+
+	// Test 1: Nil client returns text, nil error
+	var client *Client
+	res, err := client.TranslateToEnglish(ctx, text)
+	if err != nil {
+		t.Errorf("Expected nil error from nil client, got: %v", err)
+	}
+	if res != text {
+		t.Errorf("Expected original text from nil client, got: %s", res)
+	}
+
+	// Mock server
+	mockHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			t.Errorf("Expected POST request, got %s", r.Method)
+		}
+		if r.URL.Path != "/chat/completions" {
+			t.Errorf("Expected /chat/completions, got %s", r.URL.Path)
+		}
+		auth := r.Header.Get("Authorization")
+		if auth != "Bearer test-key" {
+			t.Errorf("Expected Bearer test-key, got %s", auth)
+		}
+
+		w.WriteHeader(http.StatusOK)
+		resp := chatResponse{
+			Choices: []struct {
+				Message struct {
+					Content string `json:"content"`
+				} `json:"message"`
+			}{{Message: struct {
+				Content string `json:"content"`
+			}{Content: "Wash the dishes"}}},
+		}
+		json.NewEncoder(w).Encode(resp)
+	})
+
+	server := httptest.NewServer(mockHandler)
+	defer server.Close()
+
+	// Test 2: Successful response
+	c := NewClient("test-key", server.URL, 10)
+	res, err = c.TranslateToEnglish(ctx, text)
+	if err != nil {
+		t.Errorf("Expected nil error, got: %v", err)
+	}
+	expected := "Wash the dishes"
+	if res != expected {
+		t.Errorf("Expected translated message %q, got: %q", expected, res)
+	}
+}
+
+func TestTranslateToEnglish_ErrorCases(t *testing.T) {
+	ctx := context.Background()
+	text := "Помыть посуду"
+
+	// Mock server that returns a 500
+	errorServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Internal Server Error"))
+	}))
+	defer errorServer.Close()
+
+	c := NewClient("test-key", errorServer.URL, 10)
+	res, err := c.TranslateToEnglish(ctx, text)
+	if err == nil {
+		t.Errorf("Expected error on 500 error, got nil")
+	}
+	if res != text {
+		t.Errorf("Expected original text on 500 error, got: %s", res)
+	}
+
+	// Mock server that hangs (timeout test)
+	timeoutServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(2 * time.Second)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer timeoutServer.Close()
+
+	cTimeout := NewClient("test-key", timeoutServer.URL, 1)
+	res, err = cTimeout.TranslateToEnglish(ctx, text)
+	if err == nil {
+		t.Errorf("Expected error on timeout, got nil")
+	}
+	if res != text {
+		t.Errorf("Expected original text on timeout, got: %s", res)
+	}
+}
+
 func TestRefineMessage(t *testing.T) {
 	ctx := context.Background()
 	intent := "be funny"
