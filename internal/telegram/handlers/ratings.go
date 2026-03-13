@@ -3,7 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"html"
 	"slices"
 	"strconv"
@@ -134,10 +134,10 @@ func (h *Handlers) HandleDailyRatingsInteractive(m *tgbotapi.Message) (tgbotapi.
 			msg := tgbotapi.NewMessage(h.GroupID, msgText)
 			msg.ParseMode = tgbotapi.ModeHTML
 			if _, sendErr := h.Bot.Send(msg); sendErr != nil {
-				log.Printf("error sending daily ratings group notification: %v", sendErr)
+				slog.Error("error sending daily ratings group notification", "err", sendErr)
 			}
 		} else {
-			log.Printf("error fetching monthly participant totals for group notification: %v", err)
+			slog.Error("error fetching monthly participant totals for group notification", "err", err)
 		}
 	}
 
