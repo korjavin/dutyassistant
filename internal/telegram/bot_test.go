@@ -116,6 +116,70 @@ func TestBot_HandleUpdate_SessionCancel(t *testing.T) {
 	bot.handleUpdate(update)
 }
 
+// TestBot_HandleUpdate_GlobalCancelDuringSession verifies that when an interactive session is active,
+// sending a global /cancel command with arguments (e.g. /cancel chore 1) bypasses the session handler
+// and is correctly routed to the global HandleCancel function.
+func TestBot_HandleUpdate_GlobalCancelDuringSession(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	mockScheduler := new(mocks.MockScheduler)
+
+	// Create handlers
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
+
+	// Mock getting user to satisfy admin check in HandleCancel
+	adminUser := &store.User{ID: 1, TelegramUserID: 123, IsAdmin: true}
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(123)).Return(adminUser, nil)
+
+	// Mock the behavior of /cancel chore 1
+	chore := &store.RecurringChore{ID: 1, Description: "Test Chore", IsActive: true}
+	mockStore.On("GetRecurringChore", mock.Anything, int64(1)).Return(chore, nil)
+	mockStore.On("CancelRecurringChore", mock.Anything, int64(1)).Return(nil)
+
+	// Create bot
+	dummyAPI, _ := tgbotapi.NewBotAPI("dummy:token")
+	bot := &Bot{
+		api:      dummyAPI,
+		handlers: h,
+	}
+
+	// 1. Setup session
+	chatID := int64(100)
+	userID := int64(123)
+	h.SessionManager.StartSession(chatID, userID, handlers.SessionTypeEditChore)
+
+	// Ensure session exists
+	session, exists := h.SessionManager.GetSession(chatID)
+	assert.True(t, exists)
+	assert.Equal(t, handlers.SessionTypeEditChore, session.Type)
+
+	// 2. Create the /cancel chore 1 message update
+	update := tgbotapi.Update{
+		Message: &tgbotapi.Message{
+			Chat: &tgbotapi.Chat{ID: chatID},
+			From: &tgbotapi.User{ID: userID},
+			Text: "/cancel chore 1",
+			Entities: []tgbotapi.MessageEntity{
+				{Type: "bot_command", Offset: 0, Length: 7}, // Length of /cancel
+			},
+		},
+	}
+
+	// 3. Process the update. Catch the panic that dummyAPI.Send causes.
+	defer func() {
+		recover()
+		// 4. Verify session STILL EXISTS (it wasn't intercepted)
+		_, exists = h.SessionManager.GetSession(chatID)
+		assert.True(t, exists, "Session should not have been intercepted by a global cancel command")
+
+		// Verify the global cancel handler was indeed called.
+		// Use mockStore.AssertCalled instead of AssertExpectations because we want to ignore exactly how many times GetUserByTelegramID is called (it might be called multiple times due to checkAdmin logic).
+		mockStore.AssertCalled(t, "GetRecurringChore", mock.Anything, int64(1))
+		mockStore.AssertCalled(t, "CancelRecurringChore", mock.Anything, int64(1))
+	}()
+
+	bot.handleUpdate(update)
+}
+
 func TestHandleMessage_DailyRatingsSession(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	h := handlers.NewWithAdminID(mockStore, nil, 0, 123)

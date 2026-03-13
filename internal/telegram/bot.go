@@ -140,10 +140,15 @@ func (b *Bot) handleUpdate(update tgbotapi.Update) {
 	switch {
 	case update.Message != nil:
 		// Check if the user is in an active interactive session
-		_, inSession := b.handlers.SessionManager.GetSession(chatID)
+		session, inSession := b.handlers.SessionManager.GetSession(chatID)
 
-		// If in a session, intercept /cancel to allow the session to abort gracefully
-		if inSession && update.Message.IsCommand() && update.Message.Command() == "cancel" {
+		// A bare cancel command has no arguments
+		isBareCancel := update.Message.IsCommand() && update.Message.Command() == "cancel" && strings.TrimSpace(update.Message.CommandArguments()) == ""
+		// Ensure the session belongs to the user who sent the message
+		isSessionOwner := inSession && session.UserID == userID
+
+		// If in a session, intercept bare /cancel to allow the session to abort gracefully
+		if isSessionOwner && isBareCancel {
 			response, err = b.handleMessage(update.Message)
 		} else if update.Message.IsCommand() {
 			response, err = b.handleCommand(update.Message)
