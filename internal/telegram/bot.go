@@ -286,6 +286,8 @@ func (b *Bot) handleMessage(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 	switch session.Type {
 	case handlers.SessionTypeChoreCreation:
 		return b.handlers.HandleChoreInteractive(m)
+	case handlers.SessionTypeDailyRatings:
+		return b.handlers.HandleDailyRatingsInteractive(m)
 	default:
 		log.Printf("Unknown session type: %s", session.Type)
 		return nil, nil

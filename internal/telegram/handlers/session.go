@@ -10,6 +10,7 @@ type SessionType string
 
 const (
 	SessionTypeChoreCreation SessionType = "chore_creation"
+	SessionTypeDailyRatings  SessionType = "daily_ratings"
 )
 
 // Session represents an active user session
@@ -68,6 +69,16 @@ func (sm *SessionManager) EndSession(chatID int64) {
 	defer sm.mu.Unlock()
 
 	delete(sm.sessions, chatID)
+}
+
+// TouchSession refreshes the session timestamp to keep an active flow alive.
+func (sm *SessionManager) TouchSession(chatID int64) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	if session, ok := sm.sessions[chatID]; ok {
+		session.CreatedAt = time.Now()
+	}
 }
 
 // SetData sets a value in the session data

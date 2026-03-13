@@ -47,13 +47,13 @@ Implement a monthly participant rating flow in the Telegram bot: every day at 20
 - Modify: `internal/mocks/store.go`
 - Modify: `internal/store/mocks/store.go`
 
-- [ ] Add a dedicated session type for waiting for daily ratings from the admin
-- [ ] Implement a helper that builds the rating prompt from the active participant list in a stable order
-- [ ] Implement an admin-only flow that accepts a plain-text reply with space-separated integers and validates score count, score range 1..5, and same-day correction by resubmission
-- [ ] Wire non-command message routing so only the admin reply in an active rating session is consumed
-- [ ] Return clear validation errors and echo the participant order back on failure
-- [ ] Write handler tests for valid submission, invalid count, invalid range, unauthorized sender, and overwrite/correction
-- [ ] Run Telegram handler tests and ensure they pass before task 3
+- [x] Add a dedicated session type for waiting for daily ratings from the admin
+- [x] Implement a helper that builds the rating prompt from the active participant list in a stable order
+- [x] Implement an admin-only flow that accepts a plain-text reply with space-separated integers and validates score count, score range 1..5, and same-day correction by resubmission
+- [x] Wire non-command message routing so only the admin reply in an active rating session is consumed
+- [x] Return clear validation errors and echo the participant order back on failure
+- [x] Write handler tests for valid submission, invalid count, invalid range, unauthorized sender, and overwrite/correction
+- [x] Run Telegram handler tests and ensure they pass before task 3
 
 ### Task 3: Add admin command to show the current-month score calendar
 

@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"testing"
+	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/korjavin/dutyassistant/internal/mocks"
@@ -48,6 +49,41 @@ func TestHandleCommand_Chore(t *testing.T) {
 	msgConfig, ok := resp.(tgbotapi.MessageConfig)
 	assert.True(t, ok)
 	assert.Equal(t, "No active users found to assign the chore to.", msgConfig.Text)
+
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleMessage_DailyRatingsSession(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.NewWithAdminID(mockStore, nil, 0, 123)
+	bot := &Bot{handlers: h}
+
+	ratingDate := time.Date(2026, time.March, 13, 20, 50, 0, 0, time.UTC)
+	normalizedDate := time.Date(2026, time.March, 13, 0, 0, 0, 0, time.UTC)
+	participants := []*store.User{
+		{ID: 10, FirstName: "Alice"},
+		{ID: 11, FirstName: "Bob"},
+	}
+
+	mockStore.On("GetParticipantsForRating", mock.Anything).Return(participants, nil).Once()
+	mockStore.On("SaveDailyParticipantRatings", mock.Anything, normalizedDate, mock.MatchedBy(func(ratings []*store.ParticipantDailyRating) bool {
+		return len(ratings) == 2 && ratings[0].Score == 4 && ratings[1].Score == 5
+	})).Return(nil).Once()
+
+	_, err := h.StartDailyRatingsSession(100, 123, ratingDate)
+	assert.NoError(t, err)
+
+	resp, err := bot.handleMessage(&tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 100},
+		From: &tgbotapi.User{ID: 123},
+		Text: "4 5",
+	})
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+
+	msgConfig, ok := resp.(tgbotapi.MessageConfig)
+	assert.True(t, ok)
+	assert.Contains(t, msgConfig.Text, "Saved ratings for 2026-03-13")
 
 	mockStore.AssertExpectations(t)
 }
