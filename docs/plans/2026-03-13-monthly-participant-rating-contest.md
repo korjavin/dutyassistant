@@ -90,13 +90,13 @@ Implement a monthly participant rating flow in the Telegram bot: every day at 20
 **Files:**
 - Modify: `README.md`
 
-- [ ] Manual test: the cron-style prompt lists participants in stable order and admin reply `5 2 1` stores ratings for that day
-- [ ] Manual test: resubmitting the same day replaces that day’s scores rather than duplicating them
-- [ ] Manual test: the month-to-date calendar shows all days from the 1st through today
-- [ ] Manual test: the month-end message shows totals for each participant and the top three winners
-- [ ] Run the full Go test suite and ensure it passes
-- [ ] Run the project linter if a standard lint command exists
-- [ ] Verify new code paths have meaningful automated coverage and meet the project target
+- [x] Manual test: the cron-style prompt lists participants in stable order and admin reply `5 2 1` stores ratings for that day
+- [x] Manual test: resubmitting the same day replaces that day’s scores rather than duplicating them
+- [x] Manual test: the month-to-date calendar shows all days from the 1st through today
+- [x] Manual test: the month-end message shows totals for each participant and the top three winners
+- [x] Run the full Go test suite and ensure it passes
+- [x] Run the project linter if a standard lint command exists
+- [x] Verify new code paths have meaningful automated coverage and meet the project target
 
 ### Task 6: Update documentation
 

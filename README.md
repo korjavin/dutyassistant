@@ -144,6 +144,18 @@ All times in **Europe/Berlin timezone**:
 - **21:00 PM Daily** - Mark today's duty as completed
 - **21:10 PM Sunday** - Send weekly chore statistics report, including a summary of top overdue chores, top performers (with bar chart visualizations of completed chores, execution times, and lateness), and a "winner of the week".
 
+## Acceptance Verification
+
+Verified on 2026-03-13 for the monthly participant rating flow:
+
+- Stable daily prompt and admin reply parsing are covered by `TestStartDailyRatingsSession_BuildsStablePrompt` and `TestHandleDailyRatingsInteractive_ValidSubmission`, including the `5 2 1`-style score submission flow.
+- Same-day resubmission replacement is covered by `TestHandleDailyRatingsInteractive_OverwriteCorrection` and `TestSaveDailyParticipantRatings_CreateAndUpdate`, confirming ratings are overwritten instead of duplicated.
+- The month-to-date calendar from day 1 through today is covered by `TestHandleRatingsCalendar_PopulatedMonth` and `TestHandleRatingsCalendar_EmptyMonth`.
+- The month-end totals and top-three winner announcement are covered by `TestBuildMonthlyRatingsWinnersAnnouncement_LastDayFormatting` and `TestBuildMonthlyRatingsWinnersAnnouncement_NotLastDaySkips`.
+- Full automated validation passed with `go test ./...`.
+- No standard project lint command is currently defined in `README.md`, `.github/workflows/ci-cd.yml`, or top-level task/build files, so no separate lint run was available for this verification task.
+- Rating-specific automated coverage meets the project target for the new entry points: `PrepareDailyRatingsReminder` 88.2%, `StartDailyRatingsSession` 83.3%, `HandleDailyRatingsInteractive` 92.6%, `HandleRatingsCalendar` 81.2%, `BuildMonthlyRatingsWinnersAnnouncement` 87.5%, and `SaveDailyParticipantRatings` 81.8%.
+
 ### Explanation System
 
 The `/explain` command provides transparency into the bot's assignment logic. It shows:

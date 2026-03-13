@@ -336,6 +336,29 @@ func TestSaveDailyParticipantRatings_CreateAndUpdate(t *testing.T) {
 	require.Equal(t, 2, rowCount)
 }
 
+func TestSaveDailyParticipantRatings_RejectsInvalidRows(t *testing.T) {
+	s := setupTestDB(t)
+	ctx := context.Background()
+
+	alice := &store.User{TelegramUserID: 2101, FirstName: "Alice", IsActive: true}
+	require.NoError(t, s.CreateUser(ctx, alice))
+
+	day := time.Date(2026, time.March, 13, 20, 50, 0, 0, time.UTC)
+
+	err := s.SaveDailyParticipantRatings(ctx, day, []*store.ParticipantDailyRating{nil})
+	require.EqualError(t, err, "participant rating must not be nil")
+
+	err = s.SaveDailyParticipantRatings(ctx, day, []*store.ParticipantDailyRating{{Score: 5}})
+	require.EqualError(t, err, "participant rating must include participant id")
+
+	err = s.SaveDailyParticipantRatings(ctx, day, []*store.ParticipantDailyRating{{ParticipantID: alice.ID, Score: 0}})
+	require.EqualError(t, err, "participant rating score must be between 1 and 5")
+
+	var rowCount int
+	require.NoError(t, s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM participant_ratings`).Scan(&rowCount))
+	require.Equal(t, 0, rowCount)
+}
+
 func TestGetParticipantsForRating_StableOrdering(t *testing.T) {
 	s := setupTestDB(t)
 	ctx := context.Background()
