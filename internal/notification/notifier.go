@@ -114,7 +114,7 @@ func (n *Notifier) checkAndNotify() {
 		}
 
 		groupMsg := tgbotapi.NewMessage(n.chatID, groupMessageText)
-		groupMsg.ParseMode = tgbotapi.ModeMarkdownV2
+		groupMsg.ParseMode = tgbotapi.ModeHTML
 
 		if _, err := n.bot.Send(groupMsg); err != nil {
 			log.Printf("ERROR: Failed to send group notification to chat ID %d: %v", n.chatID, err)
@@ -130,7 +130,7 @@ func (n *Notifier) checkAndNotify() {
 			}
 
 			dmMsg := tgbotapi.NewMessage(duty.User.TelegramUserID, dmMessageText)
-			dmMsg.ParseMode = tgbotapi.ModeMarkdownV2
+			dmMsg.ParseMode = tgbotapi.ModeHTML
 
 			if _, err := n.bot.Send(dmMsg); err != nil {
 				log.Printf("ERROR: Failed to send DM to user %s (ID: %d): %v", duty.User.FirstName, duty.User.TelegramUserID, err)
