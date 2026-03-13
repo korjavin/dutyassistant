@@ -70,11 +70,11 @@ func (s *SQLiteStore) GetActiveChores(ctx context.Context) ([]*store.Chore, erro
 // GetActiveChoresByUserID retrieves all active chores for a specific user.
 func (s *SQLiteStore) GetActiveChoresByUserID(ctx context.Context, userID int64) ([]*store.Chore, error) {
 	query := `
-		SELECT c.id, c.user_id, c.description, c.assigned_at, c.deadline_at, c.completed_at, c.reminder_id,
+		SELECT c.id, c.user_id, c.description, c.assigned_at, c.deadline_at, c.completed_at, c.cancelled_at, c.reminder_id,
 		       u.id, u.telegram_user_id, u.first_name, u.is_admin, u.is_active
 		FROM chores c
 		JOIN users u ON c.user_id = u.id
-		WHERE c.user_id = ? AND c.completed_at IS NULL
+		WHERE c.user_id = ? AND c.completed_at IS NULL AND c.cancelled_at IS NULL
 		ORDER BY c.deadline_at ASC
 	`
 	rows, err := s.db.QueryContext(ctx, query, userID)
