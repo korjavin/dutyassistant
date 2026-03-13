@@ -125,6 +125,73 @@ func SanitizeTelegramHTML(input string) string {
 	return result.String()
 }
 
+// TranslateToEnglish translates the given text to English if it's not already.
+// It returns the original text if the translation fails or if the client is nil.
+func (c *Client) TranslateToEnglish(ctx context.Context, text string) (string, error) {
+	if c == nil {
+		return text, nil
+	}
+
+	systemPrompt := "You are a translator. Translate the given chore description to English. Be concise, do not be verbose. Return ONLY the translated text. Preserve emojis. If translation is not possible or text is already English, return original."
+
+	reqBody := chatRequest{
+		Model: "gpt-4o-mini",
+		Messages: []chatMessage{
+			{Role: "system", Content: systemPrompt},
+			{Role: "user", Content: text},
+		},
+		Temperature: 0.3, // Lower temperature for translation
+	}
+
+	jsonBody, err := json.Marshal(reqBody)
+	if err != nil {
+		log.Printf("LLM TranslateToEnglish JSON marshal error: %v", err)
+		return text, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/chat/completions", bytes.NewBuffer(jsonBody))
+	if err != nil {
+		log.Printf("LLM TranslateToEnglish NewRequest error: %v", err)
+		return text, err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		log.Printf("LLM TranslateToEnglish Do error: %v", err)
+		return text, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		err := fmt.Errorf("LLM TranslateToEnglish non-200 status: %d, body: %s", resp.StatusCode, string(bodyBytes))
+		log.Println(err.Error())
+		return text, err
+	}
+
+	var chatResp chatResponse
+	if err := json.NewDecoder(resp.Body).Decode(&chatResp); err != nil {
+		log.Printf("LLM TranslateToEnglish decode error: %v", err)
+		return text, err
+	}
+
+	if len(chatResp.Choices) == 0 {
+		err := fmt.Errorf("LLM TranslateToEnglish no choices returned")
+		log.Println(err.Error())
+		return text, err
+	}
+
+	translated := chatResp.Choices[0].Message.Content
+	if translated == "" {
+		return text, nil
+	}
+
+	return translated, nil
+}
+
 // RefineMessage sends the vanilla message and intent to the LLM to get a more
 // fun/humorous formatted message. It returns the vanilla message if there's any error
 // or if the client is nil.

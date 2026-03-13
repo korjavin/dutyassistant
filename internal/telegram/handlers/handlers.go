@@ -1,8 +1,11 @@
 package handlers
 
 import (
+	"context"
+	"log"
 	"sync"
 	"time"
+	"unicode"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/korjavin/dutyassistant/internal/llm"
@@ -45,6 +48,35 @@ func New(s store.Store, sch scheduler.SchedulerInterface, groupID int64, llmClie
 		SessionManager: NewSessionManager(),
 		LLMClient:      llmClient,
 	}
+}
+
+// translateIfNonLatin checks if the given description contains non-Latin letters.
+// If it does, it uses the LLMClient to translate it to English.
+// If no non-Latin characters are found, or if translation fails, it returns the original description.
+func (h *Handlers) translateIfNonLatin(ctx context.Context, description string) string {
+	if h.LLMClient == nil {
+		return description
+	}
+
+	hasNonLatin := false
+	for _, r := range description {
+		if unicode.IsLetter(r) && !unicode.Is(unicode.Latin, r) {
+			hasNonLatin = true
+			break
+		}
+	}
+
+	if !hasNonLatin {
+		return description
+	}
+
+	translated, err := h.LLMClient.TranslateToEnglish(ctx, description)
+	if err != nil {
+		log.Printf("translateIfNonLatin failed: %v", err)
+		return description
+	}
+
+	return translated
 }
 
 // NewWithAdminID creates a new Handlers instance with admin ID configured.

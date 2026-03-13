@@ -94,6 +94,8 @@ func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 			return tgbotapi.NewMessage(m.Chat.ID, "❌ Chore description cannot be empty."), nil
 		}
 
+		description = h.translateIfNonLatin(context.Background(), description)
+
 		// Load configured timezone
 		tz := os.Getenv("CHORE_TIMEZONE")
 		if tz == "" {
@@ -176,6 +178,8 @@ func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 	// 4. One-off chore
 	description := args
 
+	description = h.translateIfNonLatin(context.Background(), description)
+
 	// Perform the actual chore assignment
 	return h.assignChore(m.Chat.ID, m.From.ID, description)
 }
@@ -206,6 +210,8 @@ func (h *Handlers) HandleChoreInteractive(m *tgbotapi.Message) (tgbotapi.Chattab
 		msg.ParseMode = tgbotapi.ModeHTML
 		return msg, nil
 	}
+
+	description = h.translateIfNonLatin(context.Background(), description)
 
 	// Perform the chore assignment
 	return h.assignChore(m.Chat.ID, m.From.ID, description)
