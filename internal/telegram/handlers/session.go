@@ -125,7 +125,7 @@ func sessionExpired(session *Session, now time.Time, olderThan time.Duration) bo
 	if session.Type == SessionTypeDailyRatings {
 		ratingDate, ok := ratingDateFromSession(session)
 		if ok {
-			return !normalizeRatingDate(now).Equal(ratingDate)
+			return !ratingSubmissionWindowOpen(ratingDate, now)
 		}
 	}
 

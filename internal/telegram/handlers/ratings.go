@@ -91,6 +91,10 @@ func (h *Handlers) HandleDailyRatingsInteractive(m *tgbotapi.Message) (tgbotapi.
 		h.SessionManager.EndSession(m.Chat.ID)
 		return tgbotapi.NewMessage(m.Chat.ID, "The rating session expired. Please start a new rating prompt."), nil
 	}
+	if !ratingSubmissionWindowOpen(ratingDate, TimeNow()) {
+		h.SessionManager.EndSession(m.Chat.ID)
+		return tgbotapi.NewMessage(m.Chat.ID, "The rating session expired. Please start a new rating prompt."), nil
+	}
 
 	scores, parseErr := parseParticipantScores(m.Text, len(participants))
 	if parseErr != nil {
@@ -265,7 +269,8 @@ func mergeCalendarParticipants(participants []*store.User, ratings []*store.Part
 		})
 	}
 
-	slices.SortFunc(ratedOnly, func(a, b *store.User) int {
+	merged = append(merged, ratedOnly...)
+	slices.SortFunc(merged, func(a, b *store.User) int {
 		if cmp := strings.Compare(strings.ToLower(a.FirstName), strings.ToLower(b.FirstName)); cmp != 0 {
 			return cmp
 		}
@@ -279,7 +284,7 @@ func mergeCalendarParticipants(participants []*store.User, ratings []*store.Part
 		}
 	})
 
-	return append(merged, ratedOnly...)
+	return merged
 }
 
 func sessionParticipantsFromSession(session *Session) ([]ratingSessionParticipant, bool) {
@@ -319,6 +324,24 @@ func normalizeRatingDate(date time.Time) time.Time {
 func isLastDayOfMonth(date time.Time) bool {
 	normalized := normalizeRatingDate(date)
 	return normalized.AddDate(0, 0, 1).Month() != normalized.Month()
+}
+
+func ratingSubmissionWindowOpen(ratingDate time.Time, now time.Time) bool {
+	normalizedDate := normalizeRatingDate(ratingDate)
+	if !normalizeRatingDate(now).Equal(normalizedDate) {
+		return false
+	}
+	if !isLastDayOfMonth(normalizedDate) {
+		return true
+	}
+
+	loc, err := time.LoadLocation(ratingTimezoneName)
+	if err != nil {
+		loc = time.UTC
+	}
+	localNow := now.In(loc)
+	cutoff := time.Date(localNow.Year(), localNow.Month(), localNow.Day(), 21, 0, 0, 0, loc)
+	return localNow.Before(cutoff)
 }
 
 func formatRatingsCalendar(participants []*store.User, ratings []*store.ParticipantDailyRating, now time.Time) string {

@@ -119,3 +119,20 @@ func TestSessionManager_Cleanup_ExpiresDailyRatingsSessionAfterBerlinDayChanges(
 	_, exists := sm.GetSession(chatID)
 	assert.False(t, exists)
 }
+
+func TestSessionManager_Cleanup_ExpiresDailyRatingsSessionAtMonthEndCutoff(t *testing.T) {
+	sm := NewSessionManager()
+	chatID := int64(5)
+
+	sm.StartSession(chatID, 123, SessionTypeDailyRatings)
+
+	sm.mu.Lock()
+	sm.sessions[chatID].CreatedAt = time.Date(2026, time.March, 31, 20, 50, 0, 0, time.UTC)
+	sm.sessions[chatID].SetData(ratingSessionDateKey, normalizeRatingDate(time.Date(2026, time.March, 31, 20, 50, 0, 0, time.UTC)))
+	sm.mu.Unlock()
+
+	sm.removeStaleAt(time.Date(2026, time.March, 31, 21, 0, 0, 0, time.UTC), 5*time.Minute)
+
+	_, exists := sm.GetSession(chatID)
+	assert.False(t, exists)
+}

@@ -152,6 +152,40 @@ func TestHandleRatingsCalendar_IncludesPreviouslyRatedInactiveParticipants(t *te
 	mockStore.AssertExpectations(t)
 }
 
+func TestHandleRatingsCalendar_SortsCombinedParticipantsInStableOrder(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := NewWithAdminID(mockStore, nil, 0, 123)
+
+	originalNow := TimeNow
+	TimeNow = func() time.Time {
+		return time.Date(2026, time.March, 3, 12, 0, 0, 0, time.UTC)
+	}
+	defer func() {
+		TimeNow = originalNow
+	}()
+
+	participants := []*store.User{
+		{ID: 11, FirstName: "Bob"},
+	}
+	ratings := []*store.ParticipantDailyRating{
+		{ParticipantID: 10, ParticipantName: "Alice", RatingDate: time.Date(2026, time.March, 1, 8, 0, 0, 0, time.UTC), Score: 5},
+		{ParticipantID: 11, ParticipantName: "Bob", RatingDate: time.Date(2026, time.March, 1, 8, 0, 0, 0, time.UTC), Score: 4},
+	}
+
+	mockStore.On("GetParticipantsForRating", mock.Anything).Return(participants, nil).Once()
+	mockStore.On("GetCurrentMonthParticipantRatings", mock.Anything, time.Date(2026, time.March, 3, 0, 0, 0, 0, time.UTC)).Return(ratings, nil).Once()
+
+	msg, err := h.HandleRatingsCalendar(&tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 805},
+		From: &tgbotapi.User{ID: 123},
+	})
+	assert.NoError(t, err)
+	assert.Contains(t, msg.Text, "Date        Alice  Bob")
+	assert.Contains(t, msg.Text, "2026-03-01  5      4")
+
+	mockStore.AssertExpectations(t)
+}
+
 func TestHandleRatingsCalendar_AdminAccessControl(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	h := NewWithAdminID(mockStore, nil, 0, 123)
@@ -473,6 +507,43 @@ func TestHandleDailyRatingsInteractive_SaveFailureReturnsGenericError(t *testing
 
 	_, exists := h.SessionManager.GetSession(707)
 	assert.True(t, exists)
+
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleDailyRatingsInteractive_RejectsSubmissionAfterMonthEndCutoff(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := NewWithAdminID(mockStore, nil, 0, 123)
+
+	originalNow := TimeNow
+	TimeNow = func() time.Time {
+		return time.Date(2026, time.March, 31, 21, 0, 0, 0, time.UTC)
+	}
+	defer func() {
+		TimeNow = originalNow
+	}()
+
+	ratingDate := time.Date(2026, time.March, 31, 20, 50, 0, 0, time.UTC)
+	participants := []*store.User{
+		{ID: 10, FirstName: "Alice"},
+		{ID: 11, FirstName: "Bob"},
+	}
+
+	mockStore.On("GetParticipantsForRating", mock.Anything).Return(participants, nil).Once()
+
+	_, err := h.StartDailyRatingsSession(708, 123, ratingDate)
+	assert.NoError(t, err)
+
+	msg, err := h.HandleDailyRatingsInteractive(&tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 708},
+		From: &tgbotapi.User{ID: 123},
+		Text: "5 4",
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, "The rating session expired. Please start a new rating prompt.", msg.(tgbotapi.MessageConfig).Text)
+
+	_, exists := h.SessionManager.GetSession(708)
+	assert.False(t, exists)
 
 	mockStore.AssertExpectations(t)
 }

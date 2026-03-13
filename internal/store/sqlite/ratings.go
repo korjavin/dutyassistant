@@ -34,6 +34,10 @@ func (s *SQLiteStore) SaveDailyParticipantRatings(ctx context.Context, date time
 	}
 	defer stmt.Close()
 
+	if _, err := tx.ExecContext(ctx, `DELETE FROM participant_ratings WHERE rating_date = ?`, dateStr); err != nil {
+		return fmt.Errorf("could not clear participant ratings for %s: %w", dateStr, err)
+	}
+
 	for _, rating := range ratings {
 		if rating == nil {
 			return fmt.Errorf("participant rating must not be nil")
