@@ -25,7 +25,7 @@ func TestNewClient(t *testing.T) {
 	if client.model != "gpt-4o-mini" {
 		t.Errorf("Expected default model, got: %s", client.model)
 	}
-	if client.temperature != 0.0 {
+	if client.temperature != 0.7 {
 		t.Errorf("Expected default temperature, got: %f", client.temperature)
 	}
 

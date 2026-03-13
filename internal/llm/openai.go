@@ -34,6 +34,9 @@ func NewClient(apiKey, baseURL string, timeoutSeconds int, model string, tempera
 	if model == "" {
 		model = "gpt-4o-mini"
 	}
+	if temperature == 0 {
+		temperature = 0.7
+	}
 	timeout := time.Duration(timeoutSeconds) * time.Second
 	return &Client{
 		apiKey:      apiKey,
