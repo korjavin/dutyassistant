@@ -3,24 +3,25 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"html"
 	"log"
 	"strings"
 	"time"
 
-	"github.com/korjavin/dutyassistant/internal/store"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/korjavin/dutyassistant/internal/store"
 )
 
 const (
-	adminOnlyMessage      = "Sorry, this command is for admins only."
-	userNotFoundMessage   = "Could not find user: %s"
-	assignSuccessMessage  = "Successfully assigned %s to duty on %s."
-	assignFailureMessage  = "Failed to assign %s to duty on %s."
-	modifySuccessMessage  = "Successfully modified duty for %s to be handled by %s."
-	modifyFailureMessage  = "Failed to modify duty for date %s."
-	toggleSuccessMessage  = "Successfully set status for %s to %s."
-	toggleFailureMessage  = "Failed to update user status."
-	invalidDateMessage    = "Invalid date format. Please use YYYY-MM-DD."
+	adminOnlyMessage     = "Sorry, this command is for admins only."
+	userNotFoundMessage  = "Could not find user: %s"
+	assignSuccessMessage = "Successfully assigned %s to duty on %s."
+	assignFailureMessage = "Failed to assign %s to duty on %s."
+	modifySuccessMessage = "Successfully modified duty for %s to be handled by %s."
+	modifyFailureMessage = "Failed to modify duty for date %s."
+	toggleSuccessMessage = "Successfully set status for %s to %s."
+	toggleFailureMessage = "Failed to update user status."
+	invalidDateMessage   = "Invalid date format. Please use YYYY-MM-DD."
 )
 
 // checkAdmin is a helper function to verify if a user is an admin.
@@ -423,9 +424,9 @@ func (h *Handlers) HandleOffDuty(m *tgbotapi.Message) (tgbotapi.MessageConfig, e
 	if len(args) == 1 {
 		msg := tgbotapi.NewMessage(m.Chat.ID,
 			fmt.Sprintf("📅 When should %s's off-duty period start and end?\n\n"+
-			"Usage: <code>/offduty %s start end</code>\n\n"+
-			"Example: <code>/offduty %s 2025-10-10 2025-10-15</code>",
-			args[0], args[0], args[0]))
+				"Usage: <code>/offduty %s start end</code>\n\n"+
+				"Example: <code>/offduty %s 2025-10-10 2025-10-15</code>",
+				args[0], args[0], args[0]))
 		msg.ParseMode = tgbotapi.ModeHTML
 		return msg, nil
 	}
@@ -433,9 +434,9 @@ func (h *Handlers) HandleOffDuty(m *tgbotapi.Message) (tgbotapi.MessageConfig, e
 	if len(args) == 2 {
 		msg := tgbotapi.NewMessage(m.Chat.ID,
 			fmt.Sprintf("📅 When should %s's off-duty period end?\n\n"+
-			"Usage: <code>/offduty %s %s end_date</code>\n\n"+
-			"Example: <code>/offduty %s %s 2025-10-15</code>",
-			args[0], args[0], args[1], args[0], args[1]))
+				"Usage: <code>/offduty %s %s end_date</code>\n\n"+
+				"Example: <code>/offduty %s %s 2025-10-15</code>",
+				args[0], args[0], args[1], args[0], args[1]))
 		msg.ParseMode = tgbotapi.ModeHTML
 		return msg, nil
 	}
@@ -445,9 +446,9 @@ func (h *Handlers) HandleOffDuty(m *tgbotapi.Message) (tgbotapi.MessageConfig, e
 	if err != nil {
 		msg := tgbotapi.NewMessage(m.Chat.ID,
 			fmt.Sprintf("⚠️ Invalid start date '%s'\n\n"+
-			"Please use format: YYYY-MM-DD\n\n"+
-			"Example: <code>/offduty %s 2025-10-10 2025-10-15</code>",
-			args[1], userName))
+				"Please use format: YYYY-MM-DD\n\n"+
+				"Example: <code>/offduty %s 2025-10-10 2025-10-15</code>",
+				args[1], userName))
 		msg.ParseMode = tgbotapi.ModeHTML
 		return msg, nil
 	}
@@ -456,9 +457,9 @@ func (h *Handlers) HandleOffDuty(m *tgbotapi.Message) (tgbotapi.MessageConfig, e
 	if err != nil {
 		msg := tgbotapi.NewMessage(m.Chat.ID,
 			fmt.Sprintf("⚠️ Invalid end date '%s'\n\n"+
-			"Please use format: YYYY-MM-DD\n\n"+
-			"Example: <code>/offduty %s %s 2025-10-15</code>",
-			args[2], userName, args[1]))
+				"Please use format: YYYY-MM-DD\n\n"+
+				"Example: <code>/offduty %s %s 2025-10-15</code>",
+				args[2], userName, args[1]))
 		msg.ParseMode = tgbotapi.ModeHTML
 		return msg, nil
 	}
@@ -992,5 +993,173 @@ func (h *Handlers) HandleVacationCallback(q *tgbotapi.CallbackQuery) (tgbotapi.E
 		fmt.Sprintf("%s Vacation mode is now <b>%s</b>\n\nWhen vacation mode is ON, no duty assignments will be made.", emoji, statusText),
 	)
 	edit.ParseMode = tgbotapi.ModeHTML
+	return edit, nil
+}
+
+// HandleComplete handles the /complete command for admins.
+// Shows a list of all active chores with inline buttons for selection.
+func (h *Handlers) HandleComplete(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
+	isAdmin, err := h.checkAdmin(m.From.ID)
+	if err != nil || !isAdmin {
+		return tgbotapi.NewMessage(m.Chat.ID, adminOnlyMessage), nil
+	}
+
+	chores, err := h.Store.GetActiveChores(context.Background())
+	if err != nil {
+		log.Printf("Failed to get active chores: %v", err)
+		return tgbotapi.NewMessage(m.Chat.ID, "Failed to retrieve active chores."), nil
+	}
+
+	if len(chores) == 0 {
+		msg := tgbotapi.NewMessage(m.Chat.ID, "✨ No active chores found! All clear.")
+		return msg, nil
+	}
+
+	// Create inline keyboard with chore buttons
+	var buttons [][]tgbotapi.InlineKeyboardButton
+	for _, chore := range chores {
+		if chore.User == nil {
+			continue
+		}
+
+		// Format deadline for display
+		deadlineStr := ""
+		if !chore.DeadlineAt.IsZero() {
+			deadlineStr = chore.DeadlineAt.Format("15:04")
+		}
+
+		// Button labels are plain text - use raw values (no HTML escaping)
+		buttonLabel := fmt.Sprintf("%s - %s @%s", chore.User.FirstName, chore.Description, deadlineStr)
+		row := []tgbotapi.InlineKeyboardButton{
+			tgbotapi.NewInlineKeyboardButtonData(
+				buttonLabel,
+				fmt.Sprintf("complete_chore:%s", chore.ReminderID),
+			),
+		}
+		buttons = append(buttons, row)
+	}
+
+	if len(buttons) == 0 {
+		return tgbotapi.NewMessage(m.Chat.ID, "✨ No active chores found! All clear."), nil
+	}
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
+	msg := tgbotapi.NewMessage(m.Chat.ID, "✅ <b>Mark Chore as Completed</b>\n\nSelect a chore to mark as completed:")
+	msg.ParseMode = tgbotapi.ModeHTML
+	msg.ReplyMarkup = keyboard
+	return msg, nil
+}
+
+// HandleCompleteChoreCallback handles the callback when a chore is selected for completion by admin.
+func (h *Handlers) HandleCompleteChoreCallback(q *tgbotapi.CallbackQuery) (tgbotapi.EditMessageTextConfig, error) {
+	if q.From == nil {
+		edit := tgbotapi.NewEditMessageText(
+			q.Message.Chat.ID,
+			q.Message.MessageID,
+			adminOnlyMessage,
+		)
+		return edit, nil
+	}
+
+	isAdmin, err := h.checkAdmin(q.From.ID)
+	if err != nil || !isAdmin {
+		edit := tgbotapi.NewEditMessageText(
+			q.Message.Chat.ID,
+			q.Message.MessageID,
+			adminOnlyMessage,
+		)
+		return edit, nil
+	}
+
+	// Extract reminderID from callback data: "complete_chore:reminderID"
+	parts := strings.Split(q.Data, ":")
+	if len(parts) != 2 {
+		log.Printf("Invalid callback data format: %s", q.Data)
+		edit := tgbotapi.NewEditMessageText(
+			q.Message.Chat.ID,
+			q.Message.MessageID,
+			"❌ Error: Invalid callback data.",
+		)
+		return edit, nil
+	}
+
+	reminderID := parts[1]
+
+	if h.ChoreReminderManager == nil {
+		edit := tgbotapi.NewEditMessageText(
+			q.Message.Chat.ID,
+			q.Message.MessageID,
+			"❌ Error: Reminder manager not configured.",
+		)
+		return edit, nil
+	}
+
+	// Get chore by reminderID from database
+	chore, err := h.Store.GetChoreByReminderID(context.Background(), reminderID)
+	if err != nil {
+		log.Printf("Failed to get chore by reminderID %s: %v", reminderID, err)
+		edit := tgbotapi.NewEditMessageText(
+			q.Message.Chat.ID,
+			q.Message.MessageID,
+			"❌ Error: Could not find chore.",
+		)
+		return edit, nil
+	}
+
+	if chore == nil || chore.User == nil {
+		edit := tgbotapi.NewEditMessageText(
+			q.Message.Chat.ID,
+			q.Message.MessageID,
+			"❌ Error: Chore not found or has no assigned user.",
+		)
+		return edit, nil
+	}
+
+	// Create assignment from chore
+	assignment := &ChoreAssignment{
+		UserID:      chore.User.TelegramUserID,
+		UserName:    chore.User.FirstName,
+		Description: chore.Description,
+		AssignedAt:  chore.AssignedAt,
+		GroupID:     h.GroupID,
+		ReminderID:  reminderID,
+	}
+
+	// Mark as completed in database
+	if err := h.Store.CompleteChoreByReminderID(context.Background(), reminderID); err != nil {
+		log.Printf("Failed to complete chore in database: %v", err)
+		edit := tgbotapi.NewEditMessageText(
+			q.Message.Chat.ID,
+			q.Message.MessageID,
+			"❌ Error: Failed to mark chore as completed. Please try again.",
+		)
+		return edit, nil
+	}
+
+	// Remove from active tracking
+	h.ChoreReminderManager.CompleteChore(reminderID)
+
+	// Send completion message to group (best-effort), but only after persistence succeeds
+	groupNotified := true
+	if err := h.ChoreReminderManager.SendCompletionToGroup(assignment); err != nil {
+		log.Printf("Failed to send completion message to group: %v", err)
+		groupNotified = false
+	}
+
+	// Update the message to show completion confirmation
+	// Escape HTML at display time (chore.Description and chore.User.FirstName are stored unescaped)
+	escapedDesc := html.EscapeString(chore.Description)
+	escapedName := html.EscapeString(chore.User.FirstName)
+	confirmationText := fmt.Sprintf("✅ <b>Chore Completed!</b>\n\nMarked <b>%s</b>'s chore as completed:\n\n<i>%s</i>", escapedName, escapedDesc)
+	if groupNotified {
+		confirmationText += "\n\nThe group has been notified!"
+	}
+	edit := tgbotapi.NewEditMessageText(
+		q.Message.Chat.ID,
+		q.Message.MessageID,
+		confirmationText,
+	)
+	edit.ParseMode = tgbotapi.ModeHTML
+
 	return edit, nil
 }

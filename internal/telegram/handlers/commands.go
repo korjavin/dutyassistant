@@ -37,7 +37,8 @@ const (
 		"/offduty <username> <start> <end> - Set off-duty period (YYYY-MM-DD).\n" +
 		"/vacation [on|off] - Toggle vacation mode (pauses all scheduling).\n" +
 		"/users - List all users and their status.\n" +
-		"/toggle\\_active <username> - Toggle a user's participation in the rotation."
+		"/toggle\\_active <username> - Toggle a user's participation in the rotation.\n" +
+		"/complete - Admin: Mark any active chore as completed."
 
 	statusMessage = "<b>Duty Status for %s:</b>\n\n" +
 		"📊 <b>Statistics:</b>\n" +
