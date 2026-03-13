@@ -138,11 +138,19 @@ func (b *Bot) handleUpdate(update tgbotapi.Update) {
 	}
 
 	switch {
-	case update.Message != nil && update.Message.IsCommand():
-		response, err = b.handleCommand(update.Message)
-	case update.Message != nil && !update.Message.IsCommand():
-		// Handle non-command messages (e.g., for interactive sessions)
-		response, err = b.handleMessage(update.Message)
+	case update.Message != nil:
+		// Check if the user is in an active interactive session
+		_, inSession := b.handlers.SessionManager.GetSession(chatID)
+
+		// If in a session, intercept /cancel to allow the session to abort gracefully
+		if inSession && update.Message.IsCommand() && update.Message.Command() == "cancel" {
+			response, err = b.handleMessage(update.Message)
+		} else if update.Message.IsCommand() {
+			response, err = b.handleCommand(update.Message)
+		} else {
+			// Handle non-command messages (e.g., for interactive sessions)
+			response, err = b.handleMessage(update.Message)
+		}
 	case update.CallbackQuery != nil:
 		response, err = b.handleCallbackQuery(update.CallbackQuery)
 	}
