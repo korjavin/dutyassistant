@@ -5,8 +5,8 @@ import (
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"github.com/korjavin/dutyassistant/internal/store"
 	"github.com/korjavin/dutyassistant/internal/mocks"
+	"github.com/korjavin/dutyassistant/internal/store"
 	"github.com/korjavin/dutyassistant/internal/telegram/handlers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -57,7 +57,7 @@ func TestHandleChoreActionList(t *testing.T) {
 	mockStore.On("GetActiveRecurringChores", mock.Anything).Return(rChores, nil)
 
 	q := &tgbotapi.CallbackQuery{
-		ID: "cb1",
+		ID:   "cb1",
 		From: &tgbotapi.User{ID: 123},
 		Message: &tgbotapi.Message{
 			Chat:      &tgbotapi.Chat{ID: 456},
@@ -89,7 +89,7 @@ func TestHandleChoreActionDelete(t *testing.T) {
 	mockStore.On("GetActiveRecurringChores", mock.Anything).Return([]*store.RecurringChore{}, nil)
 
 	q := &tgbotapi.CallbackQuery{
-		ID: "cb1",
+		ID:   "cb1",
 		From: &tgbotapi.User{ID: 123},
 		Message: &tgbotapi.Message{
 			Chat:      &tgbotapi.Chat{ID: 456},
@@ -119,7 +119,7 @@ func TestHandleChoreDeleteConfirmCallback(t *testing.T) {
 	mockStore.On("CancelChore", mock.Anything, int64(5)).Return(&store.Chore{}, nil)
 
 	q := &tgbotapi.CallbackQuery{
-		ID: "cb1",
+		ID:   "cb1",
 		From: &tgbotapi.User{ID: 123},
 		Message: &tgbotapi.Message{
 			Chat:      &tgbotapi.Chat{ID: 456},

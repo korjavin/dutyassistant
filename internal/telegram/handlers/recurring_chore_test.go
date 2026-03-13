@@ -108,6 +108,97 @@ func TestHandleChore_Recurring_OutsideHours(t *testing.T) {
 	assert.Contains(t, response.Text, "every 5 days")
 }
 
+func TestHandleList_Interactive(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.New(mockStore, nil, 0, nil)
+
+	adminUser := &store.User{ID: 1, TelegramUserID: 123, IsAdmin: true}
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(123)).Return(adminUser, nil)
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 789},
+		From: &tgbotapi.User{ID: 123},
+		Text: "/list",
+		Entities: []tgbotapi.MessageEntity{
+			{Type: "bot_command", Offset: 0, Length: 5},
+		},
+	}
+
+	response, err := h.HandleList(message)
+	assert.NoError(t, err)
+
+	assert.Contains(t, response.Text, "Select which type of chores you want to list:")
+
+	keyboard, ok := response.ReplyMarkup.(tgbotapi.InlineKeyboardMarkup)
+	assert.True(t, ok)
+	assert.Len(t, keyboard.InlineKeyboard, 2)
+	assert.Equal(t, "list:chore", *keyboard.InlineKeyboard[0][0].CallbackData)
+	assert.Equal(t, "list:task", *keyboard.InlineKeyboard[1][0].CallbackData)
+}
+
+func TestHandleListCallback(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.New(mockStore, nil, 0, nil)
+
+	adminUser := &store.User{ID: 1, TelegramUserID: 123, IsAdmin: true}
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(123)).Return(adminUser, nil)
+
+	chores := []*store.RecurringChore{
+		{ID: 1, Description: "Foo", Interval: 3, NextRunAt: time.Now()},
+	}
+	mockStore.On("GetActiveRecurringChores", mock.Anything).Return(chores, nil)
+
+	cb := &tgbotapi.CallbackQuery{
+		ID:   "123",
+		From: &tgbotapi.User{ID: 123},
+		Message: &tgbotapi.Message{
+			Chat:      &tgbotapi.Chat{ID: 789},
+			MessageID: 10,
+		},
+		Data: "list:chore",
+	}
+
+	response, err := h.HandleListCallback(cb)
+	assert.NoError(t, err)
+
+	editConfig, ok := response.(tgbotapi.EditMessageTextConfig)
+	assert.True(t, ok)
+	assert.Contains(t, editConfig.Text, "Active Recurring Chores")
+	assert.Contains(t, editConfig.Text, "Foo")
+}
+
+func TestHandleListCallback_Task(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.New(mockStore, nil, 0, nil)
+
+	adminUser := &store.User{ID: 1, TelegramUserID: 123, IsAdmin: true}
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(123)).Return(adminUser, nil)
+
+	chores := []*store.Chore{
+		{ID: 1, Description: "Bar Task", AssignedAt: time.Now(), User: &store.User{FirstName: "Bob"}},
+	}
+	mockStore.On("ListActiveChores", mock.Anything).Return(chores, nil)
+
+	cb := &tgbotapi.CallbackQuery{
+		ID:   "123",
+		From: &tgbotapi.User{ID: 123},
+		Message: &tgbotapi.Message{
+			Chat:      &tgbotapi.Chat{ID: 789},
+			MessageID: 10,
+		},
+		Data: "list:task",
+	}
+
+	response, err := h.HandleListCallback(cb)
+	assert.NoError(t, err)
+
+	editConfig, ok := response.(tgbotapi.EditMessageTextConfig)
+	assert.True(t, ok)
+	assert.Contains(t, editConfig.Text, "Active Regular Chores")
+	assert.Contains(t, editConfig.Text, "Bar Task")
+	assert.Contains(t, editConfig.Text, "Bob")
+}
+
 func TestHandleList_Recurring(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	h := handlers.New(mockStore, nil, 0, nil)

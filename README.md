@@ -101,7 +101,7 @@ The project uses GitHub Actions for automated builds and deployments. On push to
 ### Admin Commands
 - `/assign` - Assign days to a user's admin queue (interactive user + days selection)
 - `/chore <description> [/<N>d]` - Assign a one-off chore to a random user or make it periodic every `N` days.
-- `/list` - View all active periodic chores or regular tasks (`/list chore` or `/list task`).
+- `/list` - View all active periodic chores or regular tasks (interactive list type selection, or `/list chore` / `/list task`).
 - `/cancel` - Cancel a duty, active chore, or recurring chore (interactive item selection).
 - `/complete` - Mark any active chore as completed (interactive chore selection).
 - `/modify` or `/change` - Change duty assignment for a date (interactive date + user selection)
