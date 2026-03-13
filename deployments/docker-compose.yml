@@ -50,6 +50,10 @@ services:
       - DATABASE_PATH=/app/data/roster.db
       # Shared HMAC secret for the /who endpoint used by EchoBridge
       - DUTY_SECRET=${DUTY_SECRET}
+      # OpenAI keys
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_URL=${OPENAI_URL:-}
+      - OPENAI_TIMEOUT_SECONDS=${OPENAI_TIMEOUT_SECONDS:-10}
 
     # Traefik reverse proxy labels for automatic SSL and routing
     labels:

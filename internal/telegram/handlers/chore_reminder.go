@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"context"
+	"github.com/korjavin/dutyassistant/internal/llm"
 	"github.com/korjavin/dutyassistant/internal/store"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -28,13 +29,15 @@ type ChoreReminderManager struct {
 	activeChores map[string]*ChoreAssignment // key is reminderID
 	mu           sync.RWMutex
 	bot          *tgbotapi.BotAPI
+	llmClient    *llm.Client
 }
 
 // NewChoreReminderManager creates a new chore reminder manager
-func NewChoreReminderManager(bot *tgbotapi.BotAPI, db store.Store, groupID int64) *ChoreReminderManager {
+func NewChoreReminderManager(bot *tgbotapi.BotAPI, db store.Store, groupID int64, llmClient *llm.Client) *ChoreReminderManager {
 	crm := &ChoreReminderManager{
 		activeChores: make(map[string]*ChoreAssignment),
 		bot:          bot,
+		llmClient:    llmClient,
 	}
 	if db != nil {
 		crm.loadActiveChores(db, groupID)
@@ -191,6 +194,10 @@ func (crm *ChoreReminderManager) SendCompletionToGroup(assignment *ChoreAssignme
 		escapedName,
 		escapedDesc,
 	)
+
+	if crm.llmClient != nil {
+		completionMsg = crm.llmClient.RefineMessage(context.Background(), "celebrate chore completion, be proud of them", completionMsg)
+	}
 
 	msg := tgbotapi.NewMessage(assignment.GroupID, completionMsg)
 	msg.ParseMode = tgbotapi.ModeHTML

@@ -13,7 +13,7 @@ import (
 
 func TestHandleStart_NewUser(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := handlers.New(mockStore, nil, 0)
+	h := handlers.New(mockStore, nil, 0, nil)
 
 	message := &tgbotapi.Message{
 		Chat: &tgbotapi.Chat{ID: 123},
@@ -33,7 +33,7 @@ func TestHandleStart_NewUser(t *testing.T) {
 
 func TestHandleStart_ExistingUser(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := handlers.New(mockStore, nil, 0)
+	h := handlers.New(mockStore, nil, 0, nil)
 
 	message := &tgbotapi.Message{
 		Chat: &tgbotapi.Chat{ID: 123},
@@ -54,7 +54,7 @@ func TestHandleStart_ExistingUser(t *testing.T) {
 
 func TestHandleStart_BackfillsConfiguredAdminFlagsForExistingUser(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := handlers.NewWithAdminID(mockStore, nil, 0, 456)
+	h := handlers.NewWithAdminID(mockStore, nil, 0, 456, nil)
 
 	message := &tgbotapi.Message{
 		Chat: &tgbotapi.Chat{ID: 123},
@@ -80,7 +80,7 @@ func TestHandleStart_BackfillsConfiguredAdminFlagsForExistingUser(t *testing.T) 
 }
 
 func TestHandleHelp(t *testing.T) {
-	h := handlers.New(nil, nil, 0)
+	h := handlers.New(nil, nil, 0, nil)
 	message := &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: 123}}
 
 	msg, err := h.HandleHelp(message)
@@ -93,7 +93,7 @@ func TestHandleHelp(t *testing.T) {
 
 func TestHandleStatus_Success(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := handlers.New(mockStore, nil, 0)
+	h := handlers.New(mockStore, nil, 0, nil)
 
 	message := &tgbotapi.Message{
 		Chat: &tgbotapi.Chat{ID: 123},
@@ -115,7 +115,7 @@ func TestHandleStatus_Success(t *testing.T) {
 
 func TestHandleStatus_UserNotFound(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := handlers.New(mockStore, nil, 0)
+	h := handlers.New(mockStore, nil, 0, nil)
 
 	message := &tgbotapi.Message{
 		Chat: &tgbotapi.Chat{ID: 123},

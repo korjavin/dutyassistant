@@ -17,7 +17,7 @@ func TestHandleCommand_Chore(t *testing.T) {
 	mockScheduler := new(mocks.MockScheduler)
 
 	// Create handlers with AdminID=123, GroupID=0
-	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123, nil)
 
 	// Create bot with handlers
 	bot := &Bot{
@@ -55,7 +55,7 @@ func TestHandleCommand_Chore(t *testing.T) {
 
 func TestHandleMessage_DailyRatingsSession(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := handlers.NewWithAdminID(mockStore, nil, 0, 123)
+	h := handlers.NewWithAdminID(mockStore, nil, 0, 123, nil)
 	bot := &Bot{handlers: h}
 
 	ratingDate := time.Date(2026, time.March, 13, 20, 50, 0, 0, time.UTC)

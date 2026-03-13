@@ -21,7 +21,7 @@ import (
 func setupAdminTest(t *testing.T) (*mocks.MockStore, *mocks.MockScheduler, *handlers.Handlers) {
 	mockStore := new(mocks.MockStore)
 	mockScheduler := new(mocks.MockScheduler)
-	h := handlers.New(mockStore, mockScheduler, 0)
+	h := handlers.New(mockStore, mockScheduler, 0, nil)
 
 	adminUser := &store.User{ID: 1, TelegramUserID: 123, IsAdmin: true}
 	mockStore.On("GetUserByTelegramID", mock.Anything, int64(123)).Return(adminUser, nil).Maybe()
@@ -31,7 +31,7 @@ func setupAdminTest(t *testing.T) (*mocks.MockStore, *mocks.MockScheduler, *hand
 
 func TestAdminCommands_NotAdmin(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := handlers.New(mockStore, nil, 0)
+	h := handlers.New(mockStore, nil, 0, nil)
 
 	nonAdminUser := &store.User{ID: 2, TelegramUserID: 456, IsAdmin: false}
 	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return(nonAdminUser, nil)
@@ -167,7 +167,7 @@ func TestHandleAssign_InvalidDays(t *testing.T) {
 
 func TestHandleComplete_NotAdmin(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := handlers.New(mockStore, nil, 0)
+	h := handlers.New(mockStore, nil, 0, nil)
 
 	nonAdminUser := &store.User{ID: 2, TelegramUserID: 456, IsAdmin: false}
 	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return(nonAdminUser, nil)
@@ -184,7 +184,7 @@ func TestHandleComplete_NotAdmin(t *testing.T) {
 
 func TestHandleComplete_NoActiveChores(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := handlers.New(mockStore, nil, 0)
+	h := handlers.New(mockStore, nil, 0, nil)
 
 	message := &tgbotapi.Message{
 		Chat: &tgbotapi.Chat{ID: 789},
@@ -336,7 +336,7 @@ func TestHandleCompleteChoreCallback_Success(t *testing.T) {
 	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
 	mockScheduler := new(mocks.MockScheduler)
 	groupID := int64(-1001234567890)
-	h := handlers.NewWithAdminID(mockStore, mockScheduler, groupID, 123)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, groupID, 123, nil)
 
 	// Mock Bot API client
 	client := NewTestClient(func(req *http.Request) *http.Response {
@@ -404,7 +404,7 @@ func TestHandleCompleteChoreCallback_InvalidCallbackData(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
 	mockScheduler := new(mocks.MockScheduler)
-	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123, nil)
 
 	// Mock Bot API client
 	client := NewTestClient(func(req *http.Request) *http.Response {
@@ -443,7 +443,7 @@ func TestHandleCompleteChoreCallback_ChoreNotFound(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
 	mockScheduler := new(mocks.MockScheduler)
-	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123, nil)
 
 	// Mock Bot API client
 	client := NewTestClient(func(req *http.Request) *http.Response {
@@ -484,7 +484,7 @@ func TestHandleCompleteChoreCallback_ChoreWithoutUser(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
 	mockScheduler := new(mocks.MockScheduler)
-	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123, nil)
 
 	// Mock Bot API client
 	client := NewTestClient(func(req *http.Request) *http.Response {
@@ -537,7 +537,7 @@ func TestHandleCompleteChoreCallback_DBFailure(t *testing.T) {
 	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
 	mockScheduler := new(mocks.MockScheduler)
 	groupID := int64(-1001234567890)
-	h := handlers.NewWithAdminID(mockStore, mockScheduler, groupID, 123)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, groupID, 123, nil)
 	sendMessageCalls := 0
 
 	client := NewTestClient(func(req *http.Request) *http.Response {
@@ -601,7 +601,7 @@ func TestHandleCompleteChoreCallback_NilChore(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
 	mockScheduler := new(mocks.MockScheduler)
-	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123, nil)
 
 	// Mock Bot API client
 	client := NewTestClient(func(req *http.Request) *http.Response {
@@ -642,7 +642,7 @@ func TestHandleCompleteChoreCallback_NilChore(t *testing.T) {
 func TestHandleCompleteChoreCallback_NotAdmin(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	mockScheduler := new(mocks.MockScheduler)
-	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123, nil)
 
 	callback := &tgbotapi.CallbackQuery{
 		ID:   "callback_123",
