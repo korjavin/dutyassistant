@@ -142,7 +142,7 @@ All times in **Europe/Berlin timezone**:
 
 - **11:00 AM Daily** - Assign today's duty based on queue priority and process due periodic chores.
 - **21:00 PM Daily** - Mark today's duty as completed
-- **21:10 PM Sunday** - Send weekly duty statistics report (TODO: implement)
+- **21:10 PM Sunday** - Send weekly chore statistics report, including a summary of top overdue chores, top performers (with bar chart visualizations of completed chores, execution times, and lateness), and a "winner of the week".
 
 ### Explanation System
 

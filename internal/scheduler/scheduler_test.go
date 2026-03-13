@@ -478,6 +478,10 @@ func (m *mockStore) GetTopCompletedChoresUsers(ctx context.Context, limit int) (
 	return nil, nil
 }
 
+func (m *mockStore) GetUserWeeklyStats(ctx context.Context, since time.Time) ([]*store.UserWeeklyStats, error) {
+	return nil, nil
+}
+
 func (m *mockStore) GetLastChoreDigestDate(ctx context.Context) (string, error) {
 	return "", nil
 }

@@ -254,6 +254,51 @@ func SendDailyChoreSummary(ctx context.Context, bot *tgbotapi.BotAPI, db store.S
 	return nil
 }
 
+func renderBarChart(value, maxValue float64, width int) string {
+	if maxValue == 0 || width <= 0 {
+		return strings.Repeat("░", width)
+	}
+	filledCount := int((value / maxValue) * float64(width))
+	if filledCount > width {
+		filledCount = width
+	}
+	return strings.Repeat("█", filledCount) + strings.Repeat("░", width-filledCount)
+}
+
+func determineWinner(stats []*store.UserWeeklyStats) *store.UserWeeklyStats {
+	if len(stats) == 0 {
+		return nil
+	}
+
+	// Data should already be sorted by completed_count DESC, but we do a full pass
+	// to find the winner using highest CompletedCount, then lowest AvgLateSeconds as tie-breaker.
+	winner := stats[0]
+	for i := 1; i < len(stats); i++ {
+		if stats[i].CompletedCount > winner.CompletedCount {
+			winner = stats[i]
+		} else if stats[i].CompletedCount == winner.CompletedCount {
+			if stats[i].AvgLateSeconds < winner.AvgLateSeconds {
+				winner = stats[i]
+			}
+		}
+	}
+
+	return winner
+}
+
+func formatDuration(seconds float64) string {
+	d := time.Duration(seconds) * time.Second
+	h := int(d.Hours())
+	m := int(d.Minutes()) % 60
+	s := int(d.Seconds()) % 60
+	if h > 0 {
+		return fmt.Sprintf("%dh%02dm", h, m)
+	} else if m > 0 {
+		return fmt.Sprintf("%dm", m)
+	}
+	return fmt.Sprintf("%ds", s)
+}
+
 // SendWeeklyChoreStats sends a weekly statistics report of chores.
 func SendWeeklyChoreStats(ctx context.Context, bot *tgbotapi.BotAPI, db store.Store, groupID int64) error {
 	if groupID == 0 {
@@ -265,9 +310,10 @@ func SendWeeklyChoreStats(ctx context.Context, bot *tgbotapi.BotAPI, db store.St
 		return fmt.Errorf("failed to fetch top overdue chores: %w", err)
 	}
 
-	topUsers, err := db.GetTopCompletedChoresUsers(ctx, 5)
+	since := time.Now().AddDate(0, 0, -7)
+	weeklyStats, err := db.GetUserWeeklyStats(ctx, since)
 	if err != nil {
-		return fmt.Errorf("failed to fetch top completed chores users: %w", err)
+		return fmt.Errorf("failed to fetch user weekly stats: %w", err)
 	}
 
 	var sb strings.Builder
@@ -283,12 +329,39 @@ func SendWeeklyChoreStats(ctx context.Context, bot *tgbotapi.BotAPI, db store.St
 	}
 	sb.WriteString("\n")
 
-	sb.WriteString("🏆 <b>Top 5 Users (Completed Chores):</b>\n")
-	if len(topUsers) == 0 {
-		sb.WriteString("No completed chores recorded.\n")
+	sb.WriteString("🏆 <b>Top Performers this week:</b>\n")
+	if len(weeklyStats) == 0 {
+		sb.WriteString("No completed chores recorded this week.\n")
 	} else {
-		for i, stat := range topUsers {
-			sb.WriteString(fmt.Sprintf("%d. %s (%d completed)\n", i+1, html.EscapeString(stat.Name), stat.Count))
+		maxCount := 0.0
+		for _, stat := range weeklyStats {
+			if float64(stat.CompletedCount) > maxCount {
+				maxCount = float64(stat.CompletedCount)
+			}
+		}
+
+		for i, stat := range weeklyStats {
+			bar := renderBarChart(float64(stat.CompletedCount), maxCount, 10)
+
+			lateIndicator := "✅ on time"
+			if stat.AvgLateSeconds > 0 {
+				lateIndicator = fmt.Sprintf("⚠️ late (%s avg)", formatDuration(stat.AvgLateSeconds))
+			}
+
+			sb.WriteString(fmt.Sprintf("%d. <b>%s</b>\n", i+1, html.EscapeString(stat.Name)))
+			sb.WriteString(fmt.Sprintf("   %s %d completed\n", bar, stat.CompletedCount))
+			sb.WriteString(fmt.Sprintf("   ⏱ %s avg execution\n", formatDuration(stat.AvgExecSeconds)))
+			sb.WriteString(fmt.Sprintf("   %s\n\n", lateIndicator))
+		}
+
+		winner := determineWinner(weeklyStats)
+		if winner != nil {
+			sb.WriteString(fmt.Sprintf("🥇 <b>Winner of the week: %s</b>\n", html.EscapeString(winner.Name)))
+			if winner.AvgLateSeconds == 0 {
+				sb.WriteString("<i>Most chores completed, on time!</i>\n")
+			} else {
+				sb.WriteString(fmt.Sprintf("<i>Most chores completed! (%s avg late)</i>\n", formatDuration(winner.AvgLateSeconds)))
+			}
 		}
 	}
 

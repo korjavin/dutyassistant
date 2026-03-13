@@ -75,6 +75,14 @@ type UserChoreStat struct {
 	Count int
 }
 
+// UserWeeklyStats holds aggregated weekly statistics for a user's completed chores.
+type UserWeeklyStats struct {
+	Name           string
+	CompletedCount int
+	AvgExecSeconds float64
+	AvgLateSeconds float64
+}
+
 type UserStats struct {
 	TotalDuties     int
 	DutiesThisMonth int
@@ -124,6 +132,7 @@ type Store interface {
 	ListActiveChores(ctx context.Context) ([]*Chore, error)
 	GetTopOverdueChores(ctx context.Context, limit int) ([]*ChoreStat, error)
 	GetTopCompletedChoresUsers(ctx context.Context, limit int) ([]*UserChoreStat, error)
+	GetUserWeeklyStats(ctx context.Context, since time.Time) ([]*UserWeeklyStats, error)
 	GetLastChoreDigestDate(ctx context.Context) (string, error)
 	SetLastChoreDigestDate(ctx context.Context, date string) error
 

@@ -283,6 +283,13 @@ func (m *MockStore) GetTopCompletedChoresUsers(ctx context.Context, limit int) (
 	}
 	return args.Get(0).([]*store.UserChoreStat), args.Error(1)
 }
+func (m *MockStore) GetUserWeeklyStats(ctx context.Context, since time.Time) ([]*store.UserWeeklyStats, error) {
+	args := m.Called(ctx, since)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*store.UserWeeklyStats), args.Error(1)
+}
 func (m *MockStore) GetLastChoreDigestDate(ctx context.Context) (string, error) {
 	args := m.Called(ctx)
 	return args.String(0), args.Error(1)
@@ -357,6 +364,64 @@ func (f RoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 func NewTestClient(fn RoundTripFunc) *http.Client {
 	return &http.Client{Transport: fn}
+}
+
+func TestRenderBarChart(t *testing.T) {
+	assert.Equal(t, "█████░░░░░", renderBarChart(5, 10, 10))
+	assert.Equal(t, "██████████", renderBarChart(10, 10, 10))
+	assert.Equal(t, "░░░░░░░░░░", renderBarChart(0, 10, 10))
+	assert.Equal(t, "██████████", renderBarChart(15, 10, 10)) // Over maximum
+	assert.Equal(t, "░░░░░░░░░░", renderBarChart(5, 0, 10))  // Max is 0
+}
+
+func TestDetermineWinner(t *testing.T) {
+	stats := []*store.UserWeeklyStats{
+		{Name: "Alice", CompletedCount: 5, AvgLateSeconds: 3600},
+		{Name: "Bob", CompletedCount: 10, AvgLateSeconds: 0},
+		{Name: "Charlie", CompletedCount: 10, AvgLateSeconds: 1800}, // Bob wins over Charlie (less late)
+	}
+	winner := determineWinner(stats)
+	assert.NotNil(t, winner)
+	assert.Equal(t, "Bob", winner.Name)
+
+	stats2 := []*store.UserWeeklyStats{
+		{Name: "Alice", CompletedCount: 5, AvgLateSeconds: 0},
+		{Name: "Bob", CompletedCount: 5, AvgLateSeconds: 0}, // Alice wins (first in list)
+	}
+	winner2 := determineWinner(stats2)
+	assert.NotNil(t, winner2)
+	assert.Equal(t, "Alice", winner2.Name)
+
+	assert.Nil(t, determineWinner([]*store.UserWeeklyStats{}))
+}
+
+func TestSendWeeklyChoreStats(t *testing.T) {
+	mockStore := new(MockStore)
+	var sentText string
+	bot := setupBotAPI(t, func(form url.Values) { sentText = form.Get("text") })
+
+	mockStore.On("GetTopOverdueChores", mock.Anything, 5).Return([]*store.ChoreStat{
+		{Description: "Take out trash", Count: 3},
+	}, nil)
+
+	mockStore.On("GetUserWeeklyStats", mock.Anything, mock.Anything).Return([]*store.UserWeeklyStats{
+		{Name: "Alice", CompletedCount: 5, AvgExecSeconds: 7200, AvgLateSeconds: 0},
+		{Name: "Bob", CompletedCount: 2, AvgExecSeconds: 3600, AvgLateSeconds: 1800},
+	}, nil)
+
+	err := SendWeeklyChoreStats(context.Background(), bot, mockStore, 123)
+	assert.NoError(t, err)
+
+	// Verify the message content
+	assert.Contains(t, sentText, "Weekly Chore Statistics")
+	assert.Contains(t, sentText, "Take out trash (3 times)")
+	assert.Contains(t, sentText, "Top Performers this week:")
+	assert.Contains(t, sentText, "Alice")
+	assert.Contains(t, sentText, "Bob")
+	assert.Contains(t, sentText, "2h00m") // Alice avg exec
+	assert.Contains(t, sentText, "✅ on time") // Alice on time
+	assert.Contains(t, sentText, "⚠️ late (30m avg)") // Bob late
+	assert.Contains(t, sentText, "🥇 <b>Winner of the week: Alice</b>") // Winner
 }
 
 func setupBotAPI(t *testing.T, checkReq func(url.Values)) *tgbotapi.BotAPI {
