@@ -14,6 +14,7 @@ import (
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/korjavin/dutyassistant/internal/store"
+	"github.com/korjavin/dutyassistant/internal/telegram/keyboard"
 )
 
 // HandleChore handles the /chore command.
@@ -70,10 +71,9 @@ func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 
 	// 2. Check for interactive mode
 	if args == "" {
-		// Enter interactive mode
-		h.SessionManager.StartSession(m.Chat.ID, m.From.ID, SessionTypeChoreCreation)
-		msg := tgbotapi.NewMessage(m.Chat.ID, "📝 <b>Interactive Chore Mode</b>\n\nWhat chore do you want to create?\n\nJust send me the description in your next message.")
+		msg := tgbotapi.NewMessage(m.Chat.ID, "📝 <b>Chore Management</b>\n\nWhat would you like to do?")
 		msg.ParseMode = tgbotapi.ModeHTML
+		msg.ReplyMarkup = keyboard.ChoreMenu()
 		return msg, nil
 	}
 

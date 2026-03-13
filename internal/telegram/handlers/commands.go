@@ -28,18 +28,18 @@ const (
 		"/explain - Explain how the last assignment was made.\n" +
 		"/chore - View your currently assigned chores.\n\n" +
 		"*Admin Commands:*\n" +
-		"/chore <description> [/<N>d] - Assign a chore to a random active user (optional: make it periodic every N days).\n" +
-		"/list chore - List active periodic chores.\n" +
-		"/cancel chore <id> - Cancel a periodic chore.\n" +
-		"/assign <username> <days> - Add days to user's admin queue.\n" +
-		"/unassign <username> <days> - Remove days from user's admin queue.\n" +
-		"/change <date> <username> - Change assigned user for a date.\n" +
-		"/offduty <username> <start> <end> - Set off-duty period (YYYY-MM-DD).\n" +
-		"/vacation [on|off] - Toggle vacation mode (pauses all scheduling).\n" +
+		"/chore - Manage and assign chores interactively.\n" +
+		"/list - View all active periodic chores or regular tasks.\n" +
+		"/cancel - Cancel a duty, active chore, or recurring chore.\n" +
+		"/assign - Add days to user's admin queue.\n" +
+		"/unassign - Remove days from user's admin queue.\n" +
+		"/change - Change assigned user for a date.\n" +
+		"/offduty - Set off-duty period.\n" +
+		"/vacation - Toggle vacation mode.\n" +
 		"/users - List all users and their status.\n" +
 		"/ratings - Show the current month's participant rating calendar.\n" +
-		"/toggle\\_active <username> - Toggle a user's participation in the rotation.\n" +
-		"/complete - Admin: Mark any active chore as completed."
+		"/toggle\\_active - Toggle a user's participation in the rotation.\n" +
+		"/complete - Mark any active chore as completed."
 
 	statusMessage = "<b>Duty Status for %s:</b>\n\n" +
 		"📊 <b>Statistics:</b>\n" +

@@ -86,7 +86,7 @@ func TestHandleChore_NonAdmin_UserNotRegistered(t *testing.T) {
 	assert.Contains(t, msg.Text, "Could not find your user profile")
 }
 
-func TestHandleChore_NoArgs_EntersInteractiveMode(t *testing.T) {
+func TestHandleChore_NoArgs_ShowsMenu(t *testing.T) {
 	_, _, h := setupAdminTest(t)
 
 	message := &tgbotapi.Message{
@@ -97,14 +97,10 @@ func TestHandleChore_NoArgs_EntersInteractiveMode(t *testing.T) {
 
 	msg, err := h.HandleChore(message)
 	assert.NoError(t, err)
-	assert.Contains(t, msg.Text, "Interactive Chore Mode")
-	assert.Contains(t, msg.Text, "What chore do you want to create?")
 
-	// Verify session was created
-	session, exists := h.SessionManager.GetSession(789)
-	assert.True(t, exists)
-	assert.Equal(t, handlers.SessionTypeChoreCreation, session.Type)
-	assert.Equal(t, int64(123), session.UserID)
+	msgConfig := msg
+	assert.Contains(t, msgConfig.Text, "Chore Management")
+	assert.NotNil(t, msgConfig.ReplyMarkup)
 }
 
 func TestHandleChore_Success(t *testing.T) {

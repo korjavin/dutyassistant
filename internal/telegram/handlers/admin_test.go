@@ -248,7 +248,7 @@ func TestHandleComplete_WithActiveChores(t *testing.T) {
 	// Check inline keyboard buttons
 	assert.NotNil(t, msg.ReplyMarkup)
 	inlineKeyboard := msg.ReplyMarkup.(tgbotapi.InlineKeyboardMarkup)
-	assert.Len(t, inlineKeyboard.InlineKeyboard, 2) // 2 chores = 2 buttons
+	assert.Len(t, inlineKeyboard.InlineKeyboard, 3) // 2 chores + 1 cancel button
 
 	// Check first button
 	button1 := inlineKeyboard.InlineKeyboard[0][0]
@@ -266,6 +266,15 @@ func TestHandleComplete_WithActiveChores(t *testing.T) {
 		assert.Equal(t, "complete_chore:reminder_2", *button2.CallbackData)
 	} else {
 		t.Fatal("CallbackData is nil for button2")
+	}
+
+	// Check cancel button
+	button3 := inlineKeyboard.InlineKeyboard[2][0]
+	assert.Equal(t, "❌ Cancel", button3.Text)
+	if button3.CallbackData != nil {
+		assert.Equal(t, "cancel_flow", *button3.CallbackData)
+	} else {
+		t.Fatal("CallbackData is nil for button3")
 	}
 
 	mockStore.AssertExpectations(t)
