@@ -273,6 +273,14 @@ func (m *MockStore) GetTopCompletedChoresUsers(ctx context.Context, limit int) (
 	return args.Get(0).([]*store.UserChoreStat), args.Error(1)
 }
 
+func (m *MockStore) GetUserWeeklyStats(ctx context.Context, since time.Time) ([]*store.UserWeeklyStats, error) {
+	args := m.Called(ctx, since)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*store.UserWeeklyStats), args.Error(1)
+}
+
 func (m *MockStore) GetLastChoreDigestDate(ctx context.Context) (string, error) {
 	args := m.Called(ctx)
 	return args.String(0), args.Error(1)

@@ -150,3 +150,95 @@ func TestGetActiveChoresByUserID(t *testing.T) {
 	assert.Equal(t, chore3.ID, chores2[0].ID)
 	assert.Equal(t, "UserTwo Active Chore", chores2[0].Description)
 }
+
+func TestGetUserWeeklyStats(t *testing.T) {
+	s := setupTestDB(t)
+	ctx := context.Background()
+
+	// 1. Create test users
+	user1 := &store.User{TelegramUserID: 111, FirstName: "Alice"}
+	err := s.CreateUser(ctx, user1)
+	require.NoError(t, err)
+
+	user2 := &store.User{TelegramUserID: 222, FirstName: "Bob"}
+	err = s.CreateUser(ctx, user2)
+	require.NoError(t, err)
+
+	now := time.Now().UTC()
+	since := now.Add(-7 * 24 * time.Hour)
+
+	// Test 1: Empty results
+	stats, err := s.GetUserWeeklyStats(ctx, since)
+	require.NoError(t, err)
+	assert.Empty(t, stats)
+
+	// Add chores for Alice
+	// Chore 1: Completed quickly, on time
+	c1Completed := now.Add(-3 * 24 * time.Hour)
+	err = s.CreateChore(ctx, &store.Chore{
+		UserID:      user1.ID,
+		Description: "Alice Chore 1",
+		AssignedAt:  c1Completed.Add(-1 * time.Hour), // 1 hr exec
+		DeadlineAt:  c1Completed.Add(24 * time.Hour), // Not late
+		CompletedAt: &c1Completed,
+		ReminderID:  "a_c1",
+	})
+	require.NoError(t, err)
+
+	// Chore 2: Completed, late
+	c2Completed := now.Add(-1 * 24 * time.Hour)
+	err = s.CreateChore(ctx, &store.Chore{
+		UserID:      user1.ID,
+		Description: "Alice Chore 2",
+		AssignedAt:  c2Completed.Add(-3 * time.Hour), // 3 hr exec
+		DeadlineAt:  c2Completed.Add(-1 * time.Hour), // 1 hr late
+		CompletedAt: &c2Completed,
+		ReminderID:  "a_c2",
+	})
+	require.NoError(t, err)
+
+	// Chore 3: Out of the 'since' window (completed 8 days ago)
+	c3Completed := now.Add(-8 * 24 * time.Hour)
+	err = s.CreateChore(ctx, &store.Chore{
+		UserID:      user1.ID,
+		Description: "Alice Chore 3",
+		AssignedAt:  c3Completed.Add(-2 * time.Hour),
+		DeadlineAt:  c3Completed.Add(24 * time.Hour),
+		CompletedAt: &c3Completed,
+		ReminderID:  "a_c3",
+	})
+	require.NoError(t, err)
+
+	// Add chores for Bob
+	// Chore 1: Completed, on time
+	b1Completed := now.Add(-2 * 24 * time.Hour)
+	err = s.CreateChore(ctx, &store.Chore{
+		UserID:      user2.ID,
+		Description: "Bob Chore 1",
+		AssignedAt:  b1Completed.Add(-2 * time.Hour), // 2 hr exec
+		DeadlineAt:  b1Completed.Add(24 * time.Hour),
+		CompletedAt: &b1Completed,
+		ReminderID:  "b_c1",
+	})
+	require.NoError(t, err)
+
+	// Test 2: Check results
+	stats, err = s.GetUserWeeklyStats(ctx, since)
+	require.NoError(t, err)
+	require.Len(t, stats, 2)
+
+	// Order should be Alice (2 completed), Bob (1 completed)
+	assert.Equal(t, "Alice", stats[0].Name)
+	assert.Equal(t, 2, stats[0].CompletedCount)
+	// Alice: 1hr + 3hr exec = avg 2hr (7200s)
+	assert.Equal(t, float64(7200), stats[0].AvgExecSeconds)
+	// Alice: 0 late + 1hr late = avg 30m (1800s)
+	assert.Equal(t, float64(1800), stats[0].AvgLateSeconds)
+
+	assert.Equal(t, "Bob", stats[1].Name)
+	assert.Equal(t, 1, stats[1].CompletedCount)
+	// Bob: 2hr exec = 7200s
+	assert.Equal(t, float64(7200), stats[1].AvgExecSeconds)
+	// Bob: 0 late = 0s
+	assert.Equal(t, float64(0), stats[1].AvgLateSeconds)
+}

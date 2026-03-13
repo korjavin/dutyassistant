@@ -210,6 +210,37 @@ func (s *SQLiteStore) GetTopCompletedChoresUsers(ctx context.Context, limit int)
 	return stats, nil
 }
 
+// GetUserWeeklyStats retrieves the user weekly statistics for completed chores.
+func (s *SQLiteStore) GetUserWeeklyStats(ctx context.Context, since time.Time) ([]*store.UserWeeklyStats, error) {
+	query := `
+		SELECT
+			u.first_name,
+			COUNT(c.id) as completed_count,
+			AVG(strftime('%s', c.completed_at) - strftime('%s', c.assigned_at)) as avg_exec_seconds,
+			AVG(MAX(0, strftime('%s', c.completed_at) - strftime('%s', c.deadline_at))) as avg_late_seconds
+		FROM chores c
+		JOIN users u ON c.user_id = u.id
+		WHERE c.completed_at >= ?
+		GROUP BY u.id
+		ORDER BY completed_count DESC
+	`
+	rows, err := s.db.QueryContext(ctx, query, since.UTC().Format(time.RFC3339))
+	if err != nil {
+		return nil, fmt.Errorf("could not query user weekly stats: %w", err)
+	}
+	defer rows.Close()
+
+	var stats []*store.UserWeeklyStats
+	for rows.Next() {
+		var stat store.UserWeeklyStats
+		if err := rows.Scan(&stat.Name, &stat.CompletedCount, &stat.AvgExecSeconds, &stat.AvgLateSeconds); err != nil {
+			return nil, err
+		}
+		stats = append(stats, &stat)
+	}
+	return stats, nil
+}
+
 // Helper methods
 func scanChoreWithUser(row *sql.Row) (*store.Chore, error) {
 	chore := &store.Chore{User: &store.User{}}
