@@ -304,6 +304,35 @@ func (m *MockStore) SetLastChoreDigestDate(ctx context.Context, date string) err
 	return args.Error(0)
 }
 
+func (m *MockStore) SaveDailyParticipantRatings(ctx context.Context, date time.Time, ratings []*store.ParticipantDailyRating) error {
+	args := m.Called(ctx, date, ratings)
+	return args.Error(0)
+}
+
+func (m *MockStore) GetParticipantsForRating(ctx context.Context) ([]*store.User, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*store.User), args.Error(1)
+}
+
+func (m *MockStore) GetCurrentMonthParticipantRatings(ctx context.Context, now time.Time) ([]*store.ParticipantDailyRating, error) {
+	args := m.Called(ctx, now)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*store.ParticipantDailyRating), args.Error(1)
+}
+
+func (m *MockStore) GetMonthlyParticipantTotals(ctx context.Context, year int, month time.Month) ([]*store.ParticipantMonthlyTotal, error) {
+	args := m.Called(ctx, year, month)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*store.ParticipantMonthlyTotal), args.Error(1)
+}
+
 // CreateRecurringChore mocks the CreateRecurringChore method.
 func (m *MockStore) CreateRecurringChore(ctx context.Context, chore *store.RecurringChore) error {
 	args := m.Called(ctx, chore)

@@ -29,12 +29,12 @@ Implement a monthly participant rating flow in the Telegram bot: every day at 20
 - Modify: `internal/mocks/store.go`
 - Modify: `internal/store/mocks/store.go`
 
-- [ ] Add store types for daily participant rating rows and monthly aggregate rows
-- [ ] Extend the `Store` interface with methods to save one day of ratings, fetch the ordered participant list for rating, fetch current-month ratings, and compute monthly totals/ranking
-- [ ] Add a new SQLite table for daily participant ratings with uniqueness on participant plus date
-- [ ] Implement SQLite queries for fixed participant ordering, insert/update of one full daily rating submission, month-to-date calendar data, and monthly totals with deterministic tie ordering
-- [ ] Write store tests covering create/update semantics, stable ordering, month filtering, and aggregate ranking
-- [ ] Run store tests and ensure they pass before task 2
+- [x] Add store types for daily participant rating rows and monthly aggregate rows
+- [x] Extend the `Store` interface with methods to save one day of ratings, fetch the ordered participant list for rating, fetch current-month ratings, and compute monthly totals/ranking
+- [x] Add a new SQLite table for daily participant ratings with uniqueness on participant plus date
+- [x] Implement SQLite queries for fixed participant ordering, insert/update of one full daily rating submission, month-to-date calendar data, and monthly totals with deterministic tie ordering
+- [x] Write store tests covering create/update semantics, stable ordering, month filtering, and aggregate ranking
+- [x] Run store tests and ensure they pass before task 2
 
 ### Task 2: Add admin rating session and score submission parsing
 

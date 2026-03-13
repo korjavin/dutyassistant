@@ -159,6 +159,28 @@ func (m *mockStore) GetCompletedDutiesInRange(ctx context.Context, start, end ti
 	return []*store.Duty{}, nil
 }
 
+func (m *mockStore) SaveDailyParticipantRatings(ctx context.Context, date time.Time, ratings []*store.ParticipantDailyRating) error {
+	return nil
+}
+
+func (m *mockStore) GetParticipantsForRating(ctx context.Context) ([]*store.User, error) {
+	var participants []*store.User
+	for _, u := range m.users {
+		if u.IsActive && !u.IsAdmin {
+			participants = append(participants, u)
+		}
+	}
+	return participants, nil
+}
+
+func (m *mockStore) GetCurrentMonthParticipantRatings(ctx context.Context, now time.Time) ([]*store.ParticipantDailyRating, error) {
+	return nil, nil
+}
+
+func (m *mockStore) GetMonthlyParticipantTotals(ctx context.Context, year int, month time.Month) ([]*store.ParticipantMonthlyTotal, error) {
+	return nil, nil
+}
+
 func (m *mockStore) GetLastDuty(ctx context.Context) (*store.Duty, error) {
 	return nil, nil // not fully mocked
 }
@@ -282,11 +304,21 @@ func (m *mockStore) IsVacationMode(ctx context.Context) (bool, error) {
 	return false, nil
 }
 
-func (m *mockStore) CreateRecurringChore(ctx context.Context, chore *store.RecurringChore) error { return nil }
-func (m *mockStore) GetRecurringChore(ctx context.Context, id int64) (*store.RecurringChore, error) { return nil, nil }
-func (m *mockStore) GetActiveRecurringChores(ctx context.Context) ([]*store.RecurringChore, error) { return nil, nil }
-func (m *mockStore) GetDueRecurringChores(ctx context.Context, before time.Time) ([]*store.RecurringChore, error) { return nil, nil }
-func (m *mockStore) UpdateRecurringChoreNextRun(ctx context.Context, id int64, nextRun time.Time) error { return nil }
+func (m *mockStore) CreateRecurringChore(ctx context.Context, chore *store.RecurringChore) error {
+	return nil
+}
+func (m *mockStore) GetRecurringChore(ctx context.Context, id int64) (*store.RecurringChore, error) {
+	return nil, nil
+}
+func (m *mockStore) GetActiveRecurringChores(ctx context.Context) ([]*store.RecurringChore, error) {
+	return nil, nil
+}
+func (m *mockStore) GetDueRecurringChores(ctx context.Context, before time.Time) ([]*store.RecurringChore, error) {
+	return nil, nil
+}
+func (m *mockStore) UpdateRecurringChoreNextRun(ctx context.Context, id int64, nextRun time.Time) error {
+	return nil
+}
 func (m *mockStore) CancelRecurringChore(ctx context.Context, id int64) error { return nil }
 
 func TestScheduler_AddToVolunteerQueue(t *testing.T) {
