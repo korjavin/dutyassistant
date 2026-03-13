@@ -320,6 +320,9 @@ func (m *mockStore) UpdateRecurringChoreNextRun(ctx context.Context, id int64, n
 	return nil
 }
 func (m *mockStore) CancelRecurringChore(ctx context.Context, id int64) error { return nil }
+func (m *mockStore) UpdateRecurringChoreDescription(ctx context.Context, id int64, description string) error {
+	return nil
+}
 
 func TestScheduler_AddToVolunteerQueue(t *testing.T) {
 	mock := newMockStore()

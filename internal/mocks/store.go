@@ -97,6 +97,11 @@ func (m *MockStore) UpdateDuty(ctx context.Context, duty *store.Duty) error {
 	return args.Error(0)
 }
 
+func (m *MockStore) UpdateRecurringChoreDescription(ctx context.Context, id int64, description string) error {
+	args := m.Called(ctx, id, description)
+	return args.Error(0)
+}
+
 func (m *MockStore) DeleteDuty(ctx context.Context, date time.Time) error {
 	args := m.Called(ctx, date)
 	return args.Error(0)

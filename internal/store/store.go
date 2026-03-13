@@ -183,5 +183,6 @@ type Store interface {
 	GetActiveRecurringChores(ctx context.Context) ([]*RecurringChore, error)
 	GetDueRecurringChores(ctx context.Context, before time.Time) ([]*RecurringChore, error)
 	UpdateRecurringChoreNextRun(ctx context.Context, id int64, nextRun time.Time) error
+	UpdateRecurringChoreDescription(ctx context.Context, id int64, description string) error
 	CancelRecurringChore(ctx context.Context, id int64) error
 }

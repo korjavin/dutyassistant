@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	initdata "github.com/telegram-mini-apps/init-data-golang"
 	"github.com/korjavin/dutyassistant/internal/store"
+	initdata "github.com/telegram-mini-apps/init-data-golang"
 )
 
 // A private key for context that only this package can access. This helps

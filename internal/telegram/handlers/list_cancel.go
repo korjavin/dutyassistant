@@ -153,3 +153,82 @@ func (h *Handlers) HandleCancel(m *tgbotapi.Message) (tgbotapi.MessageConfig, er
 
 	return tgbotapi.NewMessage(m.Chat.ID, "Unknown cancel command. Use /cancel chore <id> or /cancel task <id>"), nil
 }
+
+// HandleEdit handles the /edit command for admins.
+// It supports direct editing via "/edit chore <id> <new description>"
+// or interactive mode by simply sending "/edit" or "/edit chore".
+func (h *Handlers) HandleEdit(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
+	// 1. Admin check
+	isAdmin, err := h.checkAdmin(m.From.ID)
+	if err != nil || !isAdmin {
+		return tgbotapi.NewMessage(m.Chat.ID, adminOnlyMessage), nil
+	}
+
+	args := strings.TrimSpace(m.CommandArguments())
+	parts := strings.Fields(args)
+
+	// Interactive mode: /edit or /edit chore
+	if len(parts) == 0 || (len(parts) == 1 && strings.ToLower(parts[0]) == "chore") {
+		chores, err := h.Store.GetActiveRecurringChores(context.Background())
+		if err != nil {
+			return tgbotapi.NewMessage(m.Chat.ID, "❌ Failed to retrieve recurring chores."), nil
+		}
+
+		if len(chores) == 0 {
+			return tgbotapi.NewMessage(m.Chat.ID, "No active recurring chores found to edit."), nil
+		}
+
+		var buttons [][]tgbotapi.InlineKeyboardButton
+		for _, chore := range chores {
+			// Ensure description fits on button
+			desc := chore.Description
+			if len(desc) > 30 {
+				desc = desc[:27] + "..."
+			}
+			row := []tgbotapi.InlineKeyboardButton{
+				tgbotapi.NewInlineKeyboardButtonData(
+					fmt.Sprintf("ID: %d - %s", chore.ID, desc),
+					fmt.Sprintf("edit_chore:%d", chore.ID),
+				),
+			}
+			buttons = append(buttons, row)
+		}
+
+		keyboard := tgbotapi.NewInlineKeyboardMarkup(buttons...)
+		msg := tgbotapi.NewMessage(m.Chat.ID, "🔄 <b>Edit periodic chore</b>\n\nSelect a chore to edit its description:")
+		msg.ParseMode = tgbotapi.ModeHTML
+		msg.ReplyMarkup = keyboard
+		return msg, nil
+	}
+
+	// Direct command mode: /edit chore <id> <new description>
+	if len(parts) >= 3 && strings.ToLower(parts[0]) == "chore" {
+		choreID, err := strconv.ParseInt(parts[1], 10, 64)
+		if err != nil {
+			return tgbotapi.NewMessage(m.Chat.ID, "❌ Invalid chore ID format. Use /edit chore <id> <new description>"), nil
+		}
+
+		newDescription := strings.Join(parts[2:], " ")
+
+		chore, err := h.Store.GetRecurringChore(context.Background(), choreID)
+		if err != nil {
+			return tgbotapi.NewMessage(m.Chat.ID, "❌ Failed to retrieve recurring chore."), nil
+		}
+
+		if chore == nil || !chore.IsActive {
+			return tgbotapi.NewMessage(m.Chat.ID, "❌ Recurring chore not found or already cancelled."), nil
+		}
+
+		oldDescription := chore.Description
+
+		if err := h.Store.UpdateRecurringChoreDescription(context.Background(), choreID, newDescription); err != nil {
+			return tgbotapi.NewMessage(m.Chat.ID, "❌ Failed to update recurring chore description."), nil
+		}
+
+		msg := tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("✅ <b>Periodic chore description updated:</b>\n<b>Old:</b> <i>%s</i>\n<b>New:</b> <i>%s</i>", html.EscapeString(oldDescription), html.EscapeString(newDescription)))
+		msg.ParseMode = tgbotapi.ModeHTML
+		return msg, nil
+	}
+
+	return tgbotapi.NewMessage(m.Chat.ID, "Use /edit chore <id> <new description> or simply /edit to select interactively."), nil
+}

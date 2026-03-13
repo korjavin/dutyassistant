@@ -49,8 +49,8 @@ func (h *Handlers) HandleVolunteer(m *tgbotapi.Message) (tgbotapi.MessageConfig,
 	if err != nil || days <= 0 {
 		msg := tgbotapi.NewMessage(m.Chat.ID,
 			fmt.Sprintf("⚠️ '%s' is not a valid number of days.\n\n"+
-			"Please use a positive number.\n\n"+
-			"Example: <code>/volunteer 3</code>", args))
+				"Please use a positive number.\n\n"+
+				"Example: <code>/volunteer 3</code>", args))
 		msg.ParseMode = tgbotapi.ModeHTML
 		return msg, nil
 	}

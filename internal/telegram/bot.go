@@ -146,11 +146,24 @@ func (b *Bot) handleUpdate(update tgbotapi.Update) {
 	}
 
 	switch {
-	case update.Message != nil && update.Message.IsCommand():
-		response, err = b.handleCommand(update.Message)
-	case update.Message != nil && !update.Message.IsCommand():
-		// Handle non-command messages (e.g., for interactive sessions)
-		response, err = b.handleMessage(update.Message)
+	case update.Message != nil:
+		// Check if the user is in an active interactive session
+		session, inSession := b.handlers.SessionManager.GetSession(chatID)
+
+		// A bare cancel command has no arguments
+		isBareCancel := update.Message.IsCommand() && update.Message.Command() == "cancel" && strings.TrimSpace(update.Message.CommandArguments()) == ""
+		// Ensure the session belongs to the user who sent the message
+		isSessionOwner := inSession && session.UserID == userID
+
+		// If in a session, intercept bare /cancel to allow the session to abort gracefully
+		if isSessionOwner && isBareCancel {
+			response, err = b.handleMessage(update.Message)
+		} else if update.Message.IsCommand() {
+			response, err = b.handleCommand(update.Message)
+		} else {
+			// Handle non-command messages (e.g., for interactive sessions)
+			response, err = b.handleMessage(update.Message)
+		}
 	case update.CallbackQuery != nil:
 		response, err = b.handleCallbackQuery(update.CallbackQuery)
 	}
@@ -204,6 +217,8 @@ func (b *Bot) handleCommand(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 		return b.handlers.HandleList(m)
 	case "cancel":
 		return b.handlers.HandleCancel(m)
+	case "edit":
+		return b.handlers.HandleEdit(m)
 	case "unassign":
 		return b.handlers.HandleUnassign(m)
 	case "modify":
@@ -277,6 +292,8 @@ func (b *Bot) handleCallbackQuery(q *tgbotapi.CallbackQuery) (tgbotapi.Chattable
 		return b.handlers.HandleChoreRemindCallback(q)
 	case "complete_chore":
 		return b.handlers.HandleCompleteChoreCallback(q)
+	case "edit_chore":
+		return b.handlers.HandleEditChoreCallback(q)
 	case "chore_action":
 		return b.handlers.HandleChoreActionCallback(q)
 	case "chore_delete":
@@ -310,6 +327,8 @@ func (b *Bot) handleMessage(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 		return b.handlers.HandleChoreInteractive(m)
 	case handlers.SessionTypeDailyRatings:
 		return b.handlers.HandleDailyRatingsInteractive(m)
+	case handlers.SessionTypeEditChore:
+		return b.handlers.HandleEditChoreInteractive(m)
 	default:
 		log.Printf("Unknown session type: %s", session.Type)
 		return nil, nil

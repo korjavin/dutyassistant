@@ -11,6 +11,7 @@ type SessionType string
 const (
 	SessionTypeChoreCreation SessionType = "chore_creation"
 	SessionTypeDailyRatings  SessionType = "daily_ratings"
+	SessionTypeEditChore     SessionType = "edit_chore"
 )
 
 // Session represents an active user session
