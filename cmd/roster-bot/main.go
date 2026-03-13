@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -38,6 +39,8 @@ func main() {
 	openaiAPIKey := getEnv("OPENAI_API_KEY", "")
 	openaiURL := getEnv("OPENAI_URL", "")
 	openaiTimeout := parseInt64(getEnv("OPENAI_TIMEOUT_SECONDS", "10"), 10)
+	openaiModel := getEnv("OPENAI_MODEL", "gpt-4o-mini")
+	openaiTemperature := parseFloat64(getEnv("OPENAI_TEMPERATURE", "0.7"), 0.7)
 
 	// Initialize database
 	log.Println("Initializing database at", dbPath)
@@ -53,7 +56,13 @@ func main() {
 
 	// Initialize LLM client
 	log.Println("Initializing LLM client...")
-	llmClient := llm.NewClient(openaiAPIKey, openaiURL, int(openaiTimeout))
+	llmClient := llm.NewClient(openaiAPIKey, openaiURL, int(openaiTimeout), openaiModel, openaiTemperature)
+	if llmClient != nil {
+		model, temp, url := llmClient.Config()
+		log.Printf("LLM Client: Enabled (Provider: OpenAI, Model: %s, Temperature: %.2f, BaseURL: %s)", model, temp, url)
+	} else {
+		log.Println("LLM Client: Disabled (OPENAI_API_KEY not set)")
+	}
 
 	// Initialize Telegram handlers
 	log.Println("Initializing Telegram handlers...")
@@ -369,6 +378,17 @@ func getEnv(key, defaultValue string) string {
 func parseInt64(s string, defaultValue int64) int64 {
 	var result int64
 	if _, err := fmt.Sscanf(s, "%d", &result); err != nil {
+		return defaultValue
+	}
+	return result
+}
+
+func parseFloat64(s string, defaultValue float64) float64 {
+	if s == "" {
+		return defaultValue
+	}
+	result, err := strconv.ParseFloat(s, 64)
+	if err != nil {
 		return defaultValue
 	}
 	return result

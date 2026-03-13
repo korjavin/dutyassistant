@@ -31,6 +31,8 @@ To run the Duty Assistant Bot, you need to set the following environment variabl
 | `OPENAI_API_KEY`     | The OpenAI API key for LLM-refined messages.  | No       |                      |
 | `OPENAI_URL`         | The OpenAI API base URL (can be customized).  | No       | `https://api.openai.com/v1` |
 | `OPENAI_TIMEOUT_SECONDS` | Timeout in seconds for LLM API calls.     | No       | `10`                 |
+| `OPENAI_MODEL`       | The OpenAI model to use for LLM requests.     | No       | `gpt-4o-mini`        |
+| `OPENAI_TEMPERATURE` | The temperature parameter for LLM requests.   | No       | `0.7`                |
 
 ## Running with Docker
 

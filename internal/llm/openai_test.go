@@ -10,22 +10,34 @@ import (
 )
 
 func TestNewClient(t *testing.T) {
-	client := NewClient("", "", 10)
+	client := NewClient("", "", 10, "", 0)
 	if client != nil {
 		t.Errorf("Expected nil client when API key is empty")
 	}
 
-	client = NewClient("some-key", "", 10)
+	client = NewClient("some-key", "", 10, "", 0)
 	if client == nil {
 		t.Errorf("Expected non-nil client with valid key")
 	}
 	if client.baseURL != "https://api.openai.com/v1" {
 		t.Errorf("Expected default baseURL, got: %s", client.baseURL)
 	}
+	if client.model != "gpt-4o-mini" {
+		t.Errorf("Expected default model, got: %s", client.model)
+	}
+	if client.temperature != 0.0 {
+		t.Errorf("Expected default temperature, got: %f", client.temperature)
+	}
 
-	client = NewClient("some-key", "http://localhost:1234", 10)
+	client = NewClient("some-key", "http://localhost:1234", 10, "gpt-4", 0.5)
 	if client.baseURL != "http://localhost:1234" {
 		t.Errorf("Expected custom baseURL, got: %s", client.baseURL)
+	}
+	if client.model != "gpt-4" {
+		t.Errorf("Expected custom model, got: %s", client.model)
+	}
+	if client.temperature != 0.5 {
+		t.Errorf("Expected custom temperature, got: %f", client.temperature)
 	}
 }
 
@@ -93,11 +105,52 @@ func TestRefineMessage(t *testing.T) {
 	defer server.Close()
 
 	// Test 2: Successful response + Sanitization
-	c := NewClient("test-key", server.URL, 10)
+	c := NewClient("test-key", server.URL, 10, "", 0)
 	res := c.RefineMessage(ctx, intent, vanilla)
 	expected := "🍽️ Get ready for splash mountain! You're on dish duty &lt;script&gt;bad&lt;/script&gt; &amp; it's fun!"
 	if res != expected {
 		t.Errorf("Expected refined message %q, got: %q", expected, res)
+	}
+}
+
+func TestRefineMessage_CustomConfig(t *testing.T) {
+	ctx := context.Background()
+	intent := "be funny"
+	vanilla := "You have to do the dishes"
+
+	mockHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req chatRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Errorf("Failed to decode request body: %v", err)
+		}
+
+		if req.Model != "custom-model" {
+			t.Errorf("Expected model custom-model, got: %s", req.Model)
+		}
+		if req.Temperature != 0.9 {
+			t.Errorf("Expected temperature 0.9, got: %f", req.Temperature)
+		}
+
+		w.WriteHeader(http.StatusOK)
+		resp := chatResponse{
+			Choices: []struct {
+				Message struct {
+					Content string `json:"content"`
+				} `json:"message"`
+			}{{Message: struct {
+				Content string `json:"content"`
+			}{Content: "Refined message"}}},
+		}
+		json.NewEncoder(w).Encode(resp)
+	})
+
+	server := httptest.NewServer(mockHandler)
+	defer server.Close()
+
+	c := NewClient("test-key", server.URL, 10, "custom-model", 0.9)
+	res := c.RefineMessage(ctx, intent, vanilla)
+	if res != "Refined message" {
+		t.Errorf("Expected 'Refined message', got: %s", res)
 	}
 }
 
@@ -113,7 +166,7 @@ func TestRefineMessage_ErrorCases(t *testing.T) {
 	}))
 	defer errorServer.Close()
 
-	c := NewClient("test-key", errorServer.URL, 10)
+	c := NewClient("test-key", errorServer.URL, 10, "", 0)
 	if res := c.RefineMessage(ctx, intent, vanilla); res != vanilla {
 		t.Errorf("Expected vanilla message on 500 error, got: %s", res)
 	}
@@ -125,7 +178,7 @@ func TestRefineMessage_ErrorCases(t *testing.T) {
 	}))
 	defer timeoutServer.Close()
 
-	cTimeout := NewClient("test-key", timeoutServer.URL, 1)
+	cTimeout := NewClient("test-key", timeoutServer.URL, 1, "", 0)
 	if res := cTimeout.RefineMessage(ctx, intent, vanilla); res != vanilla {
 		t.Errorf("Expected vanilla message on timeout, got: %s", res)
 	}
