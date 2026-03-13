@@ -9,6 +9,7 @@ import (
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/korjavin/dutyassistant/internal/llm"
 	"github.com/korjavin/dutyassistant/internal/store"
 	"github.com/robfig/cron/v3"
 )
@@ -32,12 +33,13 @@ type Notifier struct {
 	location  *time.Location
 	chatID    int64
 	cronSpec  string
+	llmClient *llm.Client
 	// now is a function that returns the current time. It's used for testing.
 	now func() time.Time
 }
 
 // NewNotifier creates and new Notifier.
-func NewNotifier(s store.Store, sched Scheduler, bot TelegramBot, chatID int64, cronSpec string, loc *time.Location) *Notifier {
+func NewNotifier(s store.Store, sched Scheduler, bot TelegramBot, chatID int64, cronSpec string, loc *time.Location, llmClient *llm.Client) *Notifier {
 	return &Notifier{
 		store:     s,
 		scheduler: sched,
@@ -45,6 +47,7 @@ func NewNotifier(s store.Store, sched Scheduler, bot TelegramBot, chatID int64, 
 		location:  loc,
 		chatID:    chatID,
 		cronSpec:  cronSpec,
+		llmClient: llmClient,
 		now:       time.Now, // Use real time by default
 	}
 }
@@ -106,6 +109,10 @@ func (n *Notifier) checkAndNotify() {
 	if duty != nil {
 		// Send message to the group chat
 		groupMessageText := FormatDutyAssignedMessage(duty)
+		if n.llmClient != nil {
+			groupMessageText = n.llmClient.RefineMessage(ctx, "congratulate duty assignee proudly", groupMessageText)
+		}
+
 		groupMsg := tgbotapi.NewMessage(n.chatID, groupMessageText)
 		groupMsg.ParseMode = tgbotapi.ModeMarkdownV2
 
@@ -118,6 +125,10 @@ func (n *Notifier) checkAndNotify() {
 		// Send DM to the assigned user
 		if duty.User != nil && duty.User.TelegramUserID != 0 {
 			dmMessageText := FormatDMToAssignee(duty)
+			if n.llmClient != nil {
+				dmMessageText = n.llmClient.RefineMessage(ctx, "friendly congratulatory DM to person assigned chore", dmMessageText)
+			}
+
 			dmMsg := tgbotapi.NewMessage(duty.User.TelegramUserID, dmMessageText)
 			dmMsg.ParseMode = tgbotapi.ModeMarkdownV2
 

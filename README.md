@@ -28,6 +28,9 @@ To run the Duty Assistant Bot, you need to set the following environment variabl
 | `DATABASE_PATH`      | The path to the SQLite database file. | No       | `/app/data/roster.db` |
 | `DISH_GROUP`        | Telegram chat ID for the main group, used for group duty and month-end participant rating announcements. | No       | `0` |
 | `DNS_NAME`           | The DNS name for the web interface.   | No       |                      |
+| `OPENAI_API_KEY`     | The OpenAI API key for LLM-refined messages.  | No       |                      |
+| `OPENAI_URL`         | The OpenAI API base URL (can be customized).  | No       | `https://api.openai.com/v1` |
+| `OPENAI_TIMEOUT_SECONDS` | Timeout in seconds for LLM API calls.     | No       | `10`                 |
 
 ## Running with Docker
 

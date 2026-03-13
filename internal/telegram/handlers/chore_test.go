@@ -19,7 +19,7 @@ import (
 
 func TestHandleChore_NonAdmin_NoChores(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := handlers.New(mockStore, nil, 0)
+	h := handlers.New(mockStore, nil, 0, nil)
 
 	// User is not admin
 	nonAdminUser := &store.User{ID: 2, TelegramUserID: 456, IsAdmin: false}
@@ -39,7 +39,7 @@ func TestHandleChore_NonAdmin_NoChores(t *testing.T) {
 
 func TestHandleChore_NonAdmin_WithChores(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := handlers.New(mockStore, nil, 0)
+	h := handlers.New(mockStore, nil, 0, nil)
 
 	// User is not admin
 	nonAdminUser := &store.User{ID: 2, TelegramUserID: 456, IsAdmin: false}
@@ -70,7 +70,7 @@ func TestHandleChore_NonAdmin_WithChores(t *testing.T) {
 
 func TestHandleChore_NonAdmin_UserNotRegistered(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := handlers.New(mockStore, nil, 0)
+	h := handlers.New(mockStore, nil, 0, nil)
 
 	// User is not admin and not in DB
 	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return((*store.User)(nil), nil)
@@ -112,7 +112,7 @@ func TestHandleChore_Success(t *testing.T) {
 	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
 	mockScheduler := new(mocks.MockScheduler)
 	// Create with admin ID 123 and group ID 0
-	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123, nil)
 
 	// Admin user setup not needed if we use NewWithAdminID and match ID
 
@@ -167,7 +167,7 @@ func TestHandleChore_HTMLInjection(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
 	mockScheduler := new(mocks.MockScheduler)
-	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123, nil)
 
 	activeUsers := []*store.User{
 		{ID: 10, FirstName: "<b>EvilUser</b>", IsActive: true},
@@ -208,7 +208,7 @@ func TestHandleChore_GroupAnnouncement(t *testing.T) {
 	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
 	mockScheduler := new(mocks.MockScheduler)
 	groupID := int64(-1001234567890)
-	h := handlers.NewWithAdminID(mockStore, mockScheduler, groupID, 123)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, groupID, 123, nil)
 
 	activeUsers := []*store.User{
 		{ID: 10, TelegramUserID: 111, FirstName: "Alice", IsActive: true},
@@ -268,7 +268,7 @@ func TestHandleChore_MissingTelegramID_ShowsRegistrationHint(t *testing.T) {
 	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
 	mockScheduler := new(mocks.MockScheduler)
 	groupID := int64(-1001234567890)
-	h := handlers.NewWithAdminID(mockStore, mockScheduler, groupID, 123)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, groupID, 123, nil)
 
 	activeUsers := []*store.User{
 		{ID: 10, TelegramUserID: 0, FirstName: "Alice", IsActive: true},
@@ -312,7 +312,7 @@ func TestHandleChoreInteractive_Success(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
 	mockScheduler := new(mocks.MockScheduler)
-	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123, nil)
 
 	// First, enter interactive mode
 	h.SessionManager.StartSession(789, 123, handlers.SessionTypeChoreCreation)
@@ -351,7 +351,7 @@ func TestHandleChoreInteractive_EmptyDescription(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
 	mockScheduler := new(mocks.MockScheduler)
-	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123, nil)
 
 	// Enter interactive mode
 	h.SessionManager.StartSession(789, 123, handlers.SessionTypeChoreCreation)
@@ -381,7 +381,7 @@ func TestHandleChoreInteractive_NoSession(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
 	mockScheduler := new(mocks.MockScheduler)
-	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123, nil)
 
 	// No session started
 	message := &tgbotapi.Message{
@@ -400,7 +400,7 @@ func TestHandleChoreInteractive_WrongUser(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
 	mockScheduler := new(mocks.MockScheduler)
-	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123, nil)
 
 	// Start session for user 123
 	h.SessionManager.StartSession(789, 123, handlers.SessionTypeChoreCreation)
@@ -452,7 +452,7 @@ func TestHandleChoreDoneCallback_Success(t *testing.T) {
 	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
 	mockScheduler := new(mocks.MockScheduler)
 	groupID := int64(-1001234567890)
-	h := handlers.NewWithAdminID(mockStore, mockScheduler, groupID, 123)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, groupID, 123, nil)
 
 	// Mock Bot API client
 	client := NewTestClient(func(req *http.Request) *http.Response {
@@ -500,7 +500,7 @@ func TestHandleChoreRemindCallback_Success(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
 	mockScheduler := new(mocks.MockScheduler)
-	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123, nil)
 
 	// Mock Bot API client
 	client := NewTestClient(func(req *http.Request) *http.Response {
@@ -538,7 +538,7 @@ func TestHandleChoreDoneCallback_InvalidData(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
 	mockScheduler := new(mocks.MockScheduler)
-	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123, nil)
 
 	callbackQuery := &tgbotapi.CallbackQuery{
 		ID:   "callback3",
@@ -559,7 +559,7 @@ func TestHandleChoreRemindCallback_InvalidData(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
 	mockScheduler := new(mocks.MockScheduler)
-	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123, nil)
 
 	callbackQuery := &tgbotapi.CallbackQuery{
 		ID:   "callback4",
@@ -580,7 +580,7 @@ func TestHandleChoreInteractive_NoDoubleEscaping(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
 	mockScheduler := new(mocks.MockScheduler)
-	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123, nil)
 
 	// Enter interactive mode
 	h.SessionManager.StartSession(789, 123, handlers.SessionTypeChoreCreation)
@@ -653,7 +653,7 @@ func TestSendInitialDM_IncludesDescriptionAndButtons(t *testing.T) {
 	bot, err := tgbotapi.NewBotAPIWithClient("TOKEN", tgbotapi.APIEndpoint, client)
 	assert.NoError(t, err)
 
-	crm := handlers.NewChoreReminderManager(bot, nil, 0)
+	crm := handlers.NewChoreReminderManager(bot, nil, 0, nil)
 	assignment := &handlers.ChoreAssignment{
 		UserID:      777,
 		UserName:    "Vasiliy",
@@ -678,7 +678,7 @@ func TestHandleChore_WeightedSelection(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
 	mockScheduler := new(mocks.MockScheduler)
-	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123, nil)
 
 	// Create users with different AdminQueueDays
 	// Alice: 0 days (weight = 1.0)

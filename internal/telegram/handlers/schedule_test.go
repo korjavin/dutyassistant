@@ -17,7 +17,7 @@ import (
 func TestHandleSchedule(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	mockScheduler := new(mocks.MockScheduler)
-	h := handlers.New(mockStore, mockScheduler, 0)
+	h := handlers.New(mockStore, mockScheduler, 0, nil)
 	message := &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: 123}}
 
 	// Mock store to return some duties
@@ -40,7 +40,7 @@ func TestHandleSchedule(t *testing.T) {
 
 func TestHandleCalendarCallback(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := handlers.New(mockStore, nil, 0)
+	h := handlers.New(mockStore, nil, 0, nil)
 	now := time.Date(2023, 5, 15, 0, 0, 0, 0, time.UTC)
 
 	// Mock store to return empty duties for any month query

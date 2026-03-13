@@ -23,7 +23,7 @@ func TestHandleChore_Recurring_DuringHours(t *testing.T) {
 	defer func() { handlers.TimeNow = time.Now }()
 
 	mockStore := new(mocks.MockStore)
-	h := handlers.New(mockStore, nil, 0)
+	h := handlers.New(mockStore, nil, 0, nil)
 
 	adminUser := &store.User{ID: 1, TelegramUserID: 123, FirstName: "Admin", IsAdmin: true}
 	mockStore.On("GetUserByTelegramID", mock.Anything, int64(123)).Return(adminUser, nil)
@@ -75,7 +75,7 @@ func TestHandleChore_Recurring_OutsideHours(t *testing.T) {
 	defer func() { handlers.TimeNow = time.Now }()
 
 	mockStore := new(mocks.MockStore)
-	h := handlers.New(mockStore, nil, 0)
+	h := handlers.New(mockStore, nil, 0, nil)
 
 	adminUser := &store.User{ID: 1, TelegramUserID: 123, FirstName: "Admin", IsAdmin: true}
 	mockStore.On("GetUserByTelegramID", mock.Anything, int64(123)).Return(adminUser, nil)
@@ -110,7 +110,7 @@ func TestHandleChore_Recurring_OutsideHours(t *testing.T) {
 
 func TestHandleList_Recurring(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := handlers.New(mockStore, nil, 0)
+	h := handlers.New(mockStore, nil, 0, nil)
 
 	adminUser := &store.User{ID: 1, TelegramUserID: 123, IsAdmin: true}
 	mockStore.On("GetUserByTelegramID", mock.Anything, int64(123)).Return(adminUser, nil)
@@ -142,7 +142,7 @@ func TestHandleList_Recurring(t *testing.T) {
 
 func TestHandleCancel_Recurring(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := handlers.New(mockStore, nil, 0)
+	h := handlers.New(mockStore, nil, 0, nil)
 
 	adminUser := &store.User{ID: 1, TelegramUserID: 123, IsAdmin: true}
 	mockStore.On("GetUserByTelegramID", mock.Anything, int64(123)).Return(adminUser, nil)
@@ -169,7 +169,7 @@ func TestHandleCancel_Recurring(t *testing.T) {
 
 func TestProcessRecurringChores_Success(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := handlers.New(mockStore, nil, 0)
+	h := handlers.New(mockStore, nil, 0, nil)
 
 	// Mock ChoreReminderManager so that it does not fail on missing Bot API
 	botAPI, _ := tgbotapi.NewBotAPI("dummy:token")
@@ -220,7 +220,7 @@ func TestProcessRecurringChores_Success(t *testing.T) {
 
 func TestHandleList_Task(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := handlers.New(mockStore, nil, 0)
+	h := handlers.New(mockStore, nil, 0, nil)
 
 	adminUser := &store.User{ID: 1, TelegramUserID: 123, IsAdmin: true}
 	mockStore.On("GetUserByTelegramID", mock.Anything, int64(123)).Return(adminUser, nil)
@@ -252,7 +252,7 @@ func TestHandleList_Task(t *testing.T) {
 
 func TestHandleCancel_Task(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := handlers.New(mockStore, nil, 0)
+	h := handlers.New(mockStore, nil, 0, nil)
 
 	adminUser := &store.User{ID: 1, TelegramUserID: 123, IsAdmin: true}
 	mockStore.On("GetUserByTelegramID", mock.Anything, int64(123)).Return(adminUser, nil)
@@ -277,7 +277,7 @@ func TestHandleCancel_Task(t *testing.T) {
 
 func TestHandleCancel_Task_ErrorCases(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := handlers.New(mockStore, nil, 0)
+	h := handlers.New(mockStore, nil, 0, nil)
 
 	adminUser := &store.User{ID: 1, TelegramUserID: 123, IsAdmin: true}
 	mockStore.On("GetUserByTelegramID", mock.Anything, int64(123)).Return(adminUser, nil)

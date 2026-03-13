@@ -14,7 +14,7 @@ import (
 )
 
 func TestHandleVolunteer(t *testing.T) {
-	h := handlers.New(nil, nil, 0)
+	h := handlers.New(nil, nil, 0, nil)
 	message := &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: 123}}
 
 	msg, err := h.HandleVolunteer(message)
@@ -28,7 +28,7 @@ func TestHandleVolunteer(t *testing.T) {
 func TestHandleVolunteerCallback_Success(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	mockScheduler := new(mocks.MockScheduler)
-	h := handlers.New(mockStore, mockScheduler, 0)
+	h := handlers.New(mockStore, mockScheduler, 0, nil)
 
 	// dateStr := "2023-05-20" // Removed
 	// dutyDate, _ := time.Parse("2006-01-02", dateStr) // Removed
@@ -61,7 +61,7 @@ func TestHandleVolunteerCallback_Success(t *testing.T) {
 func TestHandleVolunteerCallback_Failure(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	mockScheduler := new(mocks.MockScheduler)
-	h := handlers.New(mockStore, mockScheduler, 0)
+	h := handlers.New(mockStore, mockScheduler, 0, nil)
 
 	days := 5
 	callbackData := fmt.Sprintf("volunteer_days:%d", days)
@@ -86,7 +86,7 @@ func TestHandleVolunteerCallback_Failure(t *testing.T) {
 
 func TestHandleVolunteerCallback_UserNotFound(t *testing.T) {
 	mockStore := new(mocks.MockStore)
-	h := handlers.New(mockStore, nil, 0)
+	h := handlers.New(mockStore, nil, 0, nil)
 
 	days := 5
 	callbackData := fmt.Sprintf("volunteer_days:%d", days)
