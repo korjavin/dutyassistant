@@ -152,6 +152,37 @@ func TestHandleRatingsCalendar_IncludesPreviouslyRatedInactiveParticipants(t *te
 	mockStore.AssertExpectations(t)
 }
 
+func TestHandleRatingsCalendar_UsesBerlinDateNearUtcMidnight(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := NewWithAdminID(mockStore, nil, 0, 123)
+
+	originalNow := TimeNow
+	TimeNow = func() time.Time {
+		// 2026-02-28 23:30 UTC is 2026-03-01 00:30 in Europe/Berlin.
+		return time.Date(2026, time.February, 28, 23, 30, 0, 0, time.UTC)
+	}
+	defer func() {
+		TimeNow = originalNow
+	}()
+
+	participants := []*store.User{
+		{ID: 10, FirstName: "Alice"},
+	}
+
+	mockStore.On("GetParticipantsForRating", mock.Anything).Return(participants, nil).Once()
+	mockStore.On("GetCurrentMonthParticipantRatings", mock.Anything, time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC)).Return([]*store.ParticipantDailyRating{}, nil).Once()
+
+	msg, err := h.HandleRatingsCalendar(&tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 803},
+		From: &tgbotapi.User{ID: 123},
+	})
+	assert.NoError(t, err)
+	assert.Contains(t, msg.Text, "Participant ratings for March 2026")
+	assert.Contains(t, msg.Text, "Showing 2026-03-01 through 2026-03-01.")
+
+	mockStore.AssertExpectations(t)
+}
+
 func TestHandleRatingsCalendar_AdminAccessControl(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	h := NewWithAdminID(mockStore, nil, 0, 123)
@@ -523,4 +554,42 @@ func TestIsLastDayOfMonth(t *testing.T) {
 	assert.True(t, isLastDayOfMonth(time.Date(2024, time.February, 29, 12, 0, 0, 0, time.UTC)))
 	assert.False(t, isLastDayOfMonth(time.Date(2026, time.March, 30, 12, 0, 0, 0, time.UTC)))
 	assert.True(t, isLastDayOfMonth(time.Date(2026, time.March, 31, 12, 0, 0, 0, time.UTC)))
+}
+
+func TestNormalizeRatingDate_UsesBerlinCalendarDay(t *testing.T) {
+	assert.Equal(
+		t,
+		time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC),
+		normalizeRatingDate(time.Date(2026, time.February, 28, 23, 30, 0, 0, time.UTC)),
+	)
+}
+
+func TestHandleRatingsCalendar_UsesBerlinDateBoundary(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := NewWithAdminID(mockStore, nil, 0, 123)
+
+	originalNow := TimeNow
+	TimeNow = func() time.Time {
+		return time.Date(2026, time.February, 28, 23, 30, 0, 0, time.UTC)
+	}
+	defer func() {
+		TimeNow = originalNow
+	}()
+
+	participants := []*store.User{
+		{ID: 10, FirstName: "Alice"},
+	}
+
+	mockStore.On("GetParticipantsForRating", mock.Anything).Return(participants, nil).Once()
+	mockStore.On("GetCurrentMonthParticipantRatings", mock.Anything, time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC)).Return([]*store.ParticipantDailyRating{}, nil).Once()
+
+	msg, err := h.HandleRatingsCalendar(&tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 804},
+		From: &tgbotapi.User{ID: 123},
+	})
+	assert.NoError(t, err)
+	assert.Contains(t, msg.Text, "Participant ratings for March 2026")
+	assert.Contains(t, msg.Text, "Showing 2026-03-01 through 2026-03-01.")
+
+	mockStore.AssertExpectations(t)
 }

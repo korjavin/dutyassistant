@@ -16,6 +16,7 @@ import (
 const (
 	ratingSessionParticipantsKey = "participants"
 	ratingSessionDateKey         = "rating_date"
+	ratingTimezoneName           = "Europe/Berlin"
 )
 
 type ratingSessionParticipant struct {
@@ -306,7 +307,13 @@ func ratingDateFromSession(session *Session) (time.Time, bool) {
 }
 
 func normalizeRatingDate(date time.Time) time.Time {
-	return time.Date(date.UTC().Year(), date.UTC().Month(), date.UTC().Day(), 0, 0, 0, 0, time.UTC)
+	loc, err := time.LoadLocation(ratingTimezoneName)
+	if err != nil {
+		loc = time.UTC
+	}
+
+	localDate := date.In(loc)
+	return time.Date(localDate.Year(), localDate.Month(), localDate.Day(), 0, 0, 0, 0, time.UTC)
 }
 
 func isLastDayOfMonth(date time.Time) bool {
