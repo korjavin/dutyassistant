@@ -191,7 +191,6 @@ func TestHandleComplete_NoActiveChores(t *testing.T) {
 		From: &tgbotapi.User{ID: 123},
 	}
 
-
 	adminUser := &store.User{ID: 1, TelegramUserID: 123, IsAdmin: true}
 	mockStore.On("GetUserByTelegramID", mock.Anything, int64(123)).Return(adminUser, nil)
 	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
@@ -355,7 +354,8 @@ func TestHandleCompleteChoreCallback_Success(t *testing.T) {
 
 	// The ChoreReminderManager is initialized when SetBot is called
 	callback := &tgbotapi.CallbackQuery{
-		ID: "callback_123",
+		ID:   "callback_123",
+		From: &tgbotapi.User{ID: 123},
 		Message: &tgbotapi.Message{
 			Chat:      &tgbotapi.Chat{ID: 789},
 			MessageID: 456,
@@ -414,7 +414,8 @@ func TestHandleCompleteChoreCallback_InvalidCallbackData(t *testing.T) {
 	h.SetBot(bot)
 
 	callback := &tgbotapi.CallbackQuery{
-		ID: "callback_123",
+		ID:   "callback_123",
+		From: &tgbotapi.User{ID: 123},
 		Message: &tgbotapi.Message{
 			Chat:      &tgbotapi.Chat{ID: 789},
 			MessageID: 456,
@@ -452,7 +453,8 @@ func TestHandleCompleteChoreCallback_ChoreNotFound(t *testing.T) {
 	h.SetBot(bot)
 
 	callback := &tgbotapi.CallbackQuery{
-		ID: "callback_123",
+		ID:   "callback_123",
+		From: &tgbotapi.User{ID: 123},
 		Message: &tgbotapi.Message{
 			Chat:      &tgbotapi.Chat{ID: 789},
 			MessageID: 456,
@@ -492,7 +494,8 @@ func TestHandleCompleteChoreCallback_ChoreWithoutUser(t *testing.T) {
 	h.SetBot(bot)
 
 	callback := &tgbotapi.CallbackQuery{
-		ID: "callback_123",
+		ID:   "callback_123",
+		From: &tgbotapi.User{ID: 123},
 		Message: &tgbotapi.Message{
 			Chat:      &tgbotapi.Chat{ID: 789},
 			MessageID: 456,
@@ -526,9 +529,11 @@ func TestHandleCompleteChoreCallback_DBFailure(t *testing.T) {
 	mockScheduler := new(mocks.MockScheduler)
 	groupID := int64(-1001234567890)
 	h := handlers.NewWithAdminID(mockStore, mockScheduler, groupID, 123)
+	sendMessageCalls := 0
 
 	client := NewTestClient(func(req *http.Request) *http.Response {
 		if strings.Contains(req.URL.String(), "sendMessage") {
+			sendMessageCalls++
 			return &http.Response{
 				StatusCode: 200,
 				Body:       io.NopCloser(bytes.NewBufferString(`{"ok":true, "result": {"message_id": 1, "chat": {"id": -1001234567890}}}`)),
@@ -550,7 +555,8 @@ func TestHandleCompleteChoreCallback_DBFailure(t *testing.T) {
 	h.SetBot(bot)
 
 	callback := &tgbotapi.CallbackQuery{
-		ID: "callback_123",
+		ID:   "callback_123",
+		From: &tgbotapi.User{ID: 123},
 		Message: &tgbotapi.Message{
 			Chat:      &tgbotapi.Chat{ID: 789},
 			MessageID: 456,
@@ -577,6 +583,7 @@ func TestHandleCompleteChoreCallback_DBFailure(t *testing.T) {
 	assert.Contains(t, edit.Text, "Error: Failed to mark chore as completed.")
 	assert.Equal(t, int64(789), edit.ChatID)
 	assert.Equal(t, 456, edit.MessageID)
+	assert.Equal(t, 0, sendMessageCalls)
 
 	mockStore.AssertExpectations(t)
 }
@@ -604,7 +611,8 @@ func TestHandleCompleteChoreCallback_NilChore(t *testing.T) {
 	h.SetBot(bot)
 
 	callback := &tgbotapi.CallbackQuery{
-		ID: "callback_123",
+		ID:   "callback_123",
+		From: &tgbotapi.User{ID: 123},
 		Message: &tgbotapi.Message{
 			Chat:      &tgbotapi.Chat{ID: 789},
 			MessageID: 456,
@@ -620,4 +628,27 @@ func TestHandleCompleteChoreCallback_NilChore(t *testing.T) {
 	assert.Contains(t, edit.Text, "Error: Chore not found or has no assigned user.")
 
 	mockStore.AssertExpectations(t)
+}
+
+func TestHandleCompleteChoreCallback_NotAdmin(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	mockScheduler := new(mocks.MockScheduler)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123)
+
+	callback := &tgbotapi.CallbackQuery{
+		ID:   "callback_123",
+		From: &tgbotapi.User{ID: 456},
+		Message: &tgbotapi.Message{
+			Chat:      &tgbotapi.Chat{ID: 789},
+			MessageID: 456,
+		},
+		Data: "complete_chore:reminder_1",
+	}
+
+	edit, err := h.HandleCompleteChoreCallback(callback)
+	assert.NoError(t, err)
+	assert.Equal(t, "Sorry, this command is for admins only.", edit.Text)
+
+	mockStore.AssertNotCalled(t, "GetChoreByReminderID", mock.Anything, mock.Anything)
+	mockStore.AssertNotCalled(t, "CompleteChoreByReminderID", mock.Anything, mock.Anything)
 }
