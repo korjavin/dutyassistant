@@ -185,6 +185,66 @@ func main() {
 		log.Fatalf("Failed to schedule daily completion job: %v", err)
 	}
 
+	// Daily at 20:50 Berlin - Ask the admin to rate active participants
+	_, err = c.AddFunc("50 20 * * *", func() {
+		log.Println("[CRON] Running daily participant rating reminder (20:50 Berlin)")
+
+		if adminID == 0 {
+			log.Println("[CRON] Participant rating reminder skipped: ADMIN_ID is not configured")
+			return
+		}
+
+		msg, ok, err := telegramHandlers.PrepareDailyRatingsReminder(adminID, adminID, time.Now().In(berlinLoc))
+		if err != nil {
+			log.Printf("[CRON] ERROR: Failed to prepare participant rating reminder: %v", err)
+			return
+		}
+		if !ok {
+			log.Println("[CRON] Participant rating reminder skipped: no active non-admin participants to rate")
+			return
+		}
+
+		if _, err := bot.API().Send(*msg); err != nil {
+			log.Printf("[CRON] ERROR: Failed to send participant rating reminder to admin %d: %v", adminID, err)
+			return
+		}
+
+		log.Printf("[CRON] Successfully sent participant rating reminder to admin %d", adminID)
+	})
+	if err != nil {
+		log.Fatalf("Failed to schedule participant rating reminder job: %v", err)
+	}
+
+	// Daily at 21:00 Berlin - On the last calendar day, publish the monthly participant rating winners
+	_, err = c.AddFunc("0 21 * * *", func() {
+		log.Println("[CRON] Checking month-end participant ratings announcement (21:00 Berlin)")
+
+		if dishGroupID == 0 {
+			log.Println("[CRON] Month-end participant ratings announcement skipped: DISH_GROUP is not configured")
+			return
+		}
+
+		msg, ok, err := telegramHandlers.BuildMonthlyRatingsWinnersAnnouncement(time.Now().In(berlinLoc))
+		if err != nil {
+			log.Printf("[CRON] ERROR: Failed to build month-end participant ratings announcement: %v", err)
+			return
+		}
+		if !ok {
+			log.Println("[CRON] Month-end participant ratings announcement skipped: today is not the last calendar day of the month")
+			return
+		}
+
+		if _, err := bot.API().Send(*msg); err != nil {
+			log.Printf("[CRON] ERROR: Failed to send month-end participant ratings announcement to group %d: %v", dishGroupID, err)
+			return
+		}
+
+		log.Printf("[CRON] Successfully sent month-end participant ratings announcement to group %d", dishGroupID)
+	})
+	if err != nil {
+		log.Fatalf("Failed to schedule month-end participant ratings announcement job: %v", err)
+	}
+
 	// Daily at 16:00 Berlin - Send daily chore summary
 	tz := getEnv("CHORE_TIMEZONE", "Europe/Berlin")
 	_, err = c.AddFunc("CRON_TZ="+tz+" 0 16 * * *", func() {
@@ -218,10 +278,12 @@ func main() {
 	// Start cron scheduler
 	c.Start()
 	log.Println("═══════════════════════════════════════════════════════════")
-	log.Println("Cron scheduler started with 3 jobs:")
+	log.Println("Cron scheduler started with 5 jobs:")
 	log.Println("  1. Daily at 11:00 AM Berlin - Assign today's duty and send notifications")
 	log.Println("  2. Daily at 21:00 PM Berlin - Mark today's duty as completed")
-	log.Println("  3. Sunday at 21:10 PM Berlin - Send weekly stats")
+	log.Println("  3. Daily at 20:50 PM Berlin - Send participant rating reminder to the admin")
+	log.Println("  4. Daily at 21:00 PM Berlin - Publish month-end participant rating winners on the last calendar day")
+	log.Println("  5. Sunday at 21:10 PM Berlin - Send weekly stats")
 	log.Printf("Current Berlin time: %s", time.Now().In(berlinLoc).Format("2006-01-02 15:04:05 MST"))
 	log.Println("═══════════════════════════════════════════════════════════")
 

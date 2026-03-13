@@ -97,6 +97,23 @@ func TestHandleRatingsCalendar_AdminAccessControl(t *testing.T) {
 	assert.Equal(t, adminOnlyMessage, msg.Text)
 }
 
+func TestPrepareDailyRatingsReminder_SkipsWithoutParticipants(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := NewWithAdminID(mockStore, nil, 0, 123)
+
+	mockStore.On("GetParticipantsForRating", mock.Anything).Return([]*store.User{}, nil).Once()
+
+	msg, ok, err := h.PrepareDailyRatingsReminder(900, 123, time.Date(2026, time.March, 13, 20, 50, 0, 0, time.UTC))
+	assert.NoError(t, err)
+	assert.False(t, ok)
+	assert.Nil(t, msg)
+
+	_, exists := h.SessionManager.GetSession(900)
+	assert.False(t, exists)
+
+	mockStore.AssertExpectations(t)
+}
+
 func TestStartDailyRatingsSession_BuildsStablePrompt(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	h := NewWithAdminID(mockStore, nil, 0, 123)
@@ -288,4 +305,52 @@ func TestHandleDailyRatingsInteractive_OverwriteCorrection(t *testing.T) {
 	assert.Contains(t, secondMsg.(tgbotapi.MessageConfig).Text, "overwrite today's ratings")
 
 	mockStore.AssertExpectations(t)
+}
+
+func TestBuildMonthlyRatingsWinnersAnnouncement_LastDayFormatting(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := NewWithAdminID(mockStore, nil, -1001, 123)
+
+	now := time.Date(2026, time.March, 31, 21, 0, 0, 0, time.UTC)
+	totals := []*store.ParticipantMonthlyTotal{
+		{ParticipantID: 10, ParticipantName: "Alice", TotalScore: 14, DaysRated: 4},
+		{ParticipantID: 11, ParticipantName: "Bob", TotalScore: 11, DaysRated: 4},
+		{ParticipantID: 12, ParticipantName: "Cara", TotalScore: 8, DaysRated: 3},
+		{ParticipantID: 13, ParticipantName: "Dan", TotalScore: 6, DaysRated: 2},
+	}
+
+	mockStore.On("GetMonthlyParticipantTotals", mock.Anything, 2026, time.March).Return(totals, nil).Once()
+
+	msg, ok, err := h.BuildMonthlyRatingsWinnersAnnouncement(now)
+	assert.NoError(t, err)
+	assert.True(t, ok)
+	assert.NotNil(t, msg)
+	assert.Equal(t, int64(-1001), msg.ChatID)
+	assert.Contains(t, msg.Text, "Monthly participant ratings for March 2026")
+	assert.Contains(t, msg.Text, "1st: Alice with 14 point(s)")
+	assert.Contains(t, msg.Text, "2nd: Bob with 11 point(s)")
+	assert.Contains(t, msg.Text, "3rd: Cara with 8 point(s)")
+	assert.Contains(t, msg.Text, "1. Alice - 14 point(s) across 4 rated day(s)")
+	assert.Contains(t, msg.Text, "4. Dan - 6 point(s) across 2 rated day(s)")
+
+	mockStore.AssertExpectations(t)
+}
+
+func TestBuildMonthlyRatingsWinnersAnnouncement_NotLastDaySkips(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := NewWithAdminID(mockStore, nil, -1001, 123)
+
+	msg, ok, err := h.BuildMonthlyRatingsWinnersAnnouncement(time.Date(2026, time.March, 30, 21, 0, 0, 0, time.UTC))
+	assert.NoError(t, err)
+	assert.False(t, ok)
+	assert.Nil(t, msg)
+
+	mockStore.AssertNotCalled(t, "GetMonthlyParticipantTotals", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestIsLastDayOfMonth(t *testing.T) {
+	assert.True(t, isLastDayOfMonth(time.Date(2026, time.February, 28, 12, 0, 0, 0, time.UTC)))
+	assert.True(t, isLastDayOfMonth(time.Date(2024, time.February, 29, 12, 0, 0, 0, time.UTC)))
+	assert.False(t, isLastDayOfMonth(time.Date(2026, time.March, 30, 12, 0, 0, 0, time.UTC)))
+	assert.True(t, isLastDayOfMonth(time.Date(2026, time.March, 31, 12, 0, 0, 0, time.UTC)))
 }

@@ -22,19 +22,23 @@ type ratingSessionParticipant struct {
 	Name string
 }
 
-// StartDailyRatingsSession prepares the admin prompt and stores the participant order in session state.
-func (h *Handlers) StartDailyRatingsSession(chatID, userID int64, ratingDate time.Time) (tgbotapi.MessageConfig, error) {
+// PrepareDailyRatingsReminder starts the daily rating session and returns the prompt when participants exist.
+func (h *Handlers) PrepareDailyRatingsReminder(chatID, userID int64, ratingDate time.Time) (*tgbotapi.MessageConfig, bool, error) {
 	isAdmin, err := h.checkAdmin(userID)
-	if err != nil || !isAdmin {
-		return tgbotapi.NewMessage(chatID, adminOnlyMessage), nil
+	if err != nil {
+		return nil, false, err
+	}
+	if !isAdmin {
+		msg := tgbotapi.NewMessage(chatID, adminOnlyMessage)
+		return &msg, true, nil
 	}
 
 	participants, err := h.Store.GetParticipantsForRating(context.Background())
 	if err != nil {
-		return tgbotapi.NewMessage(chatID, genericErrorMessage), nil
+		return nil, false, err
 	}
 	if len(participants) == 0 {
-		return tgbotapi.NewMessage(chatID, "No active participants are available for rating right now."), nil
+		return nil, false, nil
 	}
 
 	h.SessionManager.StartSession(chatID, userID, SessionTypeDailyRatings)
@@ -42,7 +46,20 @@ func (h *Handlers) StartDailyRatingsSession(chatID, userID int64, ratingDate tim
 	session.SetData(ratingSessionParticipantsKey, sessionParticipants(participants))
 	session.SetData(ratingSessionDateKey, normalizeRatingDate(ratingDate))
 
-	return tgbotapi.NewMessage(chatID, buildDailyRatingsPrompt(participants, ratingDate)), nil
+	msg := tgbotapi.NewMessage(chatID, buildDailyRatingsPrompt(participants, ratingDate))
+	return &msg, true, nil
+}
+
+// StartDailyRatingsSession prepares the admin prompt and stores the participant order in session state.
+func (h *Handlers) StartDailyRatingsSession(chatID, userID int64, ratingDate time.Time) (tgbotapi.MessageConfig, error) {
+	msg, ok, err := h.PrepareDailyRatingsReminder(chatID, userID, ratingDate)
+	if err != nil {
+		return tgbotapi.NewMessage(chatID, genericErrorMessage), nil
+	}
+	if !ok {
+		return tgbotapi.NewMessage(chatID, "No active participants are available for rating right now."), nil
+	}
+	return *msg, nil
 }
 
 // HandleDailyRatingsInteractive validates and saves a daily participant rating reply.
@@ -189,6 +206,22 @@ func formatParticipantOrder(participants []ratingSessionParticipant) string {
 	return strings.Join(lines, "\n")
 }
 
+// BuildMonthlyRatingsWinnersAnnouncement renders the month-end digest on the last calendar day only.
+func (h *Handlers) BuildMonthlyRatingsWinnersAnnouncement(now time.Time) (*tgbotapi.MessageConfig, bool, error) {
+	normalizedNow := normalizeRatingDate(now)
+	if !isLastDayOfMonth(normalizedNow) {
+		return nil, false, nil
+	}
+
+	totals, err := h.Store.GetMonthlyParticipantTotals(context.Background(), normalizedNow.Year(), normalizedNow.Month())
+	if err != nil {
+		return nil, false, err
+	}
+
+	msg := tgbotapi.NewMessage(h.GroupID, formatMonthlyRatingsWinnersDigest(totals, normalizedNow))
+	return &msg, true, nil
+}
+
 func sessionParticipants(users []*store.User) []ratingSessionParticipant {
 	participants := make([]ratingSessionParticipant, 0, len(users))
 	for _, user := range users {
@@ -229,6 +262,11 @@ func ratingDateFromSession(session *Session) (time.Time, bool) {
 
 func normalizeRatingDate(date time.Time) time.Time {
 	return time.Date(date.UTC().Year(), date.UTC().Month(), date.UTC().Day(), 0, 0, 0, 0, time.UTC)
+}
+
+func isLastDayOfMonth(date time.Time) bool {
+	normalized := normalizeRatingDate(date)
+	return normalized.AddDate(0, 0, 1).Month() != normalized.Month()
 }
 
 func formatRatingsCalendar(participants []*store.User, ratings []*store.ParticipantDailyRating, now time.Time) string {
@@ -298,4 +336,35 @@ func buildRatingsCalendarTable(participants []ratingSessionParticipant, ratings 
 	}
 
 	return strings.Join(lines, "\n")
+}
+
+func formatMonthlyRatingsWinnersDigest(totals []*store.ParticipantMonthlyTotal, now time.Time) string {
+	normalizedNow := normalizeRatingDate(now)
+
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("Monthly participant ratings for %s\n\n", normalizedNow.Format("January 2006")))
+
+	if len(totals) == 0 {
+		b.WriteString("No participant ratings were recorded this month.")
+		return b.String()
+	}
+
+	b.WriteString("Winners:\n")
+	places := []string{"1st", "2nd", "3rd"}
+	for i := 0; i < len(totals) && i < len(places); i++ {
+		b.WriteString(fmt.Sprintf("%s: %s with %d point(s)\n", places[i], totals[i].ParticipantName, totals[i].TotalScore))
+	}
+
+	b.WriteString("\nTotals:\n")
+	for i, total := range totals {
+		b.WriteString(fmt.Sprintf("%d. %s - %d point(s)", i+1, total.ParticipantName, total.TotalScore))
+		if total.DaysRated > 0 {
+			b.WriteString(fmt.Sprintf(" across %d rated day(s)", total.DaysRated))
+		}
+		if i < len(totals)-1 {
+			b.WriteString("\n")
+		}
+	}
+
+	return b.String()
 }

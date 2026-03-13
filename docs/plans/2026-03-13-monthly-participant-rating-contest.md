@@ -77,13 +77,13 @@ Implement a monthly participant rating flow in the Telegram bot: every day at 20
 - Modify: `internal/telegram/handlers/ratings.go`
 - Modify: `internal/telegram/handlers/ratings_test.go`
 
-- [ ] Add a cron job at 20:50 Europe/Berlin to send the daily rating prompt to the configured admin
-- [ ] Ensure the prompt skips when there are no active non-admin participants
-- [ ] Add a cron job for 21:00 on the last calendar day of the month to publish monthly totals and 1st, 2nd, and 3rd places to the group chat
-- [ ] Use last-day-of-month logic rather than literal day 31 so the feature works in every month
-- [ ] Keep the monthly reset implicit by querying and storing by date; do not add a destructive reset job
-- [ ] Write tests for reminder text generation, winner digest formatting, and last-day-of-month announcement logic
-- [ ] Run affected tests and ensure they pass before task 5
+- [x] Add a cron job at 20:50 Europe/Berlin to send the daily rating prompt to the configured admin
+- [x] Ensure the prompt skips when there are no active non-admin participants
+- [x] Add a cron job for 21:00 on the last calendar day of the month to publish monthly totals and 1st, 2nd, and 3rd places to the group chat
+- [x] Use last-day-of-month logic rather than literal day 31 so the feature works in every month
+- [x] Keep the monthly reset implicit by querying and storing by date; do not add a destructive reset job
+- [x] Write tests for reminder text generation, winner digest formatting, and last-day-of-month announcement logic
+- [x] Run affected tests and ensure they pass before task 5
 
 ### Task 5: Verify acceptance criteria
 
