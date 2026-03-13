@@ -57,6 +57,9 @@ func (h *Handlers) HandleCancelInteractive(m *tgbotapi.Message) (tgbotapi.Messag
 
 	// Add future duties
 	for _, d := range upcomingDuties {
+		if d.User == nil {
+			continue // skip orphan records
+		}
 		dateStr := d.DutyDate.Format("Jan 02")
 		btnText := fmt.Sprintf("Duty: %s on %s", d.User.FirstName, dateStr)
 		cbData := fmt.Sprintf("cancel_assignment:D%d:%s", d.UserID, d.DutyDate.Format("2006-01-02"))

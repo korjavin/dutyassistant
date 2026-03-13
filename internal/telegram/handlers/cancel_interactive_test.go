@@ -26,7 +26,10 @@ func TestHandleCancelInteractive(t *testing.T) {
 	now := time.Now()
 	mockStore.On("ListActiveChores", mock.Anything).Return([]*store.Chore{{ID: 1, Description: "Task 1"}}, nil)
 	mockStore.On("GetActiveRecurringChores", mock.Anything).Return([]*store.RecurringChore{{ID: 2, Description: "Recurring 1"}}, nil)
-	mockStore.On("GetDutiesByMonth", mock.Anything, mock.Anything, mock.Anything).Return([]*store.Duty{{UserID: 1, DutyDate: now.AddDate(0, 0, 1), User: &store.User{FirstName: "Alice"}}}, nil)
+	mockStore.On("GetDutiesByMonth", mock.Anything, mock.Anything, mock.Anything).Return([]*store.Duty{
+		{UserID: 1, DutyDate: now.AddDate(0, 0, 1), User: &store.User{FirstName: "Alice"}},
+		{UserID: 2, DutyDate: now.AddDate(0, 0, 2), User: nil}, // Orphan duty row
+	}, nil)
 
 	msg := &tgbotapi.Message{
 		Chat: &tgbotapi.Chat{ID: 456},

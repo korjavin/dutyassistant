@@ -85,8 +85,8 @@ func TestHandleHelp(t *testing.T) {
 
 	msg, err := h.HandleHelp(message)
 	assert.NoError(t, err)
-	assert.Contains(t, msg.Text, "Here are the available commands:")
-	assert.Contains(t, msg.Text, "/complete - Admin: Mark any active chore as completed")
+	assert.Contains(t, msg.Text, "/cancel - Cancel a duty, active chore, or recurring chore.")
+	assert.Contains(t, msg.Text, "/complete - Mark any active chore as completed.")
 	assert.Contains(t, msg.Text, "/ratings - Show the current month's participant rating calendar.")
 	assert.Equal(t, tgbotapi.ModeMarkdown, msg.ParseMode)
 }
