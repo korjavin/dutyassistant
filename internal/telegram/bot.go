@@ -269,6 +269,18 @@ func (b *Bot) handleCallbackQuery(q *tgbotapi.CallbackQuery) (tgbotapi.Chattable
 		return b.handlers.HandleChoreRemindCallback(q)
 	case "complete_chore":
 		return b.handlers.HandleCompleteChoreCallback(q)
+	case "chore_action":
+		return b.handlers.HandleChoreActionCallback(q)
+	case "chore_delete":
+		return b.handlers.HandleChoreDeleteCallback(q)
+	case "chore_delete_confirm":
+		return b.handlers.HandleChoreDeleteConfirmCallback(q)
+	case "cancel_assignment":
+		return b.handlers.HandleCancelAssignmentCallback(q)
+	case "cancel_assignment_confirm":
+		return b.handlers.HandleCancelAssignmentConfirmCallback(q)
+	case "cancel_flow":
+		return b.handlers.HandleCancelFlow(q)
 	default:
 		log.Printf("Unknown callback action: %s", action)
 		return nil, nil
