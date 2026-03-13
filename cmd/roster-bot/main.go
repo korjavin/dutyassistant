@@ -205,6 +205,7 @@ func main() {
 		}
 
 		if _, err := bot.API().Send(*msg); err != nil {
+			telegramHandlers.SessionManager.EndSession(adminID)
 			log.Printf("[CRON] ERROR: Failed to send participant rating reminder to admin %d: %v", adminID, err)
 			return
 		}
@@ -278,12 +279,13 @@ func main() {
 	// Start cron scheduler
 	c.Start()
 	log.Println("═══════════════════════════════════════════════════════════")
-	log.Println("Cron scheduler started with 5 jobs:")
+	log.Println("Cron scheduler started with 6 jobs:")
 	log.Println("  1. Daily at 11:00 AM Berlin - Assign today's duty and send notifications")
 	log.Println("  2. Daily at 21:00 PM Berlin - Mark today's duty as completed")
 	log.Println("  3. Daily at 20:50 PM Berlin - Send participant rating reminder to the admin")
 	log.Println("  4. Daily at 21:00 PM Berlin - Publish month-end participant rating winners on the last calendar day")
-	log.Println("  5. Sunday at 21:10 PM Berlin - Send weekly stats")
+	log.Println("  5. Daily at 16:00 Europe/Berlin - Send daily chore summary")
+	log.Println("  6. Sunday at 21:10 PM Berlin - Send weekly stats")
 	log.Printf("Current Berlin time: %s", time.Now().In(berlinLoc).Format("2006-01-02 15:04:05 MST"))
 	log.Println("═══════════════════════════════════════════════════════════")
 
