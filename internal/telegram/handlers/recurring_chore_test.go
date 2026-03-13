@@ -327,6 +327,159 @@ func TestHandleEdit_Recurring_Success(t *testing.T) {
 	assert.Contains(t, response.Text, "New Foo Description")
 }
 
+func TestHandleEdit_Recurring_InteractiveList(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.New(mockStore, nil, 0)
+
+	adminUser := &store.User{ID: 1, TelegramUserID: 123, IsAdmin: true}
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(123)).Return(adminUser, nil)
+
+	chores := []*store.RecurringChore{
+		{ID: 1, Description: "First Chore", IsActive: true},
+		{ID: 2, Description: "A very long chore description that should be truncated because it is more than 30 characters long", IsActive: true},
+	}
+	mockStore.On("GetActiveRecurringChores", mock.Anything).Return(chores, nil)
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 789},
+		From: &tgbotapi.User{ID: 123},
+		Text: "/edit",
+		Entities: []tgbotapi.MessageEntity{
+			{Type: "bot_command", Offset: 0, Length: 5},
+		},
+	}
+
+	response, err := h.HandleEdit(message)
+	assert.NoError(t, err)
+
+	assert.Contains(t, response.Text, "Select a chore to edit")
+
+	keyboard, ok := response.ReplyMarkup.(tgbotapi.InlineKeyboardMarkup)
+	assert.True(t, ok)
+	assert.Len(t, keyboard.InlineKeyboard, 2)
+	assert.Equal(t, "edit_chore:1", *keyboard.InlineKeyboard[0][0].CallbackData)
+	assert.Contains(t, keyboard.InlineKeyboard[1][0].Text, "A very long chore descripti...")
+}
+
+func TestHandleEdit_Recurring_InteractiveList_Empty(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.New(mockStore, nil, 0)
+
+	adminUser := &store.User{ID: 1, TelegramUserID: 123, IsAdmin: true}
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(123)).Return(adminUser, nil)
+
+	var chores []*store.RecurringChore
+	mockStore.On("GetActiveRecurringChores", mock.Anything).Return(chores, nil)
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 789},
+		From: &tgbotapi.User{ID: 123},
+		Text: "/edit",
+		Entities: []tgbotapi.MessageEntity{
+			{Type: "bot_command", Offset: 0, Length: 5},
+		},
+	}
+
+	response, err := h.HandleEdit(message)
+	assert.NoError(t, err)
+
+	assert.Contains(t, response.Text, "No active recurring chores found to edit.")
+}
+
+func TestHandleEditChoreCallback(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.New(mockStore, nil, 0)
+
+	adminUser := &store.User{ID: 1, TelegramUserID: 123, IsAdmin: true}
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(123)).Return(adminUser, nil)
+
+	chore := &store.RecurringChore{ID: 1, Description: "Test Chore", IsActive: true}
+	mockStore.On("GetRecurringChore", mock.Anything, int64(1)).Return(chore, nil)
+
+	cb := &tgbotapi.CallbackQuery{
+		ID:   "123",
+		From: &tgbotapi.User{ID: 123},
+		Message: &tgbotapi.Message{
+			Chat:      &tgbotapi.Chat{ID: 789},
+			MessageID: 10,
+		},
+		Data: "edit_chore:1",
+	}
+
+	response, err := h.HandleEditChoreCallback(cb)
+	assert.NoError(t, err)
+
+	msgConfig, ok := response.(tgbotapi.MessageConfig)
+	assert.True(t, ok)
+	assert.Contains(t, msgConfig.Text, "Test Chore")
+	assert.Contains(t, msgConfig.Text, "reply with the new description")
+
+	// Ensure session was started
+	session, exists := h.SessionManager.GetSession(789)
+	assert.True(t, exists)
+	assert.Equal(t, handlers.SessionTypeEditChore, session.Type)
+
+	val, _ := session.GetData("chore_id")
+	assert.Equal(t, int64(1), val)
+}
+
+func TestHandleEditChoreInteractive_Success(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.New(mockStore, nil, 0)
+
+	// Start a session
+	h.SessionManager.StartSession(789, 123, handlers.SessionTypeEditChore)
+	session, _ := h.SessionManager.GetSession(789)
+	session.SetData("chore_id", int64(1))
+	session.SetData("old_description", "Old Test Chore")
+
+	mockStore.On("UpdateRecurringChoreDescription", mock.Anything, int64(1), "New Updated Description").Return(nil)
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 789},
+		From: &tgbotapi.User{ID: 123},
+		Text: "New Updated Description",
+	}
+
+	response, err := h.HandleEditChoreInteractive(message)
+	assert.NoError(t, err)
+
+	msgConfig, ok := response.(tgbotapi.MessageConfig)
+	assert.True(t, ok)
+	assert.Contains(t, msgConfig.Text, "updated interactively")
+	assert.Contains(t, msgConfig.Text, "Old Test Chore")
+	assert.Contains(t, msgConfig.Text, "New Updated Description")
+
+	// Ensure session is ended
+	_, exists := h.SessionManager.GetSession(789)
+	assert.False(t, exists)
+}
+
+func TestHandleEditChoreInteractive_Cancel(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.New(mockStore, nil, 0)
+
+	// Start a session
+	h.SessionManager.StartSession(789, 123, handlers.SessionTypeEditChore)
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 789},
+		From: &tgbotapi.User{ID: 123},
+		Text: "/cancel",
+	}
+
+	response, err := h.HandleEditChoreInteractive(message)
+	assert.NoError(t, err)
+
+	msgConfig, ok := response.(tgbotapi.MessageConfig)
+	assert.True(t, ok)
+	assert.Contains(t, msgConfig.Text, "cancelled")
+
+	// Ensure session is ended
+	_, exists := h.SessionManager.GetSession(789)
+	assert.False(t, exists)
+}
+
 func TestHandleEdit_Recurring_InvalidFormat(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	h := handlers.New(mockStore, nil, 0)

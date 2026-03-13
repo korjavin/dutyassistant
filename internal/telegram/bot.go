@@ -271,6 +271,8 @@ func (b *Bot) handleCallbackQuery(q *tgbotapi.CallbackQuery) (tgbotapi.Chattable
 		return b.handlers.HandleChoreRemindCallback(q)
 	case "complete_chore":
 		return b.handlers.HandleCompleteChoreCallback(q)
+	case "edit_chore":
+		return b.handlers.HandleEditChoreCallback(q)
 	default:
 		log.Printf("Unknown callback action: %s", action)
 		return nil, nil
@@ -292,6 +294,8 @@ func (b *Bot) handleMessage(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 		return b.handlers.HandleChoreInteractive(m)
 	case handlers.SessionTypeDailyRatings:
 		return b.handlers.HandleDailyRatingsInteractive(m)
+	case handlers.SessionTypeEditChore:
+		return b.handlers.HandleEditChoreInteractive(m)
 	default:
 		log.Printf("Unknown session type: %s", session.Type)
 		return nil, nil
