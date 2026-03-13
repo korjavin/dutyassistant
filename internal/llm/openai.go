@@ -24,7 +24,7 @@ type Client struct {
 
 // NewClient creates a new LLM client. If apiKey is empty, it returns nil,
 // effectively disabling the LLM features.
-func NewClient(apiKey, baseURL string, timeoutSeconds int, model string, temperature float64) *Client {
+func NewClient(apiKey, baseURL string, timeoutSeconds int, model string, temperature *float64) *Client {
 	if apiKey == "" {
 		return nil
 	}
@@ -34,15 +34,18 @@ func NewClient(apiKey, baseURL string, timeoutSeconds int, model string, tempera
 	if model == "" {
 		model = "gpt-4o-mini"
 	}
-	if temperature == 0 {
-		temperature = 0.7
+
+	temp := 0.7
+	if temperature != nil {
+		temp = *temperature
 	}
+
 	timeout := time.Duration(timeoutSeconds) * time.Second
 	return &Client{
 		apiKey:      apiKey,
 		baseURL:     baseURL,
 		model:       model,
-		temperature: temperature,
+		temperature: temp,
 		httpClient: &http.Client{
 			Timeout: timeout,
 		},

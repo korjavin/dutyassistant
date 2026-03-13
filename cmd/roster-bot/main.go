@@ -40,7 +40,13 @@ func main() {
 	openaiURL := getEnv("OPENAI_URL", "")
 	openaiTimeout := parseInt64(getEnv("OPENAI_TIMEOUT_SECONDS", "10"), 10)
 	openaiModel := getEnv("OPENAI_MODEL", "gpt-4o-mini")
-	openaiTemperature := parseFloat64(getEnv("OPENAI_TEMPERATURE", "0.7"), 0.7)
+
+	var openaiTemperature *float64
+	if tempStr := os.Getenv("OPENAI_TEMPERATURE"); tempStr != "" {
+		if temp, err := strconv.ParseFloat(tempStr, 64); err == nil {
+			openaiTemperature = &temp
+		}
+	}
 
 	// Initialize database
 	log.Println("Initializing database at", dbPath)
@@ -378,17 +384,6 @@ func getEnv(key, defaultValue string) string {
 func parseInt64(s string, defaultValue int64) int64 {
 	var result int64
 	if _, err := fmt.Sscanf(s, "%d", &result); err != nil {
-		return defaultValue
-	}
-	return result
-}
-
-func parseFloat64(s string, defaultValue float64) float64 {
-	if s == "" {
-		return defaultValue
-	}
-	result, err := strconv.ParseFloat(s, 64)
-	if err != nil {
 		return defaultValue
 	}
 	return result

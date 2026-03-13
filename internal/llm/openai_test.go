@@ -10,12 +10,12 @@ import (
 )
 
 func TestNewClient(t *testing.T) {
-	client := NewClient("", "", 10, "", 0)
+	client := NewClient("", "", 10, "", nil)
 	if client != nil {
 		t.Errorf("Expected nil client when API key is empty")
 	}
 
-	client = NewClient("some-key", "", 10, "", 0)
+	client = NewClient("some-key", "", 10, "", nil)
 	if client == nil {
 		t.Errorf("Expected non-nil client with valid key")
 	}
@@ -29,7 +29,8 @@ func TestNewClient(t *testing.T) {
 		t.Errorf("Expected default temperature, got: %f", client.temperature)
 	}
 
-	client = NewClient("some-key", "http://localhost:1234", 10, "gpt-4", 0.5)
+	customTemp := 0.5
+	client = NewClient("some-key", "http://localhost:1234", 10, "gpt-4", &customTemp)
 	if client.baseURL != "http://localhost:1234" {
 		t.Errorf("Expected custom baseURL, got: %s", client.baseURL)
 	}
@@ -105,7 +106,7 @@ func TestRefineMessage(t *testing.T) {
 	defer server.Close()
 
 	// Test 2: Successful response + Sanitization
-	c := NewClient("test-key", server.URL, 10, "", 0)
+	c := NewClient("test-key", server.URL, 10, "", nil)
 	res := c.RefineMessage(ctx, intent, vanilla)
 	expected := "🍽️ Get ready for splash mountain! You're on dish duty &lt;script&gt;bad&lt;/script&gt; &amp; it's fun!"
 	if res != expected {
@@ -147,7 +148,8 @@ func TestRefineMessage_CustomConfig(t *testing.T) {
 	server := httptest.NewServer(mockHandler)
 	defer server.Close()
 
-	c := NewClient("test-key", server.URL, 10, "custom-model", 0.9)
+	customTemp := 0.9
+	c := NewClient("test-key", server.URL, 10, "custom-model", &customTemp)
 	res := c.RefineMessage(ctx, intent, vanilla)
 	if res != "Refined message" {
 		t.Errorf("Expected 'Refined message', got: %s", res)
@@ -166,7 +168,7 @@ func TestRefineMessage_ErrorCases(t *testing.T) {
 	}))
 	defer errorServer.Close()
 
-	c := NewClient("test-key", errorServer.URL, 10, "", 0)
+	c := NewClient("test-key", errorServer.URL, 10, "", nil)
 	if res := c.RefineMessage(ctx, intent, vanilla); res != vanilla {
 		t.Errorf("Expected vanilla message on 500 error, got: %s", res)
 	}
@@ -178,8 +180,16 @@ func TestRefineMessage_ErrorCases(t *testing.T) {
 	}))
 	defer timeoutServer.Close()
 
-	cTimeout := NewClient("test-key", timeoutServer.URL, 1, "", 0)
+	cTimeout := NewClient("test-key", timeoutServer.URL, 1, "", nil)
 	if res := cTimeout.RefineMessage(ctx, intent, vanilla); res != vanilla {
 		t.Errorf("Expected vanilla message on timeout, got: %s", res)
+	}
+}
+
+func TestNewClient_ZeroTemperature(t *testing.T) {
+	zeroTemp := 0.0
+	client := NewClient("some-key", "", 10, "", &zeroTemp)
+	if client.temperature != 0.0 {
+		t.Errorf("Expected custom temperature 0.0, got: %f", client.temperature)
 	}
 }
