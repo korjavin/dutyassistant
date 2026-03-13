@@ -98,6 +98,17 @@ func (s *SQLiteStore) migrate(ctx context.Context) error {
 			is_active INTEGER NOT NULL DEFAULT 1,
 			created_at TEXT NOT NULL
 		);
+
+		CREATE TABLE IF NOT EXISTS participant_ratings (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			participant_id INTEGER NOT NULL,
+			rating_date TEXT NOT NULL,
+			score INTEGER NOT NULL,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL,
+			UNIQUE(participant_id, rating_date),
+			FOREIGN KEY(participant_id) REFERENCES users(id)
+		);
 	`
 	if _, err := s.db.ExecContext(ctx, schema); err != nil {
 		return err

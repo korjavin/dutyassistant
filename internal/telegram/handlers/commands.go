@@ -37,6 +37,7 @@ const (
 		"/offduty <username> <start> <end> - Set off-duty period (YYYY-MM-DD).\n" +
 		"/vacation [on|off] - Toggle vacation mode (pauses all scheduling).\n" +
 		"/users - List all users and their status.\n" +
+		"/ratings - Show the current month's participant rating calendar.\n" +
 		"/toggle\\_active <username> - Toggle a user's participation in the rotation.\n" +
 		"/complete - Admin: Mark any active chore as completed."
 
@@ -81,15 +82,29 @@ func (h *Handlers) HandleStart(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 			return tgbotapi.MessageConfig{}, fmt.Errorf("failed to create user: %w", createErr)
 		}
 		log.Printf("[HandleStart] Successfully created user %d with ID %d (IsAdmin=%v, IsActive=%v)", m.From.ID, newUser.ID, newUser.IsAdmin, newUser.IsActive)
-	} else if user.FirstName != m.From.FirstName {
-		// User exists, update their name if it's different
-		log.Printf("[HandleStart] Updating user %d name from '%s' to '%s'", m.From.ID, user.FirstName, m.From.FirstName)
-		user.FirstName = m.From.FirstName
-		if updateErr := h.Store.UpdateUser(context.Background(), user); updateErr != nil {
-			log.Printf("[HandleStart] Failed to update user's first name: %v", updateErr)
-		}
 	} else {
-		log.Printf("[HandleStart] User %d already exists, no changes needed", m.From.ID)
+		isConfiguredAdmin := h.AdminID != 0 && m.From.ID == h.AdminID
+		needsUpdate := false
+
+		if user.FirstName != m.From.FirstName {
+			log.Printf("[HandleStart] Updating user %d name from '%s' to '%s'", m.From.ID, user.FirstName, m.From.FirstName)
+			user.FirstName = m.From.FirstName
+			needsUpdate = true
+		}
+		if isConfiguredAdmin && (!user.IsAdmin || user.IsActive) {
+			log.Printf("[HandleStart] Backfilling configured admin flags for user %d", m.From.ID)
+			user.IsAdmin = true
+			user.IsActive = false
+			needsUpdate = true
+		}
+
+		if needsUpdate {
+			if updateErr := h.Store.UpdateUser(context.Background(), user); updateErr != nil {
+				log.Printf("[HandleStart] Failed to update user %d: %v", m.From.ID, updateErr)
+			}
+		} else {
+			log.Printf("[HandleStart] User %d already exists, no changes needed", m.From.ID)
+		}
 	}
 
 	msg := tgbotapi.NewMessage(m.Chat.ID, startMessage)

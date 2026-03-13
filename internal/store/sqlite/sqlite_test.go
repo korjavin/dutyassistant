@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/korjavin/dutyassistant/internal/store"
+	"github.com/stretchr/testify/require"
 )
 
 // setupTestDB creates a new in-memory SQLite database for testing.
@@ -298,4 +299,181 @@ func TestChoreCancellation(t *testing.T) {
 	if err == nil {
 		t.Errorf("Expected an error when cancelling an already cancelled chore")
 	}
+}
+
+func TestSaveDailyParticipantRatings_CreateAndUpdate(t *testing.T) {
+	s := setupTestDB(t)
+	ctx := context.Background()
+
+	alice := &store.User{TelegramUserID: 2001, FirstName: "Alice", IsActive: true}
+	bob := &store.User{TelegramUserID: 2002, FirstName: "Bob", IsActive: true}
+	require.NoError(t, s.CreateUser(ctx, alice))
+	require.NoError(t, s.CreateUser(ctx, bob))
+
+	day := time.Date(2026, time.March, 13, 20, 50, 0, 0, time.UTC)
+	require.NoError(t, s.SaveDailyParticipantRatings(ctx, day, []*store.ParticipantDailyRating{
+		{ParticipantID: alice.ID, Score: 5},
+		{ParticipantID: bob.ID, Score: 2},
+	}))
+
+	ratings, err := s.GetCurrentMonthParticipantRatings(ctx, day)
+	require.NoError(t, err)
+	require.Len(t, ratings, 2)
+	require.Equal(t, []int{5, 2}, []int{ratings[0].Score, ratings[1].Score})
+
+	require.NoError(t, s.SaveDailyParticipantRatings(ctx, day, []*store.ParticipantDailyRating{
+		{ParticipantID: alice.ID, Score: 1},
+		{ParticipantID: bob.ID, Score: 4},
+	}))
+
+	ratings, err = s.GetCurrentMonthParticipantRatings(ctx, day)
+	require.NoError(t, err)
+	require.Len(t, ratings, 2)
+	require.Equal(t, []int{1, 4}, []int{ratings[0].Score, ratings[1].Score})
+
+	var rowCount int
+	require.NoError(t, s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM participant_ratings`).Scan(&rowCount))
+	require.Equal(t, 2, rowCount)
+}
+
+func TestSaveDailyParticipantRatings_ReplacesSameDayParticipantSet(t *testing.T) {
+	s := setupTestDB(t)
+	ctx := context.Background()
+
+	alice := &store.User{TelegramUserID: 2003, FirstName: "Alice", IsActive: true}
+	bob := &store.User{TelegramUserID: 2004, FirstName: "Bob", IsActive: true}
+	require.NoError(t, s.CreateUser(ctx, alice))
+	require.NoError(t, s.CreateUser(ctx, bob))
+
+	day := time.Date(2026, time.March, 13, 20, 50, 0, 0, time.UTC)
+	require.NoError(t, s.SaveDailyParticipantRatings(ctx, day, []*store.ParticipantDailyRating{
+		{ParticipantID: alice.ID, Score: 5},
+		{ParticipantID: bob.ID, Score: 2},
+	}))
+
+	require.NoError(t, s.SaveDailyParticipantRatings(ctx, day, []*store.ParticipantDailyRating{
+		{ParticipantID: bob.ID, Score: 4},
+	}))
+
+	ratings, err := s.GetCurrentMonthParticipantRatings(ctx, day)
+	require.NoError(t, err)
+	require.Len(t, ratings, 1)
+	require.Equal(t, bob.ID, ratings[0].ParticipantID)
+	require.Equal(t, 4, ratings[0].Score)
+
+	var rowCount int
+	require.NoError(t, s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM participant_ratings`).Scan(&rowCount))
+	require.Equal(t, 1, rowCount)
+}
+
+func TestSaveDailyParticipantRatings_RejectsInvalidRows(t *testing.T) {
+	s := setupTestDB(t)
+	ctx := context.Background()
+
+	alice := &store.User{TelegramUserID: 2101, FirstName: "Alice", IsActive: true}
+	require.NoError(t, s.CreateUser(ctx, alice))
+
+	day := time.Date(2026, time.March, 13, 20, 50, 0, 0, time.UTC)
+
+	err := s.SaveDailyParticipantRatings(ctx, day, []*store.ParticipantDailyRating{nil})
+	require.EqualError(t, err, "participant rating must not be nil")
+
+	err = s.SaveDailyParticipantRatings(ctx, day, []*store.ParticipantDailyRating{{Score: 5}})
+	require.EqualError(t, err, "participant rating must include participant id")
+
+	err = s.SaveDailyParticipantRatings(ctx, day, []*store.ParticipantDailyRating{{ParticipantID: alice.ID, Score: 0}})
+	require.EqualError(t, err, "participant rating score must be between 1 and 5")
+
+	var rowCount int
+	require.NoError(t, s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM participant_ratings`).Scan(&rowCount))
+	require.Equal(t, 0, rowCount)
+}
+
+func TestGetParticipantsForRating_StableOrdering(t *testing.T) {
+	s := setupTestDB(t)
+	ctx := context.Background()
+
+	users := []*store.User{
+		{TelegramUserID: 3001, FirstName: "zoe", IsActive: true},
+		{TelegramUserID: 3002, FirstName: "Alice", IsActive: true},
+		{TelegramUserID: 3003, FirstName: "Bob", IsActive: true, IsAdmin: true},
+		{TelegramUserID: 3004, FirstName: "alice", IsActive: true},
+		{TelegramUserID: 3005, FirstName: "Carol", IsActive: false},
+	}
+	for _, user := range users {
+		require.NoError(t, s.CreateUser(ctx, user))
+	}
+
+	participants, err := s.GetParticipantsForRating(ctx)
+	require.NoError(t, err)
+	require.Len(t, participants, 3)
+	require.Equal(t, []string{"Alice", "alice", "zoe"}, []string{
+		participants[0].FirstName,
+		participants[1].FirstName,
+		participants[2].FirstName,
+	})
+}
+
+func TestGetCurrentMonthParticipantRatings_FiltersToRequestedMonth(t *testing.T) {
+	s := setupTestDB(t)
+	ctx := context.Background()
+
+	alice := &store.User{TelegramUserID: 4001, FirstName: "Alice", IsActive: true}
+	bob := &store.User{TelegramUserID: 4002, FirstName: "Bob", IsActive: true}
+	require.NoError(t, s.CreateUser(ctx, alice))
+	require.NoError(t, s.CreateUser(ctx, bob))
+
+	require.NoError(t, s.SaveDailyParticipantRatings(ctx, time.Date(2026, time.February, 28, 0, 0, 0, 0, time.UTC), []*store.ParticipantDailyRating{
+		{ParticipantID: alice.ID, Score: 2},
+	}))
+	require.NoError(t, s.SaveDailyParticipantRatings(ctx, time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC), []*store.ParticipantDailyRating{
+		{ParticipantID: bob.ID, Score: 4},
+		{ParticipantID: alice.ID, Score: 5},
+	}))
+	require.NoError(t, s.SaveDailyParticipantRatings(ctx, time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC), []*store.ParticipantDailyRating{
+		{ParticipantID: alice.ID, Score: 3},
+	}))
+
+	ratings, err := s.GetCurrentMonthParticipantRatings(ctx, time.Date(2026, time.March, 13, 12, 0, 0, 0, time.UTC))
+	require.NoError(t, err)
+	require.Len(t, ratings, 2)
+	require.Equal(t, time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC), ratings[0].RatingDate)
+	require.Equal(t, []string{"Alice", "Bob"}, []string{ratings[0].ParticipantName, ratings[1].ParticipantName})
+}
+
+func TestGetMonthlyParticipantTotals_RankingAndMonthFilter(t *testing.T) {
+	s := setupTestDB(t)
+	ctx := context.Background()
+
+	alice := &store.User{TelegramUserID: 5001, FirstName: "Alice", IsActive: true}
+	bob := &store.User{TelegramUserID: 5002, FirstName: "Bob", IsActive: true}
+	charlie := &store.User{TelegramUserID: 5003, FirstName: "Charlie", IsActive: true}
+	for _, user := range []*store.User{alice, bob, charlie} {
+		require.NoError(t, s.CreateUser(ctx, user))
+	}
+
+	require.NoError(t, s.SaveDailyParticipantRatings(ctx, time.Date(2026, time.March, 2, 0, 0, 0, 0, time.UTC), []*store.ParticipantDailyRating{
+		{ParticipantID: alice.ID, Score: 5},
+		{ParticipantID: bob.ID, Score: 3},
+		{ParticipantID: charlie.ID, Score: 2},
+	}))
+	require.NoError(t, s.SaveDailyParticipantRatings(ctx, time.Date(2026, time.March, 3, 0, 0, 0, 0, time.UTC), []*store.ParticipantDailyRating{
+		{ParticipantID: alice.ID, Score: 1},
+		{ParticipantID: bob.ID, Score: 3},
+		{ParticipantID: charlie.ID, Score: 4},
+	}))
+	require.NoError(t, s.SaveDailyParticipantRatings(ctx, time.Date(2026, time.April, 3, 0, 0, 0, 0, time.UTC), []*store.ParticipantDailyRating{
+		{ParticipantID: alice.ID, Score: 5},
+	}))
+
+	totals, err := s.GetMonthlyParticipantTotals(ctx, 2026, time.March)
+	require.NoError(t, err)
+	require.Len(t, totals, 3)
+	require.Equal(t, []string{"Alice", "Bob", "Charlie"}, []string{
+		totals[0].ParticipantName,
+		totals[1].ParticipantName,
+		totals[2].ParticipantName,
+	})
+	require.Equal(t, []int{6, 6, 6}, []int{totals[0].TotalScore, totals[1].TotalScore, totals[2].TotalScore})
+	require.Equal(t, []int{2, 2, 2}, []int{totals[0].DaysRated, totals[1].DaysRated, totals[2].DaysRated})
 }

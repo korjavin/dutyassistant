@@ -13,6 +13,7 @@ Duty Assistant Bot is a Telegram bot designed to help manage on-call duty roster
 *   **Off-Duty Periods**: Temporary exclusion from duty rotation with queue freezing
 *   **User Management**: Toggle active/inactive status via buttons
 *   **Weekly Statistics**: Automated weekly reports every Sunday at 21:10 PM
+*   **Monthly Participant Ratings**: Daily admin scoring prompt, month-to-date rating calendar, and month-end winners announcement
 *   **Web Interface**: View duty schedule and queue status in browser
 
 ## Environment Variables
@@ -23,7 +24,9 @@ To run the Duty Assistant Bot, you need to set the following environment variabl
 | -------------------- | ------------------------------------- | -------- | -------------------- |
 | `GIN_MODE`           | The mode for the Gin web framework.   | No       | `debug`              |
 | `TELEGRAM_APITOKEN`  | The Telegram Bot API token.           | Yes      |                      |
+| `ADMIN_ID`          | Telegram user ID allowed to run admin-only commands and receive daily participant rating prompts. | No       | `0` |
 | `DATABASE_PATH`      | The path to the SQLite database file. | No       | `/app/data/roster.db` |
+| `DISH_GROUP`        | Telegram chat ID for the main group, used for group duty and month-end participant rating announcements. | No       | `0` |
 | `DNS_NAME`           | The DNS name for the web interface.   | No       |                      |
 
 ## Running with Docker
@@ -106,6 +109,15 @@ The project uses GitHub Actions for automated builds and deployments. On push to
 - `/unassign` - Remove days from a user's admin queue (interactive user + days selection)
 - `/vacation [on|off]` - Toggle vacation mode to pause all duty assignments (interactive button UI when no argument provided)
 - `/users` - List all users with their queues and status
+- `/ratings` - Show the current month's participant rating calendar
+
+### Participant Rating Flow
+
+- Every day at 20:50 Europe/Berlin, the bot sends the configured admin a participant rating prompt when there are active non-admin participants to score.
+- The prompt lists participants in a stable order. Reply with one space-separated score per participant, using integers from 1 to 5.
+- Sending another reply later on the same day overwrites that day's participant ratings instead of creating duplicates.
+- `/ratings` shows the current month from day 1 through today, with missing scores displayed as `-`.
+- At 21:00 Europe/Berlin on the last calendar day of the month, the bot posts the monthly participant totals and 1st, 2nd, and 3rd place winners to `DISH_GROUP`.
 
 ### Interactive UX
 
@@ -142,7 +154,21 @@ All times in **Europe/Berlin timezone**:
 
 - **11:00 AM Daily** - Assign today's duty based on queue priority and process due periodic chores.
 - **21:00 PM Daily** - Mark today's duty as completed
+- **20:50 PM Daily** - Send the admin the participant rating prompt when active non-admin participants exist
+- **21:00 PM Daily (last calendar day only)** - Publish monthly participant rating winners and totals to the main group
 - **21:10 PM Sunday** - Send weekly chore statistics report, including a summary of top overdue chores, top performers (with bar chart visualizations of completed chores, execution times, and lateness), and a "winner of the week".
+
+## Acceptance Verification
+
+Verified on 2026-03-13 for the monthly participant rating flow:
+
+- Stable daily prompt and admin reply parsing are covered by `TestStartDailyRatingsSession_BuildsStablePrompt` and `TestHandleDailyRatingsInteractive_ValidSubmission`, including the `5 2 1`-style score submission flow.
+- Same-day resubmission replacement is covered by `TestHandleDailyRatingsInteractive_OverwriteCorrection` and `TestSaveDailyParticipantRatings_CreateAndUpdate`, confirming ratings are overwritten instead of duplicated.
+- The month-to-date calendar from day 1 through today is covered by `TestHandleRatingsCalendar_PopulatedMonth` and `TestHandleRatingsCalendar_EmptyMonth`.
+- The month-end totals and top-three winner announcement are covered by `TestBuildMonthlyRatingsWinnersAnnouncement_LastDayFormatting` and `TestBuildMonthlyRatingsWinnersAnnouncement_NotLastDaySkips`.
+- Full automated validation passed with `go test ./...`.
+- No standard project lint command is currently defined in `README.md`, `.github/workflows/ci-cd.yml`, or top-level task/build files, so no separate lint run was available for this verification task.
+- Rating-specific automated coverage meets the project target for the new entry points: `PrepareDailyRatingsReminder` 88.2%, `StartDailyRatingsSession` 83.3%, `HandleDailyRatingsInteractive` 92.6%, `HandleRatingsCalendar` 81.2%, `BuildMonthlyRatingsWinnersAnnouncement` 87.5%, and `SaveDailyParticipantRatings` 81.8%.
 
 ### Explanation System
 

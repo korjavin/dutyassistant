@@ -1,15 +1,15 @@
 package notification
 
 import (
-	"net/http"
-	"net/url"
-	"io"
 	"bytes"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"context"
 	"errors"
-	"testing"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"io"
+	"net/http"
+	"net/url"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/korjavin/dutyassistant/internal/store"
@@ -29,21 +29,27 @@ func (m *MockStore) GetDutyByDate(ctx context.Context, date time.Time) (*store.D
 }
 
 // Implement other store.Store methods as needed for tests, returning nil or zero values.
-func (m *MockStore) GetUserByTelegramID(ctx context.Context, id int64) (*store.User, error) { return nil, nil }
-func (m *MockStore) GetUserByName(ctx context.Context, name string) (*store.User, error)    { return nil, nil }
-func (m *MockStore) ListActiveUsers(ctx context.Context) ([]*store.User, error)              { return nil, nil }
-func (m *MockStore) ListAllUsers(ctx context.Context) ([]*store.User, error)                 { return nil, nil }
-func (m *MockStore) CreateUser(ctx context.Context, user *store.User) error                  { return nil }
-func (m *MockStore) UpdateUser(ctx context.Context, user *store.User) error                  { return nil }
-func (m *MockStore) GetUserStats(ctx context.Context, userID int64) (*store.UserStats, error) { return nil, nil }
-func (m *MockStore) CreateDuty(ctx context.Context, duty *store.Duty) error                  { return nil }
-func (m *MockStore) UpdateDuty(ctx context.Context, duty *store.Duty) error                  { return nil }
-func (m *MockStore) DeleteDuty(ctx context.Context, date time.Time) error                    { return nil }
+func (m *MockStore) GetUserByTelegramID(ctx context.Context, id int64) (*store.User, error) {
+	return nil, nil
+}
+func (m *MockStore) GetUserByName(ctx context.Context, name string) (*store.User, error) {
+	return nil, nil
+}
+func (m *MockStore) ListActiveUsers(ctx context.Context) ([]*store.User, error) { return nil, nil }
+func (m *MockStore) ListAllUsers(ctx context.Context) ([]*store.User, error)    { return nil, nil }
+func (m *MockStore) CreateUser(ctx context.Context, user *store.User) error     { return nil }
+func (m *MockStore) UpdateUser(ctx context.Context, user *store.User) error     { return nil }
+func (m *MockStore) GetUserStats(ctx context.Context, userID int64) (*store.UserStats, error) {
+	return nil, nil
+}
+func (m *MockStore) CreateDuty(ctx context.Context, duty *store.Duty) error { return nil }
+func (m *MockStore) UpdateDuty(ctx context.Context, duty *store.Duty) error { return nil }
+func (m *MockStore) DeleteDuty(ctx context.Context, date time.Time) error   { return nil }
 func (m *MockStore) GetDutiesByMonth(ctx context.Context, year int, month time.Month) ([]*store.Duty, error) {
 	return nil, nil
 }
-func (m *MockStore) CompleteDuty(ctx context.Context, date time.Time) error                  { return nil }
-func (m *MockStore) GetTodaysDuty(ctx context.Context) (*store.Duty, error)                  { return nil, nil }
+func (m *MockStore) CompleteDuty(ctx context.Context, date time.Time) error { return nil }
+func (m *MockStore) GetTodaysDuty(ctx context.Context) (*store.Duty, error) { return nil, nil }
 func (m *MockStore) GetLastDuty(ctx context.Context) (*store.Duty, error) {
 	args := m.Called(ctx)
 	if args.Get(0) == nil {
@@ -54,15 +60,35 @@ func (m *MockStore) GetLastDuty(ctx context.Context) (*store.Duty, error) {
 func (m *MockStore) GetCompletedDutiesInRange(ctx context.Context, start, end time.Time) ([]*store.Duty, error) {
 	return nil, nil
 }
-func (m *MockStore) AddToVolunteerQueue(ctx context.Context, userID int64, days int) error   { return nil }
-func (m *MockStore) AddToAdminQueue(ctx context.Context, userID int64, days int) error       { return nil }
-func (m *MockStore) DecrementVolunteerQueue(ctx context.Context, userID int64) error         { return nil }
-func (m *MockStore) DecrementAdminQueue(ctx context.Context, userID int64) error             { return nil }
-func (m *MockStore) ReduceAdminQueue(ctx context.Context, userID int64, days int) error      { return nil }
-func (m *MockStore) GetUsersWithVolunteerQueue(ctx context.Context) ([]*store.User, error)   { return nil, nil }
-func (m *MockStore) GetUsersWithAdminQueue(ctx context.Context) ([]*store.User, error)       { return nil, nil }
-func (m *MockStore) SetOffDuty(ctx context.Context, userID int64, start, end time.Time) error { return nil }
-func (m *MockStore) ClearOffDuty(ctx context.Context, userID int64) error                    { return nil }
+func (m *MockStore) SaveDailyParticipantRatings(ctx context.Context, date time.Time, ratings []*store.ParticipantDailyRating) error {
+	return nil
+}
+func (m *MockStore) GetParticipantsForRating(ctx context.Context) ([]*store.User, error) {
+	return nil, nil
+}
+func (m *MockStore) GetCurrentMonthParticipantRatings(ctx context.Context, now time.Time) ([]*store.ParticipantDailyRating, error) {
+	return nil, nil
+}
+func (m *MockStore) GetMonthlyParticipantTotals(ctx context.Context, year int, month time.Month) ([]*store.ParticipantMonthlyTotal, error) {
+	return nil, nil
+}
+func (m *MockStore) AddToVolunteerQueue(ctx context.Context, userID int64, days int) error {
+	return nil
+}
+func (m *MockStore) AddToAdminQueue(ctx context.Context, userID int64, days int) error  { return nil }
+func (m *MockStore) DecrementVolunteerQueue(ctx context.Context, userID int64) error    { return nil }
+func (m *MockStore) DecrementAdminQueue(ctx context.Context, userID int64) error        { return nil }
+func (m *MockStore) ReduceAdminQueue(ctx context.Context, userID int64, days int) error { return nil }
+func (m *MockStore) GetUsersWithVolunteerQueue(ctx context.Context) ([]*store.User, error) {
+	return nil, nil
+}
+func (m *MockStore) GetUsersWithAdminQueue(ctx context.Context) ([]*store.User, error) {
+	return nil, nil
+}
+func (m *MockStore) SetOffDuty(ctx context.Context, userID int64, start, end time.Time) error {
+	return nil
+}
+func (m *MockStore) ClearOffDuty(ctx context.Context, userID int64) error { return nil }
 func (m *MockStore) IsUserOffDuty(ctx context.Context, userID int64, date time.Time) (bool, error) {
 	return false, nil
 }
@@ -70,12 +96,22 @@ func (m *MockStore) GetOffDutyUsers(ctx context.Context, date time.Time) ([]*sto
 	return nil, nil
 }
 func (m *MockStore) SetVacationMode(ctx context.Context, enabled bool) error { return nil }
-func (m *MockStore) IsVacationMode(ctx context.Context) (bool, error) { return false, nil }
-func (m *MockStore) CreateRecurringChore(ctx context.Context, chore *store.RecurringChore) error { return nil }
-func (m *MockStore) GetRecurringChore(ctx context.Context, id int64) (*store.RecurringChore, error) { return nil, nil }
-func (m *MockStore) GetActiveRecurringChores(ctx context.Context) ([]*store.RecurringChore, error) { return nil, nil }
-func (m *MockStore) GetDueRecurringChores(ctx context.Context, before time.Time) ([]*store.RecurringChore, error) { return nil, nil }
-func (m *MockStore) UpdateRecurringChoreNextRun(ctx context.Context, id int64, nextRun time.Time) error { return nil }
+func (m *MockStore) IsVacationMode(ctx context.Context) (bool, error)        { return false, nil }
+func (m *MockStore) CreateRecurringChore(ctx context.Context, chore *store.RecurringChore) error {
+	return nil
+}
+func (m *MockStore) GetRecurringChore(ctx context.Context, id int64) (*store.RecurringChore, error) {
+	return nil, nil
+}
+func (m *MockStore) GetActiveRecurringChores(ctx context.Context) ([]*store.RecurringChore, error) {
+	return nil, nil
+}
+func (m *MockStore) GetDueRecurringChores(ctx context.Context, before time.Time) ([]*store.RecurringChore, error) {
+	return nil, nil
+}
+func (m *MockStore) UpdateRecurringChoreNextRun(ctx context.Context, id int64, nextRun time.Time) error {
+	return nil
+}
 func (m *MockStore) CancelRecurringChore(ctx context.Context, id int64) error { return nil }
 
 // MockScheduler is a mock implementation of the Scheduler interface.
@@ -231,8 +267,6 @@ func TestCheckAndNotify_SendFails(t *testing.T) {
 	// We can't assert on logs directly without a more complex setup, but we expect the error to be logged.
 }
 
-
-
 func (m *MockStore) CreateChore(ctx context.Context, chore *store.Chore) error {
 	args := m.Called(ctx, chore)
 	return args.Error(0)
@@ -310,7 +344,6 @@ func (m *MockStore) SetLastChoreDigestDate(ctx context.Context, date string) err
 	return args.Error(0)
 }
 
-
 func TestSendDailyChoreSummary_NoOverdue(t *testing.T) {
 	mockStore := new(MockStore)
 	var sentText string
@@ -357,8 +390,8 @@ func TestSendDailyChoreSummary_NotCronIgnoresIdempotency(t *testing.T) {
 	assert.Contains(t, sentMessages[0], "Просроченных chores нет")
 }
 
-
 type RoundTripFunc func(req *http.Request) *http.Response
+
 func (f RoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return f(req), nil
 }
@@ -371,7 +404,7 @@ func TestRenderBarChart(t *testing.T) {
 	assert.Equal(t, "██████████", renderBarChart(10, 10, 10))
 	assert.Equal(t, "░░░░░░░░░░", renderBarChart(0, 10, 10))
 	assert.Equal(t, "██████████", renderBarChart(15, 10, 10)) // Over maximum
-	assert.Equal(t, "░░░░░░░░░░", renderBarChart(5, 0, 10))  // Max is 0
+	assert.Equal(t, "░░░░░░░░░░", renderBarChart(5, 0, 10))   // Max is 0
 }
 
 func TestDetermineWinner(t *testing.T) {
@@ -418,9 +451,9 @@ func TestSendWeeklyChoreStats(t *testing.T) {
 	assert.Contains(t, sentText, "Top Performers this week:")
 	assert.Contains(t, sentText, "Alice")
 	assert.Contains(t, sentText, "Bob")
-	assert.Contains(t, sentText, "2h00m") // Alice avg exec
-	assert.Contains(t, sentText, "✅ on time") // Alice on time
-	assert.Contains(t, sentText, "⚠️ late (30m avg)") // Bob late
+	assert.Contains(t, sentText, "2h00m")                              // Alice avg exec
+	assert.Contains(t, sentText, "✅ on time")                          // Alice on time
+	assert.Contains(t, sentText, "⚠️ late (30m avg)")                  // Bob late
 	assert.Contains(t, sentText, "🥇 <b>Winner of the week: Alice</b>") // Winner
 }
 

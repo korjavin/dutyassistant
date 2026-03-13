@@ -206,6 +206,8 @@ func (b *Bot) handleCommand(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 		return b.handlers.HandleOffDuty(m)
 	case "users":
 		return b.handlers.HandleUsers(m)
+	case "ratings":
+		return b.handlers.HandleRatingsCalendar(m)
 	case "vacation":
 		return b.handlers.HandleVacation(m)
 	case "toggle_active", "toggleactive":
@@ -286,6 +288,8 @@ func (b *Bot) handleMessage(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 	switch session.Type {
 	case handlers.SessionTypeChoreCreation:
 		return b.handlers.HandleChoreInteractive(m)
+	case handlers.SessionTypeDailyRatings:
+		return b.handlers.HandleDailyRatingsInteractive(m)
 	default:
 		log.Printf("Unknown session type: %s", session.Type)
 		return nil, nil

@@ -10,10 +10,12 @@ type SessionType string
 
 const (
 	SessionTypeChoreCreation SessionType = "chore_creation"
+	SessionTypeDailyRatings  SessionType = "daily_ratings"
 )
 
 // Session represents an active user session
 type Session struct {
+	mu        sync.RWMutex
 	Type      SessionType
 	ChatID    int64
 	UserID    int64
@@ -70,13 +72,27 @@ func (sm *SessionManager) EndSession(chatID int64) {
 	delete(sm.sessions, chatID)
 }
 
+// TouchSession refreshes the session timestamp to keep an active flow alive.
+func (sm *SessionManager) TouchSession(chatID int64) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	if session, ok := sm.sessions[chatID]; ok {
+		session.CreatedAt = time.Now()
+	}
+}
+
 // SetData sets a value in the session data
 func (s *Session) SetData(key string, value interface{}) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.Data[key] = value
 }
 
 // GetData retrieves a value from session data
 func (s *Session) GetData(key string) (interface{}, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	val, ok := s.Data[key]
 	return val, ok
 }
@@ -93,11 +109,30 @@ func (sm *SessionManager) cleanupStale() {
 
 // removeStale removes sessions older than the given duration
 func (sm *SessionManager) removeStale(olderThan time.Duration) {
+	sm.removeStaleAt(time.Now(), olderThan)
+}
+
+func (sm *SessionManager) removeStaleAt(now time.Time, olderThan time.Duration) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	for chatID, session := range sm.sessions {
-		if time.Since(session.CreatedAt) > olderThan {
+		if sessionExpired(session, now, olderThan) {
 			delete(sm.sessions, chatID)
 		}
 	}
+}
+
+func sessionExpired(session *Session, now time.Time, olderThan time.Duration) bool {
+	if session == nil {
+		return true
+	}
+
+	if session.Type == SessionTypeDailyRatings {
+		ratingDate, ok := ratingDateFromSession(session)
+		if ok {
+			return !ratingSubmissionWindowOpen(ratingDate, now)
+		}
+	}
+
+	return now.Sub(session.CreatedAt) > olderThan
 }

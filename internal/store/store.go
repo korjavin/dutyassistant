@@ -89,6 +89,22 @@ type UserStats struct {
 	NextDutyDate    string // YYYY-MM-DD, or empty if none
 }
 
+// ParticipantDailyRating represents one participant's score for one calendar day.
+type ParticipantDailyRating struct {
+	ParticipantID   int64
+	ParticipantName string
+	RatingDate      time.Time
+	Score           int
+}
+
+// ParticipantMonthlyTotal represents a participant's aggregate score for one month.
+type ParticipantMonthlyTotal struct {
+	ParticipantID   int64
+	ParticipantName string
+	TotalScore      int
+	DaysRated       int
+}
+
 // RecurringChore represents a scheduled periodic chore.
 type RecurringChore struct {
 	ID          int64
@@ -135,6 +151,12 @@ type Store interface {
 	GetUserWeeklyStats(ctx context.Context, since time.Time) ([]*UserWeeklyStats, error)
 	GetLastChoreDigestDate(ctx context.Context) (string, error)
 	SetLastChoreDigestDate(ctx context.Context, date string) error
+
+	// Participant rating methods
+	SaveDailyParticipantRatings(ctx context.Context, date time.Time, ratings []*ParticipantDailyRating) error
+	GetParticipantsForRating(ctx context.Context) ([]*User, error)
+	GetCurrentMonthParticipantRatings(ctx context.Context, now time.Time) ([]*ParticipantDailyRating, error)
+	GetMonthlyParticipantTotals(ctx context.Context, year int, month time.Month) ([]*ParticipantMonthlyTotal, error)
 
 	// Queue management methods
 	AddToVolunteerQueue(ctx context.Context, userID int64, days int) error
