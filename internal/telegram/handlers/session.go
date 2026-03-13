@@ -104,11 +104,30 @@ func (sm *SessionManager) cleanupStale() {
 
 // removeStale removes sessions older than the given duration
 func (sm *SessionManager) removeStale(olderThan time.Duration) {
+	sm.removeStaleAt(time.Now(), olderThan)
+}
+
+func (sm *SessionManager) removeStaleAt(now time.Time, olderThan time.Duration) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	for chatID, session := range sm.sessions {
-		if time.Since(session.CreatedAt) > olderThan {
+		if sessionExpired(session, now, olderThan) {
 			delete(sm.sessions, chatID)
 		}
 	}
+}
+
+func sessionExpired(session *Session, now time.Time, olderThan time.Duration) bool {
+	if session == nil {
+		return true
+	}
+
+	if session.Type == SessionTypeDailyRatings {
+		ratingDate, ok := ratingDateFromSession(session)
+		if ok {
+			return !normalizeRatingDate(now).Equal(ratingDate)
+		}
+	}
+
+	return now.Sub(session.CreatedAt) > olderThan
 }
