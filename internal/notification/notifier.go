@@ -357,7 +357,11 @@ func SendWeeklyChoreStats(ctx context.Context, bot *tgbotapi.BotAPI, db store.St
 		winner := determineWinner(weeklyStats)
 		if winner != nil {
 			sb.WriteString(fmt.Sprintf("🥇 <b>Winner of the week: %s</b>\n", html.EscapeString(winner.Name)))
-			sb.WriteString("<i>Most chores completed, on time!</i>\n")
+			if winner.AvgLateSeconds == 0 {
+				sb.WriteString("<i>Most chores completed, on time!</i>\n")
+			} else {
+				sb.WriteString(fmt.Sprintf("<i>Most chores completed! (%s avg late)</i>\n", formatDuration(winner.AvgLateSeconds)))
+			}
 		}
 	}
 
