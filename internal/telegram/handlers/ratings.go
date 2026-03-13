@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"html"
 	"slices"
 	"strconv"
@@ -123,6 +124,21 @@ func (h *Handlers) HandleDailyRatingsInteractive(m *tgbotapi.Message) (tgbotapi.
 
 	if err := h.Store.SaveDailyParticipantRatings(context.Background(), ratingDate, ratings); err != nil {
 		return tgbotapi.NewMessage(m.Chat.ID, genericErrorMessage), nil
+	}
+
+	if h.Bot != nil && h.GroupID != 0 {
+		normalizedNow := normalizeRatingDate(ratingDate)
+		totals, err := h.Store.GetMonthlyParticipantTotals(context.Background(), normalizedNow.Year(), normalizedNow.Month())
+		if err == nil {
+			msgText := formatDailyAndMonthlySummary(ratings, totals, ratingDate)
+			msg := tgbotapi.NewMessage(h.GroupID, msgText)
+			msg.ParseMode = tgbotapi.ModeHTML
+			if _, sendErr := h.Bot.Send(msg); sendErr != nil {
+				slog.Error("error sending daily ratings group notification", "err", sendErr)
+			}
+		} else {
+			slog.Error("error fetching monthly participant totals for group notification", "err", err)
+		}
 	}
 
 	h.SessionManager.TouchSession(m.Chat.ID)
@@ -246,6 +262,9 @@ func (h *Handlers) filterRatingParticipants(users []*store.User) []*store.User {
 	filtered := make([]*store.User, 0, len(users))
 	for _, user := range users {
 		if user == nil {
+			continue
+		}
+		if user.IsAdmin {
 			continue
 		}
 		if h.AdminID != 0 && user.TelegramUserID == h.AdminID {
@@ -438,6 +457,31 @@ func buildRatingsCalendarTable(participants []ratingSessionParticipant, ratings 
 	}
 
 	return strings.Join(lines, "\n")
+}
+
+func formatDailyAndMonthlySummary(dailyRatings []*store.ParticipantDailyRating, totals []*store.ParticipantMonthlyTotal, now time.Time) string {
+	normalizedNow := normalizeRatingDate(now)
+
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("<b>Daily Ratings for %s</b>\n", normalizedNow.Format("2006-01-02")))
+
+	for _, rating := range dailyRatings {
+		b.WriteString(fmt.Sprintf("%s: %d\n", html.EscapeString(rating.ParticipantName), rating.Score))
+	}
+
+	b.WriteString(fmt.Sprintf("\n<b>Monthly Standings (%s)</b>\n", normalizedNow.Format("January 2006")))
+	if len(totals) == 0 {
+		b.WriteString("No participant ratings were recorded this month.")
+	} else {
+		for i, total := range totals {
+			b.WriteString(fmt.Sprintf("%d. %s - %d point(s)", i+1, html.EscapeString(total.ParticipantName), total.TotalScore))
+			if i < len(totals)-1 {
+				b.WriteString("\n")
+			}
+		}
+	}
+
+	return b.String()
 }
 
 func formatMonthlyRatingsWinnersDigest(totals []*store.ParticipantMonthlyTotal, now time.Time) string {

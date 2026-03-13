@@ -56,9 +56,9 @@ func TestExplainLastAssignment_RoundRobin(t *testing.T) {
 	// User off duty checks
 	mockStore.On("GetOffDutyUsers", ctx, today).Return([]*store.User{u2}, nil)
 
-    // For calculating volunteer / admin available candidates
-    mockStore.On("GetUsersWithVolunteerQueue", ctx).Return([]*store.User{}, nil)
-    mockStore.On("GetUsersWithAdminQueue", ctx).Return([]*store.User{}, nil)
+	// For calculating volunteer / admin available candidates
+	mockStore.On("GetUsersWithVolunteerQueue", ctx).Return([]*store.User{}, nil)
+	mockStore.On("GetUsersWithAdminQueue", ctx).Return([]*store.User{}, nil)
 
 	explanation, err := s.ExplainLastAssignment(ctx)
 

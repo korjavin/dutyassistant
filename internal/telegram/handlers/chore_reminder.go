@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"html"
 	"log"
@@ -8,10 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"context"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/korjavin/dutyassistant/internal/llm"
 	"github.com/korjavin/dutyassistant/internal/store"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 // ChoreAssignment represents an active chore assignment

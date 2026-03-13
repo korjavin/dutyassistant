@@ -319,6 +319,35 @@ func TestStartDailyRatingsSession_NoParticipants(t *testing.T) {
 	mockStore.AssertExpectations(t)
 }
 
+func TestHandleDailyRatingsInteractive_SendsGroupNotification(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := NewWithAdminID(mockStore, nil, -1001, 123)
+
+	ratingDate := time.Date(2026, time.March, 13, 20, 50, 0, 0, time.UTC)
+	participants := []*store.User{
+		{ID: 10, FirstName: "Alice"},
+		{ID: 11, FirstName: "Bob"},
+	}
+
+	mockStore.On("GetParticipantsForRating", mock.Anything).Return(participants, nil).Once()
+	mockStore.On("SaveDailyParticipantRatings", mock.Anything, normalizeRatingDate(ratingDate), mock.MatchedBy(func(ratings []*store.ParticipantDailyRating) bool {
+		return len(ratings) == 2 && ratings[0].Score == 5 && ratings[1].Score == 3
+	})).Return(nil).Once()
+
+	_, err := h.StartDailyRatingsSession(700, 123, ratingDate)
+	assert.NoError(t, err)
+
+	msg, err := h.HandleDailyRatingsInteractive(&tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 700},
+		From: &tgbotapi.User{ID: 123},
+		Text: "5 3",
+	})
+	assert.NoError(t, err)
+	assert.NotNil(t, msg)
+
+	mockStore.AssertExpectations(t)
+}
+
 func TestHandleDailyRatingsInteractive_ValidSubmission(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	h := NewWithAdminID(mockStore, nil, 0, 123, nil)
@@ -592,6 +621,30 @@ func TestHandleDailyRatingsInteractive_RejectsSubmissionAfterMonthEndCutoff(t *t
 	assert.False(t, exists)
 
 	mockStore.AssertExpectations(t)
+}
+
+func TestFormatDailyAndMonthlySummary(t *testing.T) {
+	now := time.Date(2026, time.March, 13, 0, 0, 0, 0, time.UTC)
+	dailyRatings := []*store.ParticipantDailyRating{
+		{ParticipantName: "Alice", Score: 5},
+		{ParticipantName: "Bob", Score: 4},
+	}
+	totals := []*store.ParticipantMonthlyTotal{
+		{ParticipantName: "Alice", TotalScore: 15},
+		{ParticipantName: "Bob", TotalScore: 12},
+		{ParticipantName: "Cara", TotalScore: 8},
+	}
+
+	result := formatDailyAndMonthlySummary(dailyRatings, totals, now)
+	expected := "<b>Daily Ratings for 2026-03-13</b>\n" +
+		"Alice: 5\n" +
+		"Bob: 4\n\n" +
+		"<b>Monthly Standings (March 2026)</b>\n" +
+		"1. Alice - 15 point(s)\n" +
+		"2. Bob - 12 point(s)\n" +
+		"3. Cara - 8 point(s)"
+
+	assert.Equal(t, expected, result)
 }
 
 func TestBuildMonthlyRatingsWinnersAnnouncement_LastDayFormatting(t *testing.T) {

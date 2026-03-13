@@ -2,6 +2,10 @@
 
 Duty Assistant Bot is a Telegram bot designed to help manage on-call duty rosters using a queue-based assignment system. It features an interactive inline keyboard UI for all commands and provides both Telegram and web interfaces.
 
+## Development Guidelines
+
+*   **Logging:** Use `log/slog` for all structured logging instead of the standard library `log` or `fmt` packages to ensure consistent and parseable output.
+
 ## Features
 
 *   **Queue-Based Assignment System**: Three-tier priority system (Volunteer → Admin → Round-Robin)
@@ -103,7 +107,7 @@ The project uses GitHub Actions for automated builds and deployments. On push to
 ### Admin Commands
 - `/assign` - Assign days to a user's admin queue (interactive user + days selection)
 - `/chore <description> [/<N>d]` - Assign a one-off chore to a random user or make it periodic every `N` days.
-- `/list` - View all active periodic chores or regular tasks (`/list chore` or `/list task`).
+- `/list` - View all active periodic chores or regular tasks (interactive list type selection, or `/list chore` / `/list task`).
 - `/cancel` - Cancel a duty, active chore, or recurring chore (interactive item selection).
 - `/complete` - Mark any active chore as completed (interactive chore selection).
 - `/modify` or `/change` - Change duty assignment for a date (interactive date + user selection)

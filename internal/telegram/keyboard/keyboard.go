@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/korjavin/dutyassistant/internal/store"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/korjavin/dutyassistant/internal/store"
 )
 
 const (
@@ -15,6 +15,18 @@ const (
 	ActionSelectDay = "select_day"
 	ActionIgnore    = "ignore"
 )
+
+// ListMenu creates an inline keyboard with options to list periodic or regular chores.
+func ListMenu() tgbotapi.InlineKeyboardMarkup {
+	return tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("📋 Periodic Chores", "list:chore"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("📝 Regular Chores", "list:task"),
+		),
+	)
+}
 
 // ChoreMenu creates the interactive inline keyboard for the /chore command.
 func ChoreMenu() tgbotapi.InlineKeyboardMarkup {
