@@ -206,6 +206,8 @@ func (b *Bot) handleCommand(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 		return b.handlers.HandleOffDuty(m)
 	case "users":
 		return b.handlers.HandleUsers(m)
+	case "ratings":
+		return b.handlers.HandleRatingsCalendar(m)
 	case "vacation":
 		return b.handlers.HandleVacation(m)
 	case "toggle_active", "toggleactive":

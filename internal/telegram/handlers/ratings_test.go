@@ -11,6 +11,92 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
+func TestHandleRatingsCalendar_PopulatedMonth(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := NewWithAdminID(mockStore, nil, 0, 123)
+
+	originalNow := TimeNow
+	TimeNow = func() time.Time {
+		return time.Date(2026, time.March, 3, 12, 0, 0, 0, time.UTC)
+	}
+	defer func() {
+		TimeNow = originalNow
+	}()
+
+	participants := []*store.User{
+		{ID: 10, FirstName: "Alice"},
+		{ID: 11, FirstName: "Bob"},
+	}
+	ratings := []*store.ParticipantDailyRating{
+		{ParticipantID: 10, ParticipantName: "Alice", RatingDate: time.Date(2026, time.March, 1, 8, 0, 0, 0, time.UTC), Score: 5},
+		{ParticipantID: 11, ParticipantName: "Bob", RatingDate: time.Date(2026, time.March, 1, 8, 0, 0, 0, time.UTC), Score: 4},
+		{ParticipantID: 10, ParticipantName: "Alice", RatingDate: time.Date(2026, time.March, 2, 8, 0, 0, 0, time.UTC), Score: 3},
+	}
+
+	mockStore.On("GetParticipantsForRating", mock.Anything).Return(participants, nil).Once()
+	mockStore.On("GetCurrentMonthParticipantRatings", mock.Anything, time.Date(2026, time.March, 3, 0, 0, 0, 0, time.UTC)).Return(ratings, nil).Once()
+
+	msg, err := h.HandleRatingsCalendar(&tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 800},
+		From: &tgbotapi.User{ID: 123},
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, tgbotapi.ModeHTML, msg.ParseMode)
+	assert.Contains(t, msg.Text, "Participant ratings for March 2026")
+	assert.Contains(t, msg.Text, "Showing 2026-03-01 through 2026-03-03.")
+	assert.Contains(t, msg.Text, "<pre>")
+	assert.Contains(t, msg.Text, "Date        Alice  Bob")
+	assert.Contains(t, msg.Text, "2026-03-01  5      4")
+	assert.Contains(t, msg.Text, "2026-03-02  3      -")
+	assert.Contains(t, msg.Text, "2026-03-03  -      -")
+	assert.Contains(t, msg.Text, "Missing scores are shown as -.")
+
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleRatingsCalendar_EmptyMonth(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := NewWithAdminID(mockStore, nil, 0, 123)
+
+	originalNow := TimeNow
+	TimeNow = func() time.Time {
+		return time.Date(2026, time.March, 2, 12, 0, 0, 0, time.UTC)
+	}
+	defer func() {
+		TimeNow = originalNow
+	}()
+
+	participants := []*store.User{
+		{ID: 10, FirstName: "Alice"},
+	}
+
+	mockStore.On("GetParticipantsForRating", mock.Anything).Return(participants, nil).Once()
+	mockStore.On("GetCurrentMonthParticipantRatings", mock.Anything, time.Date(2026, time.March, 2, 0, 0, 0, 0, time.UTC)).Return([]*store.ParticipantDailyRating{}, nil).Once()
+
+	msg, err := h.HandleRatingsCalendar(&tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 801},
+		From: &tgbotapi.User{ID: 123},
+	})
+	assert.NoError(t, err)
+	assert.Contains(t, msg.Text, "2026-03-01  -")
+	assert.Contains(t, msg.Text, "2026-03-02  -")
+	assert.Contains(t, msg.Text, "Missing scores are shown as -.")
+
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleRatingsCalendar_AdminAccessControl(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := NewWithAdminID(mockStore, nil, 0, 123)
+
+	msg, err := h.HandleRatingsCalendar(&tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 802},
+		From: &tgbotapi.User{ID: 999},
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, adminOnlyMessage, msg.Text)
+}
+
 func TestStartDailyRatingsSession_BuildsStablePrompt(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	h := NewWithAdminID(mockStore, nil, 0, 123)

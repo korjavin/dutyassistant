@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"html"
 	"strconv"
 	"strings"
 	"time"
@@ -94,6 +95,33 @@ func (h *Handlers) HandleDailyRatingsInteractive(m *tgbotapi.Message) (tgbotapi.
 
 	h.SessionManager.TouchSession(m.Chat.ID)
 	return tgbotapi.NewMessage(m.Chat.ID, formatRatingSuccess(participants, ratingDate)), nil
+}
+
+// HandleRatingsCalendar renders the current month's participant ratings for admins.
+func (h *Handlers) HandleRatingsCalendar(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
+	isAdmin, err := h.checkAdmin(m.From.ID)
+	if err != nil || !isAdmin {
+		return tgbotapi.NewMessage(m.Chat.ID, adminOnlyMessage), nil
+	}
+
+	now := normalizeRatingDate(TimeNow())
+	participants, err := h.Store.GetParticipantsForRating(context.Background())
+	if err != nil {
+		return tgbotapi.NewMessage(m.Chat.ID, genericErrorMessage), nil
+	}
+	if len(participants) == 0 {
+		return tgbotapi.NewMessage(m.Chat.ID, "No active participants are available for rating right now."), nil
+	}
+
+	ratings, err := h.Store.GetCurrentMonthParticipantRatings(context.Background(), now)
+	if err != nil {
+		return tgbotapi.NewMessage(m.Chat.ID, genericErrorMessage), nil
+	}
+
+	text := formatRatingsCalendar(participants, ratings, now)
+	msg := tgbotapi.NewMessage(m.Chat.ID, text)
+	msg.ParseMode = tgbotapi.ModeHTML
+	return msg, nil
 }
 
 func buildDailyRatingsPrompt(participants []*store.User, ratingDate time.Time) string {
@@ -201,4 +229,73 @@ func ratingDateFromSession(session *Session) (time.Time, bool) {
 
 func normalizeRatingDate(date time.Time) time.Time {
 	return time.Date(date.UTC().Year(), date.UTC().Month(), date.UTC().Day(), 0, 0, 0, 0, time.UTC)
+}
+
+func formatRatingsCalendar(participants []*store.User, ratings []*store.ParticipantDailyRating, now time.Time) string {
+	normalizedNow := normalizeRatingDate(now)
+	sessionOrder := sessionParticipants(participants)
+	table := buildRatingsCalendarTable(sessionOrder, ratings, normalizedNow)
+
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("Participant ratings for %s\n", normalizedNow.Format("January 2006")))
+	b.WriteString(fmt.Sprintf("Showing %s through %s.\n\n", time.Date(normalizedNow.Year(), normalizedNow.Month(), 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02"), normalizedNow.Format("2006-01-02")))
+	b.WriteString("<pre>")
+	b.WriteString(html.EscapeString(table))
+	b.WriteString("</pre>\n")
+	b.WriteString("Missing scores are shown as -.")
+	return b.String()
+}
+
+func buildRatingsCalendarTable(participants []ratingSessionParticipant, ratings []*store.ParticipantDailyRating, now time.Time) string {
+	const missingScore = "-"
+
+	dateWidth := len("2006-01-02")
+	nameWidths := make([]int, len(participants))
+	for i, participant := range participants {
+		if len(participant.Name) > len(missingScore) {
+			nameWidths[i] = len(participant.Name)
+		} else {
+			nameWidths[i] = len(missingScore)
+		}
+	}
+
+	ratingByDayAndParticipant := make(map[string]map[int64]int, len(ratings))
+	for _, rating := range ratings {
+		if rating == nil {
+			continue
+		}
+		dateKey := normalizeRatingDate(rating.RatingDate).Format("2006-01-02")
+		if _, ok := ratingByDayAndParticipant[dateKey]; !ok {
+			ratingByDayAndParticipant[dateKey] = make(map[int64]int)
+		}
+		ratingByDayAndParticipant[dateKey][rating.ParticipantID] = rating.Score
+	}
+
+	formatCell := func(value string, width int) string {
+		return fmt.Sprintf("%-*s", width, value)
+	}
+
+	var lines []string
+	headerCells := []string{formatCell("Date", dateWidth)}
+	for i, participant := range participants {
+		headerCells = append(headerCells, formatCell(participant.Name, nameWidths[i]))
+	}
+	lines = append(lines, strings.Join(headerCells, "  "))
+
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	for day := monthStart; !day.After(now); day = day.AddDate(0, 0, 1) {
+		dateKey := day.Format("2006-01-02")
+		row := []string{formatCell(dateKey, dateWidth)}
+		dailyRatings := ratingByDayAndParticipant[dateKey]
+		for i, participant := range participants {
+			cell := missingScore
+			if score, ok := dailyRatings[participant.ID]; ok {
+				cell = strconv.Itoa(score)
+			}
+			row = append(row, formatCell(cell, nameWidths[i]))
+		}
+		lines = append(lines, strings.Join(row, "  "))
+	}
+
+	return strings.Join(lines, "\n")
 }

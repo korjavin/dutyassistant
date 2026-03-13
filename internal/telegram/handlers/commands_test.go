@@ -60,6 +60,7 @@ func TestHandleHelp(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Contains(t, msg.Text, "Here are the available commands:")
 	assert.Contains(t, msg.Text, "/complete - Admin: Mark any active chore as completed")
+	assert.Contains(t, msg.Text, "/ratings - Show the current month's participant rating calendar.")
 	assert.Equal(t, tgbotapi.ModeMarkdown, msg.ParseMode)
 }
 

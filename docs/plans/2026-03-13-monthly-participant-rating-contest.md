@@ -63,12 +63,12 @@ Implement a monthly participant rating flow in the Telegram bot: every day at 20
 - Modify: `internal/telegram/handlers/ratings.go`
 - Modify: `internal/telegram/handlers/ratings_test.go`
 
-- [ ] Add a new admin command to display month-to-date ratings in a readable text table/calendar
-- [ ] Render dates from the 1st of the current month through today, with one row per day and participant scores aligned to the same stable participant order
-- [ ] Show missing days or missing scores explicitly so the admin can see gaps
-- [ ] Update `/help` text to document the new rating commands
-- [ ] Write handler tests for populated calendar output, empty-month output, and admin access control
-- [ ] Run Telegram handler tests and ensure they pass before task 4
+- [x] Add a new admin command to display month-to-date ratings in a readable text table/calendar
+- [x] Render dates from the 1st of the current month through today, with one row per day and participant scores aligned to the same stable participant order
+- [x] Show missing days or missing scores explicitly so the admin can see gaps
+- [x] Update `/help` text to document the new rating commands
+- [x] Write handler tests for populated calendar output, empty-month output, and admin access control
+- [x] Run Telegram handler tests and ensure they pass before task 4
 
 ### Task 4: Add scheduled daily reminder and month-end winner announcement
 
