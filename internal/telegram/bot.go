@@ -46,6 +46,14 @@ func (b *Bot) SendMessage(chatID int64, text string) error {
 	return err
 }
 
+// SendMessageHTML sends a text message with HTML formatting to a specific chat ID.
+func (b *Bot) SendMessageHTML(chatID int64, text string) error {
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ParseMode = tgbotapi.ModeHTML
+	_, err := b.api.Send(msg)
+	return err
+}
+
 // SendMessageMarkdown sends a text message with MarkdownV2 formatting to a specific chat ID.
 func (b *Bot) SendMessageMarkdown(chatID int64, text string) error {
 	msg := tgbotapi.NewMessage(chatID, text)

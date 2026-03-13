@@ -29,6 +29,29 @@ func TestNewClient(t *testing.T) {
 	}
 }
 
+func TestSanitizeTelegramHTML(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"Clean HTML", "<b>Hello</b> <i>World</i>", "<b>Hello</b> <i>World</i>"},
+		{"Unescaped ampersand", "A & B", "A &amp; B"},
+		{"Disallowed tag", "<b>Hello</b> <script>alert(1)</script>", "<b>Hello</b> &lt;script&gt;alert(1)&lt;/script&gt;"},
+		{"Valid links", `<a href="http://example.com">Link</a>`, `<a href="http://example.com">Link</a>`},
+		{"Multiple tags", "<s><b>test</b></s> & <pre>code</pre>", "<s><b>test</b></s> &amp; <pre>code</pre>"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res := SanitizeTelegramHTML(tt.input)
+			if res != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, res)
+			}
+		})
+	}
+}
+
 func TestRefineMessage(t *testing.T) {
 	ctx := context.Background()
 	intent := "be funny"
@@ -61,7 +84,7 @@ func TestRefineMessage(t *testing.T) {
 				} `json:"message"`
 			}{{Message: struct {
 				Content string `json:"content"`
-			}{Content: "🍽️ Get ready for splash mountain! You're on dish duty!"}}},
+			}{Content: "🍽️ Get ready for splash mountain! You're on dish duty <script>bad</script> & it's fun!"}}},
 		}
 		json.NewEncoder(w).Encode(resp)
 	})
@@ -69,10 +92,10 @@ func TestRefineMessage(t *testing.T) {
 	server := httptest.NewServer(mockHandler)
 	defer server.Close()
 
-	// Test 2: Successful response
+	// Test 2: Successful response + Sanitization
 	c := NewClient("test-key", server.URL, 10)
 	res := c.RefineMessage(ctx, intent, vanilla)
-	expected := "🍽️ Get ready for splash mountain! You're on dish duty!"
+	expected := "🍽️ Get ready for splash mountain! You're on dish duty &lt;script&gt;bad&lt;/script&gt; &amp; it's fun!"
 	if res != expected {
 		t.Errorf("Expected refined message %q, got: %q", expected, res)
 	}

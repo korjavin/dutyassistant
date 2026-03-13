@@ -8,6 +8,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"regexp"
+	"strings"
 	"time"
 )
 
@@ -59,6 +61,49 @@ type chatResponse struct {
 	} `json:"choices"`
 }
 
+// SanitizeTelegramHTML ensures that only permitted Telegram HTML tags remain
+// and that any raw `<` or `&` inside text nodes are properly escaped.
+func SanitizeTelegramHTML(input string) string {
+	// Telegram supported tags list
+	allowedTags := []string{
+		"b", "strong", "i", "em", "u", "ins", "s", "strike", "del", "code", "pre",
+	}
+
+	var allowRegexParts []string
+	for _, tag := range allowedTags {
+		allowRegexParts = append(allowRegexParts, fmt.Sprintf("</?%s>", tag))
+	}
+	// Special handling for a href
+	allowRegexParts = append(allowRegexParts, `<a href="[^"]*">`)
+	allowRegexParts = append(allowRegexParts, `</a>`)
+	// Special handling for tg-spoiler
+	allowRegexParts = append(allowRegexParts, `<tg-spoiler>`)
+	allowRegexParts = append(allowRegexParts, `</tg-spoiler>`)
+
+	allowPattern := strings.Join(allowRegexParts, "|")
+	reAllowed := regexp.MustCompile("(?i)(" + allowPattern + ")")
+
+	// Split input by allowed tags
+	parts := reAllowed.Split(input, -1)
+	tags := reAllowed.FindAllString(input, -1)
+
+	var result strings.Builder
+	for i, part := range parts {
+		// Escape &, <, > in text parts
+		escapedPart := strings.ReplaceAll(part, "&", "&amp;")
+		escapedPart = strings.ReplaceAll(escapedPart, "<", "&lt;")
+		escapedPart = strings.ReplaceAll(escapedPart, ">", "&gt;")
+		result.WriteString(escapedPart)
+
+		// Re-append the allowed tag
+		if i < len(tags) {
+			result.WriteString(tags[i])
+		}
+	}
+
+	return result.String()
+}
+
 // RefineMessage sends the vanilla message and intent to the LLM to get a more
 // fun/humorous formatted message. It returns the vanilla message if there's any error
 // or if the client is nil.
@@ -69,7 +114,8 @@ func (c *Client) RefineMessage(ctx context.Context, intent, vanilla string) stri
 
 	systemPrompt := `You are a fun, witty, and enthusiastic assistant managing household chores.
 Your task is to reformat the given message based on the specified intent while keeping the core information intact.
-Return ONLY the formatted text. Use emojis appropriately. Do NOT wrap the output in quotes or markdown code blocks.`
+Return ONLY the formatted text. Use emojis appropriately. Do NOT wrap the output in quotes or markdown code blocks.
+If formatting text, ONLY use Telegram-supported HTML tags (<b>, <i>, <a>, <code>, <pre>). Do NOT use any unsupported HTML tags.`
 
 	userPrompt := fmt.Sprintf("Intent: %s\nOriginal Message: %s", intent, vanilla)
 
@@ -126,5 +172,5 @@ Return ONLY the formatted text. Use emojis appropriately. Do NOT wrap the output
 		return vanilla
 	}
 
-	return refined
+	return SanitizeTelegramHTML(refined)
 }

@@ -130,7 +130,7 @@ func main() {
 
 			log.Printf("[CRON] DM message content: %s", dmMsg)
 
-			if err := bot.SendMessageMarkdown(duty.User.TelegramUserID, dmMsg); err != nil {
+			if err := bot.SendMessageHTML(duty.User.TelegramUserID, dmMsg); err != nil {
 				log.Printf("[CRON] ERROR: Failed to send DM to user %d: %v", duty.User.TelegramUserID, err)
 				// Log failure to database
 				if dbErr := store.LogNotification(context.Background(), duty.DutyDate, duty.UserID, "DM", "FAILED", err.Error()); dbErr != nil {
@@ -162,7 +162,7 @@ func main() {
 
 			log.Printf("[CRON] Group message content: %s", groupMsg)
 
-			if err := bot.SendMessageMarkdown(dishGroupID, groupMsg); err != nil {
+			if err := bot.SendMessageHTML(dishGroupID, groupMsg); err != nil {
 				log.Printf("[CRON] ERROR: Failed to send group notification to chat %d: %v", dishGroupID, err)
 				// Log failure to database
 				if dbErr := store.LogNotification(context.Background(), duty.DutyDate, duty.UserID, "GROUP", "FAILED", err.Error()); dbErr != nil {
