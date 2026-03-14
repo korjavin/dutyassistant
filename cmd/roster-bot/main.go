@@ -115,24 +115,24 @@ func main() {
 
 		// Process Recurring Chores
 		if err := telegramHandlers.ProcessRecurringChores(context.Background()); err != nil {
-			slog.Info(fmt.Sprintf("ERROR: Failed to process recurring chores: %v", err), slog.String("component", "cron"))
+			slog.Error(fmt.Sprintf("ERROR: Failed to process recurring chores: %v", err), slog.String("component", "cron"))
 		}
 
 		duty, err := sched.AssignTodaysDuty(context.Background())
 		if err != nil {
-			slog.Info(fmt.Sprintf("ERROR: Failed to assign today's duty: %v", err), slog.String("component", "cron"))
+			slog.Error(fmt.Sprintf("ERROR: Failed to assign today's duty: %v", err), slog.String("component", "cron"))
 			return
 		}
 
 		if duty == nil {
-			slog.Info(fmt.Sprintf("WARNING: No duty was assigned (duty is nil)"), slog.String("component", "cron"))
+			slog.Warn(fmt.Sprintf("WARNING: No duty was assigned (duty is nil)"), slog.String("component", "cron"))
 			return
 		}
 
 		slog.Info(fmt.Sprintf("✓ Successfully assigned duty to user %d (Assignment Type: %s)", duty.UserID, duty.AssignmentType), slog.String("component", "cron"))
 
 		if duty.User == nil {
-			slog.Info(fmt.Sprintf("ERROR: Duty.User is nil - cannot send notifications!"), slog.String("component", "cron"))
+			slog.Error(fmt.Sprintf("ERROR: Duty.User is nil - cannot send notifications!"), slog.String("component", "cron"))
 			return
 		}
 
@@ -150,23 +150,23 @@ func main() {
 			slog.Info(fmt.Sprintf("DM message content: %s", dmMsg), slog.String("component", "cron"))
 
 			if err := bot.SendMessageHTML(duty.User.TelegramUserID, dmMsg); err != nil {
-				slog.Info(fmt.Sprintf("ERROR: Failed to send DM to user %d: %v", duty.User.TelegramUserID, err), slog.String("component", "cron"))
+				slog.Error(fmt.Sprintf("ERROR: Failed to send DM to user %d: %v", duty.User.TelegramUserID, err), slog.String("component", "cron"))
 				// Log failure to database
 				if dbErr := store.LogNotification(context.Background(), duty.DutyDate, duty.UserID, "DM", "FAILED", err.Error()); dbErr != nil {
-					slog.Info(fmt.Sprintf("ERROR: Failed to log DM failure: %v", dbErr), slog.String("component", "cron"))
+					slog.Error(fmt.Sprintf("ERROR: Failed to log DM failure: %v", dbErr), slog.String("component", "cron"))
 				}
 			} else {
 				slog.Info(fmt.Sprintf("✓ Successfully sent DM notification to user %d", duty.User.TelegramUserID), slog.String("component", "cron"))
 				// Log success to database
 				if dbErr := store.LogNotification(context.Background(), duty.DutyDate, duty.UserID, "DM", "SUCCESS", ""); dbErr != nil {
-					slog.Info(fmt.Sprintf("ERROR: Failed to log DM success: %v", dbErr), slog.String("component", "cron"))
+					slog.Error(fmt.Sprintf("ERROR: Failed to log DM success: %v", dbErr), slog.String("component", "cron"))
 				}
 			}
 		} else {
-			slog.Info(fmt.Sprintf("WARNING: User %s has TelegramUserID=0, cannot send DM", duty.User.FirstName), slog.String("component", "cron"))
+			slog.Warn(fmt.Sprintf("WARNING: User %s has TelegramUserID=0, cannot send DM", duty.User.FirstName), slog.String("component", "cron"))
 			// Log skip to database
 			if dbErr := store.LogNotification(context.Background(), duty.DutyDate, duty.UserID, "DM", "SKIPPED", "TelegramUserID is 0"); dbErr != nil {
-				slog.Info(fmt.Sprintf("ERROR: Failed to log DM skip: %v", dbErr), slog.String("component", "cron"))
+				slog.Error(fmt.Sprintf("ERROR: Failed to log DM skip: %v", dbErr), slog.String("component", "cron"))
 			}
 		}
 
@@ -182,23 +182,23 @@ func main() {
 			slog.Info(fmt.Sprintf("Group message content: %s", groupMsg), slog.String("component", "cron"))
 
 			if err := bot.SendMessageHTML(dishGroupID, groupMsg); err != nil {
-				slog.Info(fmt.Sprintf("ERROR: Failed to send group notification to chat %d: %v", dishGroupID, err), slog.String("component", "cron"))
+				slog.Error(fmt.Sprintf("ERROR: Failed to send group notification to chat %d: %v", dishGroupID, err), slog.String("component", "cron"))
 				// Log failure to database
 				if dbErr := store.LogNotification(context.Background(), duty.DutyDate, duty.UserID, "GROUP", "FAILED", err.Error()); dbErr != nil {
-					slog.Info(fmt.Sprintf("ERROR: Failed to log group notification failure: %v", dbErr), slog.String("component", "cron"))
+					slog.Error(fmt.Sprintf("ERROR: Failed to log group notification failure: %v", dbErr), slog.String("component", "cron"))
 				}
 			} else {
 				slog.Info(fmt.Sprintf("✓ Successfully sent group notification to chat %d", dishGroupID), slog.String("component", "cron"))
 				// Log success to database
 				if dbErr := store.LogNotification(context.Background(), duty.DutyDate, duty.UserID, "GROUP", "SUCCESS", ""); dbErr != nil {
-					slog.Info(fmt.Sprintf("ERROR: Failed to log group notification success: %v", dbErr), slog.String("component", "cron"))
+					slog.Error(fmt.Sprintf("ERROR: Failed to log group notification success: %v", dbErr), slog.String("component", "cron"))
 				}
 			}
 		} else {
-			slog.Info(fmt.Sprintf("WARNING: DISH_GROUP not configured (dishGroupID=0), skipping group notification"), slog.String("component", "cron"))
+			slog.Warn(fmt.Sprintf("WARNING: DISH_GROUP not configured (dishGroupID=0), skipping group notification"), slog.String("component", "cron"))
 			// Log skip to database
 			if dbErr := store.LogNotification(context.Background(), duty.DutyDate, duty.UserID, "GROUP", "SKIPPED", "dishGroupID not configured"); dbErr != nil {
-				slog.Info(fmt.Sprintf("ERROR: Failed to log group notification skip: %v", dbErr), slog.String("component", "cron"))
+				slog.Error(fmt.Sprintf("ERROR: Failed to log group notification skip: %v", dbErr), slog.String("component", "cron"))
 			}
 		}
 
@@ -236,7 +236,7 @@ func main() {
 
 		msg, ok, err := telegramHandlers.PrepareDailyRatingsReminder(adminID, adminID, time.Now().In(berlinLoc))
 		if err != nil {
-			slog.Info(fmt.Sprintf("ERROR: Failed to prepare participant rating reminder: %v", err), slog.String("component", "cron"))
+			slog.Error(fmt.Sprintf("ERROR: Failed to prepare participant rating reminder: %v", err), slog.String("component", "cron"))
 			return
 		}
 		if !ok {
@@ -246,7 +246,7 @@ func main() {
 
 		if _, err := bot.API().Send(*msg); err != nil {
 			telegramHandlers.SessionManager.EndSession(adminID)
-			slog.Info(fmt.Sprintf("ERROR: Failed to send participant rating reminder to admin %d: %v", adminID, err), slog.String("component", "cron"))
+			slog.Error(fmt.Sprintf("ERROR: Failed to send participant rating reminder to admin %d: %v", adminID, err), slog.String("component", "cron"))
 			return
 		}
 
@@ -268,7 +268,7 @@ func main() {
 
 		msg, ok, err := telegramHandlers.BuildMonthlyRatingsWinnersAnnouncement(time.Now().In(berlinLoc))
 		if err != nil {
-			slog.Info(fmt.Sprintf("ERROR: Failed to build month-end participant ratings announcement: %v", err), slog.String("component", "cron"))
+			slog.Error(fmt.Sprintf("ERROR: Failed to build month-end participant ratings announcement: %v", err), slog.String("component", "cron"))
 			return
 		}
 		if !ok {
@@ -277,7 +277,7 @@ func main() {
 		}
 
 		if _, err := bot.API().Send(*msg); err != nil {
-			slog.Info(fmt.Sprintf("ERROR: Failed to send month-end participant ratings announcement to group %d: %v", dishGroupID, err), slog.String("component", "cron"))
+			slog.Error(fmt.Sprintf("ERROR: Failed to send month-end participant ratings announcement to group %d: %v", dishGroupID, err), slog.String("component", "cron"))
 			return
 		}
 
@@ -337,14 +337,14 @@ func main() {
 	slog.Info(fmt.Sprint("Initializing HTTP server on :8080..."))
 	dutySecret := getEnv("DUTY_SECRET", "")
 	if dutySecret == "" {
-		slog.Info(fmt.Sprint("WARNING: DUTY_SECRET is not set. The /who endpoint will return 503 until it is configured."))
+		slog.Warn(fmt.Sprint("WARNING: DUTY_SECRET is not set. The /who endpoint will return 503 until it is configured."))
 	}
 	router := httpserver.NewServer(store, telegramToken, dutySecret)
 
 	// Create HTTP server for graceful shutdown
 	srv := &http.Server{
-		Addr:    ":8080",
-		Handler: router,
+		Addr:		":8080",
+		Handler:	router,
 	}
 
 	// Start HTTP server in background
@@ -376,7 +376,7 @@ func main() {
 	defer shutdownCancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		slog.Info(fmt.Sprintf("HTTP server shutdown error: %v", err))
+		slog.Error(fmt.Sprintf("HTTP server shutdown error: %v", err))
 	}
 
 	// Stop Telegram bot

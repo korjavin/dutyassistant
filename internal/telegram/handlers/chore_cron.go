@@ -103,8 +103,8 @@ func (h *Handlers) assignRecurringChore(ctx context.Context, chore *store.Recurr
 
 	// 4. Weighted random assignment
 	type weightedUser struct {
-		user   *store.User
-		weight float64
+		user	*store.User
+		weight	float64
 	}
 
 	var weightedCandidates []weightedUser
@@ -178,11 +178,11 @@ func (h *Handlers) assignRecurringChore(ctx context.Context, chore *store.Recurr
 	reminderID := GenerateReminderID(selectedUser.TelegramUserID, time.Now())
 
 	dbChore := &store.Chore{
-		UserID:      selectedUser.ID,
-		Description: chore.Description,
-		AssignedAt:  time.Now(),
-		DeadlineAt:  deadline,
-		ReminderID:  reminderID,
+		UserID:		selectedUser.ID,
+		Description:	chore.Description,
+		AssignedAt:	time.Now(),
+		DeadlineAt:	deadline,
+		ReminderID:	reminderID,
 	}
 	if err := h.Store.CreateChore(ctx, dbChore); err != nil {
 		return fmt.Errorf("failed to save recurring chore to database: %v", err)
@@ -190,22 +190,22 @@ func (h *Handlers) assignRecurringChore(ctx context.Context, chore *store.Recurr
 
 	// 7. Send DM to assigned user and schedule reminder (Best Effort)
 	if h.ChoreReminderManager == nil {
-		slog.Info(fmt.Sprintf("Warning: DM reminders are disabled (bot API is not configured), skipping DM for %s", selectedUser.FirstName))
+		slog.Warn(fmt.Sprintf("Warning: DM reminders are disabled (bot API is not configured), skipping DM for %s", selectedUser.FirstName))
 		return nil
 	}
 
 	if selectedUser.TelegramUserID == 0 {
-		slog.Info(fmt.Sprintf("Warning: couldn't send DM: user %s is not registered in the bot yet", selectedUser.FirstName))
+		slog.Warn(fmt.Sprintf("Warning: couldn't send DM: user %s is not registered in the bot yet", selectedUser.FirstName))
 		return nil
 	}
 
 	assignment := &ChoreAssignment{
-		UserID:      selectedUser.TelegramUserID,
-		UserName:    selectedUser.FirstName,
-		Description: chore.Description,
-		AssignedAt:  time.Now(),
-		GroupID:     h.GroupID,
-		ReminderID:  reminderID,
+		UserID:		selectedUser.TelegramUserID,
+		UserName:	selectedUser.FirstName,
+		Description:	chore.Description,
+		AssignedAt:	time.Now(),
+		GroupID:	h.GroupID,
+		ReminderID:	reminderID,
 	}
 
 	if err := h.ChoreReminderManager.SendInitialDM(assignment); err != nil {
