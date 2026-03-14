@@ -26,12 +26,12 @@ This plan removes Go vendoring from the project, upgrades the Go version to 1.26
 - Modify: `go.mod`
 - Delete: `vendor/` directory
 
-- [ ] Update `go` version to `1.26.1` in `go.mod`
-- [ ] Update `toolchain` version to `go1.26.1` in `go.mod`
-- [ ] Delete the `vendor/` directory: `rm -rf vendor/`
-- [ ] Run `go mod tidy` to refresh `go.sum` and verify dependencies
-- [ ] Run `go build ./...` to ensure the project still compiles without vendoring
-- [ ] run project test suite - must pass before task 2
+- [x] Update `go` version to `1.26.1` in `go.mod`
+- [x] Update `toolchain` version to `go1.26.1` in `go.mod`
+- [x] Delete the `vendor/` directory: `rm -rf vendor/`
+- [x] Run `go mod tidy` to refresh `go.sum` and verify dependencies
+- [x] Run `go build ./...` to ensure the project still compiles without vendoring
+- [x] run project test suite - must pass before task 2
 
 ### Task 2: Update Docker Configuration
 
