@@ -110,7 +110,7 @@ func OptionalAuth(s store.Store, botToken string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
-			slog.Info(fmt.Sprint("No Authorization header present"), slog.String("component", "web_auth"))
+			slog.Info("No Authorization header present", slog.String("component", "web_auth"))
 			c.Next()
 			return
 		}

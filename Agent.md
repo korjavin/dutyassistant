@@ -672,3 +672,6 @@ The LLM client is configured via environment variables:
 - DeepSeek: `https://api.deepseek.com/v1`
 - Ollama: `http://localhost:11434/v1`
 - vLLM: `http://localhost:8000/v1`
+
+## PR Quality Checks
+All Pull Requests must pass the `quality` check workflow, which runs `golangci-lint` and the full test suite (`go test`).

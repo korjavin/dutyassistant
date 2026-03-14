@@ -317,15 +317,19 @@ func (m *mockStore) IsVacationMode(ctx context.Context) (bool, error) {
 func (m *mockStore) CreateRecurringChore(ctx context.Context, chore *store.RecurringChore) error {
 	return nil
 }
+
 func (m *mockStore) GetRecurringChore(ctx context.Context, id int64) (*store.RecurringChore, error) {
 	return nil, nil
 }
+
 func (m *mockStore) GetActiveRecurringChores(ctx context.Context) ([]*store.RecurringChore, error) {
 	return nil, nil
 }
+
 func (m *mockStore) GetDueRecurringChores(ctx context.Context, before time.Time) ([]*store.RecurringChore, error) {
 	return nil, nil
 }
+
 func (m *mockStore) UpdateRecurringChoreNextRun(ctx context.Context, id int64, nextRun time.Time) error {
 	return nil
 }
@@ -498,27 +502,35 @@ func TestScheduler_ChangeDutyUser_PastDate(t *testing.T) {
 		t.Fatal("Expected error when changing past duty, got nil")
 	}
 }
+
 func (m *mockStore) CreateChore(ctx context.Context, chore *store.Chore) error {
 	return nil
 }
+
 func (m *mockStore) GetChoreByReminderID(ctx context.Context, reminderID string) (*store.Chore, error) {
 	return nil, nil
 }
+
 func (m *mockStore) GetActiveChores(ctx context.Context) ([]*store.Chore, error) {
 	return nil, nil
 }
+
 func (m *mockStore) GetActiveChoresByUserID(ctx context.Context, userID int64) ([]*store.Chore, error) {
 	return nil, nil
 }
+
 func (m *mockStore) GetOverdueChores(ctx context.Context) ([]*store.Chore, error) {
 	return nil, nil
 }
+
 func (m *mockStore) CompleteChoreByReminderID(ctx context.Context, reminderID string) error {
 	return nil
 }
+
 func (m *mockStore) GetTopOverdueChores(ctx context.Context, limit int) ([]*store.ChoreStat, error) {
 	return nil, nil
 }
+
 func (m *mockStore) GetTopCompletedChoresUsers(ctx context.Context, limit int) ([]*store.UserChoreStat, error) {
 	return nil, nil
 }
@@ -530,12 +542,15 @@ func (m *mockStore) GetUserWeeklyStats(ctx context.Context, since time.Time) ([]
 func (m *mockStore) GetLastChoreDigestDate(ctx context.Context) (string, error) {
 	return "", nil
 }
+
 func (m *mockStore) CancelChore(ctx context.Context, id int64) (*store.Chore, error) {
 	return nil, nil
 }
+
 func (m *mockStore) ListActiveChores(ctx context.Context) ([]*store.Chore, error) {
 	return nil, nil
 }
+
 func (m *mockStore) SetLastChoreDigestDate(ctx context.Context, date string) error {
 	return nil
 }

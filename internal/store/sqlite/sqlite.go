@@ -126,12 +126,12 @@ func (s *SQLiteStore) migrate(ctx context.Context) error {
 
 	for _, alteration := range alterations {
 		// Ignore errors for columns that already exist
-		s.db.ExecContext(ctx, alteration)
+		_, _ = s.db.ExecContext(ctx, alteration)
 	}
 
 	// Clean up legacy uncompleted chores created before bug fix PR #53
 	// This removes chores generated erroneously by recurring tasks before the fix
-	s.db.ExecContext(ctx, `DELETE FROM chores WHERE completed_at IS NULL AND assigned_at < '2026-03-08'`)
+	_, _ = s.db.ExecContext(ctx, `DELETE FROM chores WHERE completed_at IS NULL AND assigned_at < '2026-03-08'`)
 
 	return nil
 }

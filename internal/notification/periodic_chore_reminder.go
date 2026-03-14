@@ -3,7 +3,7 @@ package notification
 import (
 	"context"
 	"log/slog"
-	"math/rand"
+	"math/rand/v2"
 	"time"
 
 	"github.com/korjavin/dutyassistant/internal/store"
@@ -48,6 +48,7 @@ func StartPeriodicChoreReminders(ctx context.Context, bot BotSender, s store.Sto
 // If the result is after 19:00, it advances to 16:00 next day + small random offset (0-30m).
 func nextReminderTime(now time.Time, loc *time.Location) time.Time {
 	// Random duration between 3 and 6 hours
+	//nolint:gosec // weak random is acceptable here for calculating reminders
 	randHours := 3 + rand.Float64()*3
 	next := now.Add(time.Duration(randHours * float64(time.Hour)))
 
@@ -56,13 +57,15 @@ func nextReminderTime(now time.Time, loc *time.Location) time.Time {
 
 	if hour < 16 {
 		// Advance to 16:00 same day + random minutes (0-30)
-		randMinutes := time.Duration(rand.Intn(30)) * time.Minute
+		//nolint:gosec // weak random is acceptable here
+		randMinutes := time.Duration(rand.IntN(30)) * time.Minute
 		return time.Date(year, month, day, 16, 0, 0, 0, loc).Add(randMinutes)
 	}
 
 	if hour >= 19 {
 		// Advance to 16:00 next day + 0-30 min random offset
-		randMinutes := time.Duration(rand.Intn(30)) * time.Minute
+		//nolint:gosec // weak random is acceptable here
+		randMinutes := time.Duration(rand.IntN(30)) * time.Minute
 		nextDay := next.AddDate(0, 0, 1)
 		return time.Date(nextDay.Year(), nextDay.Month(), nextDay.Day(), 16, 0, 0, 0, loc).Add(randMinutes)
 	}
