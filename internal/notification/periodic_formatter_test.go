@@ -10,10 +10,10 @@ import (
 )
 
 func TestFormatPeriodicChoreReminder_Empty(t *testing.T) {
-	msg := FormatPeriodicChoreReminder(nil)
+	msg := FormatPeriodicChoreReminder(nil, time.UTC)
 	assert.Empty(t, msg)
 
-	msg = FormatPeriodicChoreReminder([]*store.Chore{})
+	msg = FormatPeriodicChoreReminder([]*store.Chore{}, time.UTC)
 	assert.Empty(t, msg)
 }
 
@@ -26,7 +26,7 @@ func TestFormatPeriodicChoreReminder_SingleChore(t *testing.T) {
 		},
 	}
 
-	msg := FormatPeriodicChoreReminder(chores)
+	msg := FormatPeriodicChoreReminder(chores, time.UTC)
 	assert.NotEmpty(t, msg)
 	assert.True(t, strings.Contains(msg, "Just a gentle reminder, you've got some chores on your list 🧹"))
 	assert.True(t, strings.Contains(msg, "1. <b>Take out the trash</b> (Due: Mar 14, 15:30)"))
@@ -47,7 +47,7 @@ func TestFormatPeriodicChoreReminder_MultipleChores(t *testing.T) {
 		},
 	}
 
-	msg := FormatPeriodicChoreReminder(chores)
+	msg := FormatPeriodicChoreReminder(chores, time.UTC)
 	assert.NotEmpty(t, msg)
 	assert.True(t, strings.Contains(msg, "Just a gentle reminder, you've got some chores on your list 🧹"))
 	assert.True(t, strings.Contains(msg, "1. <b>Take out the trash</b> (Due: Mar 14, 15:30)"))
@@ -64,7 +64,25 @@ func TestFormatPeriodicChoreReminder_Escaping(t *testing.T) {
 		},
 	}
 
-	msg := FormatPeriodicChoreReminder(chores)
+	msg := FormatPeriodicChoreReminder(chores, time.UTC)
 	assert.NotEmpty(t, msg)
 	assert.True(t, strings.Contains(msg, "1. <b>Clean &lt;script&gt;alert(1)&lt;/script&gt; &amp; &lt;b&gt;tags&lt;/b&gt;</b>"))
+}
+
+func TestFormatPeriodicChoreReminder_TimezoneShift(t *testing.T) {
+	loc, _ := time.LoadLocation("Europe/Berlin") // UTC+1 or UTC+2
+
+	// Create a chore with a UTC deadline
+	deadline := time.Date(2026, 3, 14, 22, 59, 0, 0, time.UTC)
+	chores := []*store.Chore{
+		{
+			Description: "Timezone Test",
+			DeadlineAt:  deadline,
+		},
+	}
+
+	// In Berlin time (CET, UTC+1), 22:59 UTC on March 14, 2026 is 23:59 local time.
+	msg := FormatPeriodicChoreReminder(chores, loc)
+	assert.NotEmpty(t, msg)
+	assert.True(t, strings.Contains(msg, "1. <b>Timezone Test</b> (Due: Mar 14, 23:59)"))
 }

@@ -97,7 +97,7 @@ func sendChoreReminders(ctx context.Context, now time.Time, bot BotSender, s sto
 	}
 
 	for telegramID, list := range userChores {
-		msg := FormatPeriodicChoreReminder(list)
+		msg := FormatPeriodicChoreReminder(list, loc)
 		if msg == "" {
 			continue
 		}

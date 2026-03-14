@@ -4,14 +4,19 @@ import (
 	"fmt"
 	"html"
 	"strings"
+	"time"
 
 	"github.com/korjavin/dutyassistant/internal/store"
 )
 
 // FormatPeriodicChoreReminder produces a friendly HTML message listing a user's pending chores.
-func FormatPeriodicChoreReminder(chores []*store.Chore) string {
+func FormatPeriodicChoreReminder(chores []*store.Chore, loc *time.Location) string {
 	if len(chores) == 0 {
 		return ""
+	}
+
+	if loc == nil {
+		loc = time.UTC
 	}
 
 	var sb strings.Builder
@@ -20,7 +25,7 @@ func FormatPeriodicChoreReminder(chores []*store.Chore) string {
 	for i, chore := range chores {
 		deadlineStr := "no deadline"
 		if !chore.DeadlineAt.IsZero() {
-			deadlineStr = chore.DeadlineAt.Format("Jan 02, 15:04")
+			deadlineStr = chore.DeadlineAt.In(loc).Format("Jan 02, 15:04")
 		}
 
 		sb.WriteString(fmt.Sprintf("%d. <b>%s</b> (Due: %s)\n", i+1, html.EscapeString(chore.Description), deadlineStr))
