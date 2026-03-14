@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"html"
-	"log"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -28,18 +28,18 @@ const (
 // Admin is determined by matching the Telegram user ID against the ADMIN_ID env var.
 func (h *Handlers) checkAdmin(telegramUserID int64) (bool, error) {
 	if h.AdminID == 0 {
-		log.Printf("[checkAdmin] AdminID not configured (0), falling back to database flag for user %d", telegramUserID)
+		slog.Info(fmt.Sprintf("[checkAdmin] AdminID not configured (0), falling back to database flag for user %d", telegramUserID))
 		// Fallback to database flag if AdminID is not configured
 		user, err := h.Store.GetUserByTelegramID(context.Background(), telegramUserID)
 		if err != nil || user == nil {
-			log.Printf("[checkAdmin] User %d not found in database or error: %v", telegramUserID, err)
+			slog.Warn(fmt.Sprintf("[checkAdmin] User %d not found in database or error: %v", telegramUserID, err))
 			return false, err
 		}
-		log.Printf("[checkAdmin] User %d IsAdmin flag from database: %v", telegramUserID, user.IsAdmin)
+		slog.Info(fmt.Sprintf("[checkAdmin] User %d IsAdmin flag from database: %v", telegramUserID, user.IsAdmin))
 		return user.IsAdmin, nil
 	}
 	isAdmin := telegramUserID == h.AdminID
-	log.Printf("[checkAdmin] Configured AdminID=%d, User=%d, isAdmin=%v", h.AdminID, telegramUserID, isAdmin)
+	slog.Info(fmt.Sprintf("[checkAdmin] Configured AdminID=%d, User=%d, isAdmin=%v", h.AdminID, telegramUserID, isAdmin))
 	return isAdmin, nil
 }
 
@@ -297,7 +297,7 @@ func (h *Handlers) HandleUsers(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 	// Check vacation mode status
 	isVacation, err := h.Scheduler.IsVacationMode(context.Background())
 	if err != nil {
-		log.Printf("Warning: could not check vacation mode: %v", err)
+		slog.Warn(fmt.Sprintf("Warning: could not check vacation mode: %v", err))
 	}
 
 	now := TimeNow()
@@ -1038,7 +1038,7 @@ func (h *Handlers) HandleComplete(m *tgbotapi.Message) (tgbotapi.MessageConfig, 
 
 	chores, err := h.Store.GetActiveChores(context.Background())
 	if err != nil {
-		log.Printf("Failed to get active chores: %v", err)
+		slog.Error(fmt.Sprintf("Failed to get active chores: %v", err))
 		return tgbotapi.NewMessage(m.Chat.ID, "Failed to retrieve active chores."), nil
 	}
 
@@ -1110,7 +1110,7 @@ func (h *Handlers) HandleCompleteChoreCallback(q *tgbotapi.CallbackQuery) (tgbot
 	// Extract reminderID from callback data: "complete_chore:reminderID"
 	parts := strings.Split(q.Data, ":")
 	if len(parts) != 2 {
-		log.Printf("Invalid callback data format: %s", q.Data)
+		slog.Info(fmt.Sprintf("Invalid callback data format: %s", q.Data))
 		edit := tgbotapi.NewEditMessageText(
 			q.Message.Chat.ID,
 			q.Message.MessageID,
@@ -1133,7 +1133,7 @@ func (h *Handlers) HandleCompleteChoreCallback(q *tgbotapi.CallbackQuery) (tgbot
 	// Get chore by reminderID from database
 	chore, err := h.Store.GetChoreByReminderID(context.Background(), reminderID)
 	if err != nil {
-		log.Printf("Failed to get chore by reminderID %s: %v", reminderID, err)
+		slog.Error(fmt.Sprintf("Failed to get chore by reminderID %s: %v", reminderID, err))
 		edit := tgbotapi.NewEditMessageText(
 			q.Message.Chat.ID,
 			q.Message.MessageID,
@@ -1163,7 +1163,7 @@ func (h *Handlers) HandleCompleteChoreCallback(q *tgbotapi.CallbackQuery) (tgbot
 
 	// Mark as completed in database
 	if err := h.Store.CompleteChoreByReminderID(context.Background(), reminderID); err != nil {
-		log.Printf("Failed to complete chore in database: %v", err)
+		slog.Error(fmt.Sprintf("Failed to complete chore in database: %v", err))
 		edit := tgbotapi.NewEditMessageText(
 			q.Message.Chat.ID,
 			q.Message.MessageID,
@@ -1178,7 +1178,7 @@ func (h *Handlers) HandleCompleteChoreCallback(q *tgbotapi.CallbackQuery) (tgbot
 	// Send completion message to group (best-effort), but only after persistence succeeds
 	groupNotified := true
 	if err := h.ChoreReminderManager.SendCompletionToGroup(assignment); err != nil {
-		log.Printf("Failed to send completion message to group: %v", err)
+		slog.Error(fmt.Sprintf("Failed to send completion message to group: %v", err))
 		groupNotified = false
 	}
 

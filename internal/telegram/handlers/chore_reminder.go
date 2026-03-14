@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"html"
-	"log"
+	"log/slog"
 	"math/rand"
 	"sync"
 	"time"
@@ -73,7 +73,7 @@ func (crm *ChoreReminderManager) SendInitialDM(assignment *ChoreAssignment) erro
 	msg.ReplyMarkup = choreReminderKeyboard(assignment.ReminderID)
 
 	if _, err := crm.bot.Send(msg); err != nil {
-		log.Printf("Failed to send initial DM to user %s (%d): %v", assignment.UserName, assignment.UserID, err)
+		slog.Error(fmt.Sprintf("Failed to send initial DM to user %s (%d): %v", assignment.UserName, assignment.UserID, err))
 		// Don't store assignment if DM failed - prevents memory leak
 		return err
 	}
@@ -83,7 +83,7 @@ func (crm *ChoreReminderManager) SendInitialDM(assignment *ChoreAssignment) erro
 	crm.activeChores[assignment.ReminderID] = assignment
 	crm.mu.Unlock()
 
-	log.Printf("Sent initial DM to %s for chore: %s", assignment.UserName, assignment.Description)
+	slog.Info(fmt.Sprintf("Sent initial DM to %s for chore: %s", assignment.UserName, assignment.Description))
 
 	// Schedule reminder in 10 minutes
 	time.AfterFunc(10*time.Minute, func() {
@@ -100,12 +100,12 @@ func (crm *ChoreReminderManager) SendReminderWithButtons(reminderID string) {
 	crm.mu.RUnlock()
 
 	if !exists {
-		log.Printf("Chore assignment %s not found, possibly already completed", reminderID)
+		slog.Info(fmt.Sprintf("Chore assignment %s not found, possibly already completed", reminderID))
 		return
 	}
 
 	if crm.bot == nil {
-		log.Printf("Bot not configured, cannot send reminder")
+		slog.Info(fmt.Sprintf("Bot not configured, cannot send reminder"))
 		return
 	}
 
@@ -121,9 +121,9 @@ func (crm *ChoreReminderManager) SendReminderWithButtons(reminderID string) {
 	msg.ReplyMarkup = choreReminderKeyboard(reminderID)
 
 	if _, err := crm.bot.Send(msg); err != nil {
-		log.Printf("Failed to send reminder to user %d: %v", assignment.UserID, err)
+		slog.Error(fmt.Sprintf("Failed to send reminder to user %d: %v", assignment.UserID, err))
 	} else {
-		log.Printf("Sent reminder to user %s for chore: %s", assignment.UserName, assignment.Description)
+		slog.Info(fmt.Sprintf("Sent reminder to user %s for chore: %s", assignment.UserName, assignment.Description))
 	}
 }
 
@@ -143,7 +143,7 @@ func (crm *ChoreReminderManager) ScheduleReReminder(reminderID string) {
 	time.AfterFunc(15*time.Minute, func() {
 		crm.SendReminderWithButtons(reminderID)
 	})
-	log.Printf("Scheduled re-reminder for chore %s in 15 minutes", reminderID)
+	slog.Info(fmt.Sprintf("Scheduled re-reminder for chore %s in 15 minutes", reminderID))
 }
 
 // GetAssignment retrieves a chore assignment by ID
@@ -161,7 +161,7 @@ func (crm *ChoreReminderManager) CompleteChore(reminderID string) {
 	defer crm.mu.Unlock()
 
 	delete(crm.activeChores, reminderID)
-	log.Printf("Marked chore %s as completed", reminderID)
+	slog.Info(fmt.Sprintf("Marked chore %s as completed", reminderID))
 }
 
 // CancelChore removes a cancelled chore from active tracking
@@ -170,7 +170,7 @@ func (crm *ChoreReminderManager) CancelChore(reminderID string) {
 	defer crm.mu.Unlock()
 
 	delete(crm.activeChores, reminderID)
-	log.Printf("Removed cancelled chore %s from tracking", reminderID)
+	slog.Info(fmt.Sprintf("Removed cancelled chore %s from tracking", reminderID))
 }
 
 // SendCompletionToGroup sends a completion message to the group chat
@@ -180,7 +180,7 @@ func (crm *ChoreReminderManager) SendCompletionToGroup(assignment *ChoreAssignme
 	}
 
 	if assignment.GroupID == 0 {
-		log.Printf("No group configured for chore completion announcement")
+		slog.Info(fmt.Sprintf("No group configured for chore completion announcement"))
 		return nil
 	}
 
@@ -203,18 +203,18 @@ func (crm *ChoreReminderManager) SendCompletionToGroup(assignment *ChoreAssignme
 	msg.ParseMode = tgbotapi.ModeHTML
 
 	if _, err := crm.bot.Send(msg); err != nil {
-		log.Printf("Failed to send completion message to group %d: %v", assignment.GroupID, err)
+		slog.Error(fmt.Sprintf("Failed to send completion message to group %d: %v", assignment.GroupID, err))
 		return err
 	}
 
-	log.Printf("Sent completion message to group for chore: %s", assignment.Description)
+	slog.Info(fmt.Sprintf("Sent completion message to group for chore: %s", assignment.Description))
 	return nil
 }
 
 func (crm *ChoreReminderManager) loadActiveChores(db store.Store, groupID int64) {
 	chores, err := db.GetActiveChores(context.Background())
 	if err != nil {
-		log.Printf("Failed to load active chores from database: %v", err)
+		slog.Error(fmt.Sprintf("Failed to load active chores from database: %v", err))
 		return
 	}
 
@@ -233,5 +233,5 @@ func (crm *ChoreReminderManager) loadActiveChores(db store.Store, groupID int64)
 			}
 		}
 	}
-	log.Printf("Loaded %d active chores from database", len(crm.activeChores))
+	slog.Info(fmt.Sprintf("Loaded %d active chores from database", len(crm.activeChores)))
 }

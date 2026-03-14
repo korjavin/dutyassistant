@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"html"
-	"log"
+	"log/slog"
 	"math/rand"
 	"os"
 	"regexp"
@@ -37,7 +37,7 @@ func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 
 		chores, err := h.Store.GetActiveChoresByUserID(context.Background(), user.ID)
 		if err != nil {
-			log.Printf("Failed to get active chores for user %d: %v", user.ID, err)
+			slog.Error(fmt.Sprintf("Failed to get active chores for user %d: %v", user.ID, err))
 			return tgbotapi.NewMessage(m.Chat.ID, "Sorry, something went wrong while fetching your chores."), nil
 		}
 
@@ -103,7 +103,7 @@ func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 		}
 		loc, err := time.LoadLocation(tz)
 		if err != nil {
-			log.Printf("Failed to load %s location: %v", tz, err)
+			slog.Error(fmt.Sprintf("Failed to load %s location: %v", tz, err))
 			loc = time.Local
 		}
 
@@ -131,14 +131,14 @@ func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 		}
 
 		chore := &store.RecurringChore{
-			Description: description,
-			Interval:    intervalDays,
-			NextRunAt:   nextRun,
-			CreatedAt:   now,
+			Description:	description,
+			Interval:	intervalDays,
+			NextRunAt:	nextRun,
+			CreatedAt:	now,
 		}
 
 		if err := h.Store.CreateRecurringChore(context.Background(), chore); err != nil {
-			log.Printf("Failed to create recurring chore: %v", err)
+			slog.Error(fmt.Sprintf("Failed to create recurring chore: %v", err))
 			return tgbotapi.NewMessage(m.Chat.ID, "❌ Failed to create recurring chore."), nil
 		}
 
@@ -148,7 +148,7 @@ func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 			var err error
 			msgConfig, err = h.assignChore(m.Chat.ID, m.From.ID, description)
 			if err != nil {
-				log.Printf("Failed to assign initial recurring chore: %v", err)
+				slog.Error(fmt.Sprintf("Failed to assign initial recurring chore: %v", err))
 				return tgbotapi.NewMessage(m.Chat.ID, "❌ Recurring chore created, but failed to assign immediately."), nil
 			}
 		} else {
@@ -261,15 +261,15 @@ func (h *Handlers) assignChore(chatID int64, fromUserID int64, description strin
 	// Additional +2% chance for every pending admin assigned day
 
 	type weightedUser struct {
-		user   *store.User
-		weight float64
+		user	*store.User
+		weight	float64
 	}
 
 	var weightedCandidates []weightedUser
 	var totalWeight float64
 
-	log.Printf("[CHORE] Starting weighted selection for chore assignment")
-	log.Printf("[CHORE] Number of candidates after filtering: %d", len(candidates))
+	slog.Info(fmt.Sprintf("[CHORE] Starting weighted selection for chore assignment"))
+	slog.Info(fmt.Sprintf("[CHORE] Number of candidates after filtering: %d", len(candidates)))
 
 	for _, u := range candidates {
 		// Base weight
@@ -281,35 +281,35 @@ func (h *Handlers) assignChore(chatID int64, fromUserID int64, description strin
 
 		weightedCandidates = append(weightedCandidates, weightedUser{user: u, weight: weight})
 		totalWeight += weight
-		log.Printf("[CHORE] Candidate: %s (ID: %d) - AdminQueueDays: %d, Weight: %.3f",
-			u.FirstName, u.ID, u.AdminQueueDays, weight)
+		slog.Info(fmt.Sprintf("[CHORE] Candidate: %s (ID: %d) - AdminQueueDays: %d, Weight: %.3f",
+			u.FirstName, u.ID, u.AdminQueueDays, weight))
 	}
 
-	log.Printf("[CHORE] Total weight: %.3f", totalWeight)
+	slog.Info(fmt.Sprintf("[CHORE] Total weight: %.3f", totalWeight))
 
 	// Select user
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	target := r.Float64() * totalWeight
-	log.Printf("[CHORE] Random target value: %.3f (0 to %.3f)", target, totalWeight)
+	slog.Info(fmt.Sprintf("[CHORE] Random target value: %.3f (0 to %.3f)", target, totalWeight))
 
 	var selectedUser *store.User
 	currentWeight := 0.0
 	for i, wu := range weightedCandidates {
 		currentWeight += wu.weight
-		log.Printf("[CHORE] Step %d: Checking %s - cumulative weight: %.3f, target: %.3f",
-			i+1, wu.user.FirstName, currentWeight, target)
+		slog.Info(fmt.Sprintf("[CHORE] Step %d: Checking %s - cumulative weight: %.3f, target: %.3f",
+			i+1, wu.user.FirstName, currentWeight, target))
 		if target < currentWeight {
 			selectedUser = wu.user
-			log.Printf("[CHORE] ✓ Selected: %s (ID: %d)", selectedUser.FirstName, selectedUser.ID)
+			slog.Info(fmt.Sprintf("[CHORE] ✓ Selected: %s (ID: %d)", selectedUser.FirstName, selectedUser.ID))
 			break
 		}
 	}
 	// Fallback (should not happen mathematically if totalWeight > 0)
 	if selectedUser == nil && len(candidates) > 0 {
-		log.Printf("[CHORE] WARNING: Fallback selection triggered (this should not happen)")
+		slog.Warn(fmt.Sprintf("[CHORE] WARNING: Fallback selection triggered (this should not happen)"))
 		// Just pick randomly
 		selectedUser = candidates[r.Intn(len(candidates))]
-		log.Printf("[CHORE] Fallback selected: %s (ID: %d)", selectedUser.FirstName, selectedUser.ID)
+		slog.Info(fmt.Sprintf("[CHORE] Fallback selected: %s (ID: %d)", selectedUser.FirstName, selectedUser.ID))
 	}
 
 	if selectedUser == nil {
@@ -337,7 +337,7 @@ func (h *Handlers) assignChore(chatID int64, fromUserID int64, description strin
 				groupMsg := tgbotapi.NewMessage(h.GroupID, groupText)
 				groupMsg.ParseMode = tgbotapi.ModeHTML
 				if _, err := h.Bot.Send(groupMsg); err != nil {
-					log.Printf("Failed to send chore announcement to group %d: %v", h.GroupID, err)
+					slog.Error(fmt.Sprintf("Failed to send chore announcement to group %d: %v", h.GroupID, err))
 					responseMsg.Text += "\n\n⚠️ Failed to announce in group."
 				} else {
 					responseMsg.Text += "\n\n📢 Announced in group."
@@ -381,29 +381,29 @@ func (h *Handlers) assignChore(chatID int64, fromUserID int64, description strin
 	reminderID := GenerateReminderID(selectedUser.TelegramUserID, time.Now())
 
 	chore := &store.Chore{
-		UserID:      selectedUser.ID,
-		Description: description,
-		AssignedAt:  time.Now(),
-		DeadlineAt:  deadline,
-		ReminderID:  reminderID,
+		UserID:		selectedUser.ID,
+		Description:	description,
+		AssignedAt:	time.Now(),
+		DeadlineAt:	deadline,
+		ReminderID:	reminderID,
 	}
 	if err := h.Store.CreateChore(context.Background(), chore); err != nil {
-		log.Printf("Failed to create chore in database: %v", err)
+		slog.Error(fmt.Sprintf("Failed to create chore in database: %v", err))
 		responseMsg.Text += "\n\n⚠️ Failed to save chore to database."
 		return responseMsg, nil
 	}
 	assignment := &ChoreAssignment{
-		UserID:      selectedUser.TelegramUserID,
-		UserName:    selectedUser.FirstName,
-		Description: description, // Store unescaped
-		AssignedAt:  time.Now(),
-		GroupID:     h.GroupID,
-		ReminderID:  reminderID,
+		UserID:		selectedUser.TelegramUserID,
+		UserName:	selectedUser.FirstName,
+		Description:	description,	// Store unescaped
+		AssignedAt:	time.Now(),
+		GroupID:	h.GroupID,
+		ReminderID:	reminderID,
 	}
 
 	// SendInitialDM now handles storage internally only on success
 	if err := h.ChoreReminderManager.SendInitialDM(assignment); err != nil {
-		log.Printf("Failed to send DM to user %s: %v", selectedUser.FirstName, err)
+		slog.Error(fmt.Sprintf("Failed to send DM to user %s: %v", selectedUser.FirstName, err))
 		errText := strings.ToLower(err.Error())
 		if strings.Contains(errText, "forbidden") || strings.Contains(errText, "bot can't initiate conversation") {
 			responseMsg.Text += "\n\n⚠️ Failed to send DM: user must start a private chat with the bot first (/start)."

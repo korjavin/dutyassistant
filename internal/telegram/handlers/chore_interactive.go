@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"html"
-	"log"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -46,7 +46,7 @@ func (h *Handlers) HandleChoreActionCallback(q *tgbotapi.CallbackQuery) (tgbotap
 func (h *Handlers) handleChoreListInteractive(q *tgbotapi.CallbackQuery) (tgbotapi.Chattable, error) {
 	chores, err := h.Store.ListActiveChores(context.Background())
 	if err != nil {
-		log.Printf("Error fetching chores: %v", err)
+		slog.Error(fmt.Sprintf("Error fetching chores: %v", err))
 		editMsg := tgbotapi.NewEditMessageText(q.Message.Chat.ID, q.Message.MessageID, "❌ Failed to fetch active chores.")
 		editMsg.ReplyMarkup = nil
 		return editMsg, nil
@@ -54,7 +54,7 @@ func (h *Handlers) handleChoreListInteractive(q *tgbotapi.CallbackQuery) (tgbota
 
 	rChores, err := h.Store.GetActiveRecurringChores(context.Background())
 	if err != nil {
-		log.Printf("Error fetching recurring chores: %v", err)
+		slog.Error(fmt.Sprintf("Error fetching recurring chores: %v", err))
 		editMsg := tgbotapi.NewEditMessageText(q.Message.Chat.ID, q.Message.MessageID, "❌ Failed to fetch recurring chores.")
 		editMsg.ReplyMarkup = nil
 		return editMsg, nil
@@ -217,7 +217,7 @@ func (h *Handlers) HandleChoreDeleteConfirmCallback(q *tgbotapi.CallbackQuery) (
 
 	msgText := "✅ Chore deleted successfully."
 	if actionErr != nil {
-		log.Printf("Error deleting chore %s: %v", choreIDStr, actionErr)
+		slog.Error(fmt.Sprintf("Error deleting chore %s: %v", choreIDStr, actionErr))
 		msgText = "❌ Failed to delete chore."
 	}
 

@@ -3,7 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -16,13 +16,13 @@ import (
 func (h *Handlers) HandleCancelInteractive(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
 	chores, err := h.Store.ListActiveChores(context.Background())
 	if err != nil {
-		log.Printf("Failed to get active chores for cancel menu: %v", err)
+		slog.Error(fmt.Sprintf("Failed to get active chores for cancel menu: %v", err))
 		return tgbotapi.NewMessage(m.Chat.ID, "❌ Failed to load items to cancel."), nil
 	}
 
 	rChores, err := h.Store.GetActiveRecurringChores(context.Background())
 	if err != nil {
-		log.Printf("Failed to get active recurring chores for cancel menu: %v", err)
+		slog.Error(fmt.Sprintf("Failed to get active recurring chores for cancel menu: %v", err))
 		return tgbotapi.NewMessage(m.Chat.ID, "❌ Failed to load items to cancel."), nil
 	}
 
@@ -194,7 +194,7 @@ func (h *Handlers) HandleCancelAssignmentConfirmCallback(q *tgbotapi.CallbackQue
 	}
 
 	if actionErr != nil {
-		log.Printf("Error cancelling item %s: %v", idStr, actionErr)
+		slog.Error(fmt.Sprintf("Error cancelling item %s: %v", idStr, actionErr))
 		msgText = "❌ Failed to cancel the item."
 	}
 

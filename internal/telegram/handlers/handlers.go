@@ -2,7 +2,8 @@ package handlers
 
 import (
 	"context"
-	"log"
+	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 	"unicode"
@@ -72,7 +73,7 @@ func (h *Handlers) translateIfNonLatin(ctx context.Context, description string) 
 
 	translated, err := h.LLMClient.TranslateToEnglish(ctx, description)
 	if err != nil {
-		log.Printf("translateIfNonLatin failed: %v", err)
+		slog.Error(fmt.Sprintf("translateIfNonLatin failed: %v", err))
 		return description
 	}
 

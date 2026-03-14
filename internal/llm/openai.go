@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"regexp"
 	"strings"
@@ -145,13 +145,13 @@ func (c *Client) TranslateToEnglish(ctx context.Context, text string) (string, e
 
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
-		log.Printf("LLM TranslateToEnglish JSON marshal error: %v", err)
+		slog.Error(fmt.Sprintf("LLM TranslateToEnglish JSON marshal error: %v", err))
 		return text, err
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/chat/completions", bytes.NewBuffer(jsonBody))
 	if err != nil {
-		log.Printf("LLM TranslateToEnglish NewRequest error: %v", err)
+		slog.Error(fmt.Sprintf("LLM TranslateToEnglish NewRequest error: %v", err))
 		return text, err
 	}
 
@@ -160,7 +160,7 @@ func (c *Client) TranslateToEnglish(ctx context.Context, text string) (string, e
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		log.Printf("LLM TranslateToEnglish Do error: %v", err)
+		slog.Error(fmt.Sprintf("LLM TranslateToEnglish Do error: %v", err))
 		return text, err
 	}
 	defer resp.Body.Close()
@@ -168,19 +168,19 @@ func (c *Client) TranslateToEnglish(ctx context.Context, text string) (string, e
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		err := fmt.Errorf("LLM TranslateToEnglish non-200 status: %d, body: %s", resp.StatusCode, string(bodyBytes))
-		log.Println(err.Error())
+		slog.Error(fmt.Sprint(err.Error()))
 		return text, err
 	}
 
 	var chatResp chatResponse
 	if err := json.NewDecoder(resp.Body).Decode(&chatResp); err != nil {
-		log.Printf("LLM TranslateToEnglish decode error: %v", err)
+		slog.Error(fmt.Sprintf("LLM TranslateToEnglish decode error: %v", err))
 		return text, err
 	}
 
 	if len(chatResp.Choices) == 0 {
 		err := fmt.Errorf("LLM TranslateToEnglish no choices returned")
-		log.Println(err.Error())
+		slog.Error(fmt.Sprint(err.Error()))
 		return text, err
 	}
 
@@ -218,13 +218,13 @@ If formatting text, ONLY use Telegram-supported HTML tags (<b>, <i>, <a>, <code>
 
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
-		log.Printf("LLM RefineMessage JSON marshal error: %v", err)
+		slog.Error(fmt.Sprintf("LLM RefineMessage JSON marshal error: %v", err))
 		return vanilla
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/chat/completions", bytes.NewBuffer(jsonBody))
 	if err != nil {
-		log.Printf("LLM RefineMessage NewRequest error: %v", err)
+		slog.Error(fmt.Sprintf("LLM RefineMessage NewRequest error: %v", err))
 		return vanilla
 	}
 
@@ -233,25 +233,25 @@ If formatting text, ONLY use Telegram-supported HTML tags (<b>, <i>, <a>, <code>
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		log.Printf("LLM RefineMessage Do error: %v", err)
+		slog.Error(fmt.Sprintf("LLM RefineMessage Do error: %v", err))
 		return vanilla
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		log.Printf("LLM RefineMessage non-200 status: %d, body: %s", resp.StatusCode, string(bodyBytes))
+		slog.Info(fmt.Sprintf("LLM RefineMessage non-200 status: %d, body: %s", resp.StatusCode, string(bodyBytes)))
 		return vanilla
 	}
 
 	var chatResp chatResponse
 	if err := json.NewDecoder(resp.Body).Decode(&chatResp); err != nil {
-		log.Printf("LLM RefineMessage decode error: %v", err)
+		slog.Error(fmt.Sprintf("LLM RefineMessage decode error: %v", err))
 		return vanilla
 	}
 
 	if len(chatResp.Choices) == 0 {
-		log.Printf("LLM RefineMessage no choices returned")
+		slog.Info(fmt.Sprintf("LLM RefineMessage no choices returned"))
 		return vanilla
 	}
 

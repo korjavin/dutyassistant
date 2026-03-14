@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"html"
-	"log"
+	"log/slog"
 	"math/rand"
 	"os"
 	"time"
@@ -16,7 +16,7 @@ import (
 // ProcessRecurringChores fetches all due recurring chores and assigns them.
 // It should be called periodically by the cron scheduler.
 func (h *Handlers) ProcessRecurringChores(ctx context.Context) error {
-	log.Printf("[CRON] Starting ProcessRecurringChores")
+	slog.Info(fmt.Sprintf("[CRON] Starting ProcessRecurringChores"))
 
 	berlinLoc, err := time.LoadLocation("Europe/Berlin")
 	if err != nil {
@@ -30,18 +30,18 @@ func (h *Handlers) ProcessRecurringChores(ctx context.Context) error {
 	}
 
 	if len(dueChores) == 0 {
-		log.Printf("[CRON] No recurring chores are due.")
+		slog.Info(fmt.Sprintf("[CRON] No recurring chores are due."))
 		return nil
 	}
 
-	log.Printf("[CRON] Found %d due recurring chores.", len(dueChores))
+	slog.Info(fmt.Sprintf("[CRON] Found %d due recurring chores.", len(dueChores)))
 
 	for _, chore := range dueChores {
-		log.Printf("[CRON] Processing recurring chore %d: %s", chore.ID, chore.Description)
+		slog.Info(fmt.Sprintf("[CRON] Processing recurring chore %d: %s", chore.ID, chore.Description))
 
 		err := h.assignRecurringChore(ctx, chore)
 		if err != nil {
-			log.Printf("[CRON] ERROR: Failed to assign recurring chore %d: %v", chore.ID, err)
+			slog.Error(fmt.Sprintf("[CRON] ERROR: Failed to assign recurring chore %d: %v", chore.ID, err))
 			// Do not update nextRunAt so it retries next time
 			continue
 		}
@@ -56,9 +56,9 @@ func (h *Handlers) ProcessRecurringChores(ctx context.Context) error {
 		}
 
 		if err := h.Store.UpdateRecurringChoreNextRun(ctx, chore.ID, newNextRun); err != nil {
-			log.Printf("[CRON] ERROR: Failed to update next_run_at for chore %d: %v", chore.ID, err)
+			slog.Error(fmt.Sprintf("[CRON] ERROR: Failed to update next_run_at for chore %d: %v", chore.ID, err))
 		} else {
-			log.Printf("[CRON] Successfully scheduled recurring chore %d for next run at %s", chore.ID, newNextRun.Format("2006-01-02 15:04 MST"))
+			slog.Info(fmt.Sprintf("[CRON] Successfully scheduled recurring chore %d for next run at %s", chore.ID, newNextRun.Format("2006-01-02 15:04 MST")))
 		}
 	}
 
@@ -103,8 +103,8 @@ func (h *Handlers) assignRecurringChore(ctx context.Context, chore *store.Recurr
 
 	// 4. Weighted random assignment
 	type weightedUser struct {
-		user   *store.User
-		weight float64
+		user	*store.User
+		weight	float64
 	}
 
 	var weightedCandidates []weightedUser
@@ -153,14 +153,14 @@ func (h *Handlers) assignRecurringChore(ctx context.Context, chore *store.Recurr
 		groupMsg := tgbotapi.NewMessage(h.GroupID, groupText)
 		groupMsg.ParseMode = tgbotapi.ModeHTML
 		if _, err := h.Bot.Send(groupMsg); err != nil {
-			log.Printf("Failed to send recurring chore announcement to group %d: %v", h.GroupID, err)
+			slog.Error(fmt.Sprintf("Failed to send recurring chore announcement to group %d: %v", h.GroupID, err))
 		} else {
-			log.Printf("Announced recurring chore in group.")
+			slog.Info(fmt.Sprintf("Announced recurring chore in group."))
 		}
 	} else if h.GroupID == 0 {
-		log.Printf("No group configured to announce recurring chore.")
+		slog.Info(fmt.Sprintf("No group configured to announce recurring chore."))
 	} else if h.Bot == nil {
-		log.Printf("Bot API not available for group announcement.")
+		slog.Info(fmt.Sprintf("Bot API not available for group announcement."))
 	}
 
 	// 6. Save chore to database to be visible in web UI and loaded on restart
@@ -178,11 +178,11 @@ func (h *Handlers) assignRecurringChore(ctx context.Context, chore *store.Recurr
 	reminderID := GenerateReminderID(selectedUser.TelegramUserID, time.Now())
 
 	dbChore := &store.Chore{
-		UserID:      selectedUser.ID,
-		Description: chore.Description,
-		AssignedAt:  time.Now(),
-		DeadlineAt:  deadline,
-		ReminderID:  reminderID,
+		UserID:		selectedUser.ID,
+		Description:	chore.Description,
+		AssignedAt:	time.Now(),
+		DeadlineAt:	deadline,
+		ReminderID:	reminderID,
 	}
 	if err := h.Store.CreateChore(ctx, dbChore); err != nil {
 		return fmt.Errorf("failed to save recurring chore to database: %v", err)
@@ -190,26 +190,26 @@ func (h *Handlers) assignRecurringChore(ctx context.Context, chore *store.Recurr
 
 	// 7. Send DM to assigned user and schedule reminder (Best Effort)
 	if h.ChoreReminderManager == nil {
-		log.Printf("Warning: DM reminders are disabled (bot API is not configured), skipping DM for %s", selectedUser.FirstName)
+		slog.Warn(fmt.Sprintf("Warning: DM reminders are disabled (bot API is not configured), skipping DM for %s", selectedUser.FirstName))
 		return nil
 	}
 
 	if selectedUser.TelegramUserID == 0 {
-		log.Printf("Warning: couldn't send DM: user %s is not registered in the bot yet", selectedUser.FirstName)
+		slog.Warn(fmt.Sprintf("Warning: couldn't send DM: user %s is not registered in the bot yet", selectedUser.FirstName))
 		return nil
 	}
 
 	assignment := &ChoreAssignment{
-		UserID:      selectedUser.TelegramUserID,
-		UserName:    selectedUser.FirstName,
-		Description: chore.Description,
-		AssignedAt:  time.Now(),
-		GroupID:     h.GroupID,
-		ReminderID:  reminderID,
+		UserID:		selectedUser.TelegramUserID,
+		UserName:	selectedUser.FirstName,
+		Description:	chore.Description,
+		AssignedAt:	time.Now(),
+		GroupID:	h.GroupID,
+		ReminderID:	reminderID,
 	}
 
 	if err := h.ChoreReminderManager.SendInitialDM(assignment); err != nil {
-		log.Printf("Warning: failed to send initial DM to user %s: %v", selectedUser.FirstName, err)
+		slog.Warn(fmt.Sprintf("Warning: failed to send initial DM to user %s: %v", selectedUser.FirstName, err))
 		// We still consider the assignment successful even if the DM fails
 	}
 

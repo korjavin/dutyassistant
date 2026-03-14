@@ -2,7 +2,8 @@ package middleware
 
 import (
 	"context"
-	"log"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -109,46 +110,46 @@ func OptionalAuth(s store.Store, botToken string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
-			log.Println("[WEB_AUTH] No Authorization header present")
+			slog.Info(fmt.Sprint("No Authorization header present"), slog.String("component", "web_auth"))
 			c.Next()
 			return
 		}
 
-		log.Printf("[WEB_AUTH] Authorization header received (length: %d)", len(authHeader))
+		slog.Info(fmt.Sprintf("Authorization header received (length: %d)", len(authHeader)), slog.String("component", "web_auth"))
 
 		parts := strings.Split(authHeader, " ")
 		if len(parts) != 2 || strings.ToLower(parts[0]) != "tma" {
-			log.Printf("[WEB_AUTH] Invalid auth format: parts=%d, scheme=%s", len(parts), parts[0])
+			slog.Warn(fmt.Sprintf("Invalid auth format: parts=%d, scheme=%s", len(parts), parts[0]), slog.String("component", "web_auth"))
 			c.Next()
 			return
 		}
 
 		initData := parts[1]
-		log.Printf("[WEB_AUTH] Validating initData (length: %d)", len(initData))
+		slog.Info(fmt.Sprintf("Validating initData (length: %d)", len(initData)), slog.String("component", "web_auth"))
 
 		if err := initdata.Validate(initData, botToken, 0); err != nil {
-			log.Printf("[WEB_AUTH] Validation failed: %v", err)
+			slog.Error(fmt.Sprintf("Validation failed: %v", err), slog.String("component", "web_auth"))
 			c.Next()
 			return
 		}
 
 		data, err := initdata.Parse(initData)
 		if err != nil || data.User.ID == 0 {
-			log.Printf("[WEB_AUTH] Parse failed or invalid user ID: err=%v, userID=%d", err, data.User.ID)
+			slog.Error(fmt.Sprintf("Parse failed or invalid user ID: err=%v, userID=%d", err, data.User.ID), slog.String("component", "web_auth"))
 			c.Next()
 			return
 		}
 
-		log.Printf("[WEB_AUTH] Parsed successfully, user ID: %d", data.User.ID)
+		slog.Info(fmt.Sprintf("Parsed successfully, user ID: %d", data.User.ID), slog.String("component", "web_auth"))
 
 		user, err := s.GetUserByTelegramID(c.Request.Context(), data.User.ID)
 		if err != nil || user == nil {
-			log.Printf("[WEB_AUTH] User lookup failed: err=%v, found=%v", err, user != nil)
+			slog.Error(fmt.Sprintf("User lookup failed: err=%v, found=%v", err, user != nil), slog.String("component", "web_auth"))
 			c.Next()
 			return
 		}
 
-		log.Printf("[WEB_AUTH] User authenticated: ID=%d, Name=%s, IsActive=%v", user.ID, user.FirstName, user.IsActive)
+		slog.Info(fmt.Sprintf("User authenticated: ID=%d, Name=%s, IsActive=%v", user.ID, user.FirstName, user.IsActive), slog.String("component", "web_auth"))
 
 		// Store user in context if found
 		ctx := context.WithValue(c.Request.Context(), UserKey, user)

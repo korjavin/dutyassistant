@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -11,9 +11,9 @@ import (
 )
 
 type choreItem struct {
-	Description string `json:"description"`
-	DeadlineAt  string `json:"deadline_at"`
-	Assignee    string `json:"assignee"`
+	Description	string	`json:"description"`
+	DeadlineAt	string	`json:"deadline_at"`
+	Assignee	string	`json:"assignee"`
 }
 
 // TimeNow is exposed for testing
@@ -58,28 +58,28 @@ func GetWho(s store.Store) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		duty, err := s.GetTodaysDuty(c.Request.Context())
 		if err != nil {
-			log.Printf("[WHO] Failed to get today's duty: %v", err)
+			slog.Error(fmt.Sprintf("[WHO] Failed to get today's duty: %v", err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve duty information"})
 			return
 		}
 
 		chores, err := s.GetActiveChores(c.Request.Context())
 		if err != nil {
-			log.Printf("[WHO] Failed to get active chores: %v", err)
+			slog.Error(fmt.Sprintf("[WHO] Failed to get active chores: %v", err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve active chores"})
 			return
 		}
 
-		choreItems := make([]choreItem, 0) // ensure it marshals to [] instead of null
+		choreItems := make([]choreItem, 0)	// ensure it marshals to [] instead of null
 		for _, chore := range chores {
 			assignee := ""
 			if chore.User != nil {
 				assignee = chore.User.FirstName
 			}
 			choreItems = append(choreItems, choreItem{
-				Description: chore.Description,
-				DeadlineAt:  formatRelativeDate(chore.DeadlineAt),
-				Assignee:    assignee,
+				Description:	chore.Description,
+				DeadlineAt:	formatRelativeDate(chore.DeadlineAt),
+				Assignee:	assignee,
 			})
 		}
 
@@ -89,8 +89,8 @@ func GetWho(s store.Store) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{
-			"name":   name,
-			"chores": choreItems,
+			"name":		name,
+			"chores":	choreItems,
 		})
 	}
 }
