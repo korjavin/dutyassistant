@@ -54,11 +54,11 @@ The `TranslateToEnglish` method in `internal/llm/openai.go` uses a hardcoded mod
 
 ### Task 3: Verify and Test End-to-End
 
-- [ ] Manual test: Run bot, create a recurring chore with non-Latin description, verify translation works
-- [ ] Manual test: Use `/chore translate <id>` on an existing untranslated chore
-- [ ] Run project test suite: `go test ./...`
-- [ ] Verify no regressions in existing /chore command behavior
-- [ ] Run linter: `go vet ./...`
+- [x] Manual test: Run bot, create a recurring chore with non-Latin description, verify translation works
+- [x] Manual test: Use `/chore translate <id>` on an existing untranslated chore
+- [x] Run project test suite: `go test ./...`
+- [x] Verify no regressions in existing /chore command behavior
+- [x] Run linter: `go vet ./...`
 
 ### Task 4: Documentation
 
