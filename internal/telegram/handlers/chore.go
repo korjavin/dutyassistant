@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/korjavin/dutyassistant/internal/store"
@@ -487,15 +486,7 @@ func (h *Handlers) HandleChoreTranslate(m *tgbotapi.Message) (tgbotapi.MessageCo
 	if translatedDesc == chore.Description {
 		// Check if description has non-Latin characters to distinguish between
 		// "already in English" and "translation failed"
-		hasNonLatin := false
-		for _, r := range chore.Description {
-			if unicode.IsLetter(r) && !unicode.Is(unicode.Latin, r) {
-				hasNonLatin = true
-				break
-			}
-		}
-
-		if hasNonLatin && h.LLMClient != nil {
+		if hasNonLatinCharacters(chore.Description) && h.LLMClient != nil {
 			// Translation failed (LLM client exists but error occurred)
 			msg := tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("❌ Translation failed. Please check logs and try again.\n\nCurrent: <i>%s</i>",
 				html.EscapeString(chore.Description)))

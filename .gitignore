@@ -4,6 +4,7 @@
 *.dll
 *.so
 *.dylib
+*.test
 /roster-bot
 
 # Dependency directories
