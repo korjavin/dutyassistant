@@ -41,7 +41,7 @@ func TestTranslateIfNonLatin(t *testing.T) {
 	server := httptest.NewServer(mockHandler)
 	defer server.Close()
 
-	llmClient := llm.NewClient("test-key", server.URL, 10)
+	llmClient := llm.NewClient("test-key", server.URL, 10, "gpt-3.5-turbo", nil)
 	mockStore := new(mocks.MockStore)
 
 	h := NewWithAdminID(mockStore, nil, 0, 123, llmClient)
@@ -105,7 +105,7 @@ func TestTranslateIfNonLatin_ErrorHandling(t *testing.T) {
 	}))
 	defer errorServer.Close()
 
-	llmClient := llm.NewClient("test-key", errorServer.URL, 10)
+	llmClient := llm.NewClient("test-key", errorServer.URL, 10, "gpt-3.5-turbo", nil)
 	mockStore := new(mocks.MockStore)
 
 	h := NewWithAdminID(mockStore, nil, 0, 123, llmClient)
@@ -124,7 +124,7 @@ func TestTranslateIfNonLatin_TimeoutHandling(t *testing.T) {
 	}))
 	defer timeoutServer.Close()
 
-	llmClient := llm.NewClient("test-key", timeoutServer.URL, 1)
+	llmClient := llm.NewClient("test-key", timeoutServer.URL, 1, "gpt-3.5-turbo", nil)
 	mockStore := new(mocks.MockStore)
 
 	h := NewWithAdminID(mockStore, nil, 0, 123, llmClient)

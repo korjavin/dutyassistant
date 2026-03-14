@@ -197,6 +197,10 @@ func TestHandleMessage_DailyRatingsSession(t *testing.T) {
 		return len(ratings) == 2 && ratings[0].Score == 4 && ratings[1].Score == 5
 	})).Return(nil).Once()
 
+	originalTimeNow := handlers.TimeNow
+	handlers.TimeNow = func() time.Time { return ratingDate }
+	defer func() { handlers.TimeNow = originalTimeNow }()
+
 	_, err := h.StartDailyRatingsSession(100, 123, ratingDate)
 	assert.NoError(t, err)
 
