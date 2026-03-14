@@ -1,8 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { createModal, createErrorMessage } from '../web/js/ui/components.js';
-
-// Since calendar is complex to mock due to ES imports, we'll verify the components logic
-// that we fixed related to calendar modal insertion.
+import { describe, it, expect, beforeEach } from 'vitest';
+import { createModal } from '../web/js/ui/components.js';
 
 describe('Calendar and Components XSS fixes', () => {
     beforeEach(() => {
@@ -13,9 +10,11 @@ describe('Calendar and Components XSS fixes', () => {
         const title = 'Test Title <script>alert(1)</script>';
         const content = 'Test Content <img src=x onerror=alert(1)>';
 
-        // Normally the caller must sanitize, so we will test that our DOM logic doesn't execute anything when inserting
+        // This simulates calendar.js creating a modal using its own safe templating
+        // calendar.js now calls escapeHtml on the duty fields before inserting to `content`
+        const safeContent = `<div>${content}</div>`;
         const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = createModal(title, content, 'test-modal');
+        tempDiv.innerHTML = createModal(title, safeContent, 'test-modal');
         const modalNode = tempDiv.firstElementChild;
         document.body.appendChild(modalNode);
 

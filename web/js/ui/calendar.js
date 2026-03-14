@@ -1,7 +1,7 @@
 import VanillaCalendar from '/vendor/vanilla-calendar/vanilla-calendar.min.js';
 import { getSchedule, getPrognosis, volunteerForDuty, withdrawFromDuty } from '../api.js';
 import { getState, setState } from '../store.js';
-import { createDutyCard, createModal, showModal, createLoadingSpinner, createErrorMessage, hideModal } from './components.js';
+import { createDutyCard, createModal, showModal, createLoadingSpinner, createErrorMessage, hideModal, escapeHtml } from './components.js';
 
 const calendarContainer = document.getElementById('calendar-container');
 let calendar;
@@ -206,9 +206,9 @@ function renderCalendar(scheduleData = {}, prognosisData = {}) {
                 if (dutiesByDate[date]) {
                     const duties = dutiesByDate[date];
                     const content = duties.map(duty => `
-                        <div class="p-3 mb-2 border rounded ${duty.typeClass}">
-                            <div class="font-bold">${duty.displayName}</div>
-                            <div class="text-sm text-gray-600">${duty.assignment_type}</div>
+                        <div class="p-3 mb-2 border rounded ${escapeHtml(duty.typeClass)}">
+                            <div class="font-bold">${escapeHtml(duty.displayName)}</div>
+                            <div class="text-sm text-gray-600">${escapeHtml(duty.assignment_type)}</div>
                         </div>
                     `).join('');
                     const modalId = 'duty-details-modal';
