@@ -62,5 +62,5 @@ The `TranslateToEnglish` method in `internal/llm/openai.go` uses a hardcoded mod
 
 ### Task 4: Documentation
 
-- [ ] Update README.md if user-facing changes need documentation (optional - command is self-explanatory)
-- [ ] Move this plan to `docs/plans/completed/`
+- [x] Update README.md if user-facing changes need documentation (optional - command is self-explanatory)
+- [x] Move this plan to `docs/plans/completed/`
