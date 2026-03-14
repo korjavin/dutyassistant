@@ -203,6 +203,7 @@ func (s *Scheduler) selectUserWithBalancing(ctx context.Context, users []*store.
 	}
 
 	// Randomly select from users with max queue count for fairness
+	/* #nosec G404 */
 	return maxQueueUsers[rand.IntN(len(maxQueueUsers))]
 }
 
@@ -227,6 +228,7 @@ func (s *Scheduler) selectRoundRobinUser(ctx context.Context, users []*store.Use
 	duties, err := s.store.GetCompletedDutiesInRange(ctx, start, today)
 	if err != nil {
 		// If error, randomize selection among all available users
+		/* #nosec G404 */
 		return users[rand.IntN(len(users))]
 	}
 
@@ -258,9 +260,10 @@ func (s *Scheduler) selectRoundRobinUser(ctx context.Context, users []*store.Use
 
 	// Randomly select from candidates for fairness
 	if len(candidateUsers) == 0 {
-		return users[rand.IntN(len(users))]
+		/* #nosec G404 */ return users[rand.IntN(len(users))]
 	}
 
+	/* #nosec G404 */
 	return candidateUsers[rand.IntN(len(candidateUsers))]
 }
 

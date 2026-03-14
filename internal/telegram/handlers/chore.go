@@ -324,7 +324,7 @@ func (h *Handlers) assignChore(chatID int64, fromUserID int64, description strin
 	}
 	// Fallback (should not happen mathematically if totalWeight > 0)
 	if selectedUser == nil && len(candidates) > 0 {
-		slog.Warn(fmt.Sprintf("[CHORE] WARNING: Fallback selection triggered (this should not happen)"))
+		slog.Warn("[CHORE] WARNING: Fallback selection triggered (this should not happen)")
 		// Just pick randomly
 		selectedUser = candidates[r.Intn(len(candidates))]
 		slog.Info(fmt.Sprintf("[CHORE] Fallback selected: %s (ID: %d)", selectedUser.FirstName, selectedUser.ID))

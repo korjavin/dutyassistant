@@ -16,7 +16,7 @@ import (
 // ProcessRecurringChores fetches all due recurring chores and assigns them.
 // It should be called periodically by the cron scheduler.
 func (h *Handlers) ProcessRecurringChores(ctx context.Context) error {
-	slog.Info(fmt.Sprintf("[CRON] Starting ProcessRecurringChores"))
+	slog.Info("[CRON] Starting ProcessRecurringChores")
 
 	berlinLoc, err := time.LoadLocation("Europe/Berlin")
 	if err != nil {
@@ -30,7 +30,7 @@ func (h *Handlers) ProcessRecurringChores(ctx context.Context) error {
 	}
 
 	if len(dueChores) == 0 {
-		slog.Info(fmt.Sprintf("[CRON] No recurring chores are due."))
+		slog.Info("[CRON] No recurring chores are due.")
 		return nil
 	}
 
