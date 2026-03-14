@@ -7,7 +7,7 @@ Create a dedicated PR check workflow and golangci-lint config to enforce code qu
 ## Context
 - Files involved: `.github/workflows/pr-checks.yml` (new), `.golangci.yml` (new)
 - Existing: `.github/workflows/ci-cd.yml` runs only on push to master (build + deploy, no linting)
-- Go version: 1.25.0, vendor directory present
+- Go version: 1.26.1, vendor directory removed
 - golangci-lint natively runs gofumpt (via `gofumpt` linter) and gosec (via `gosec` linter), so one tool covers all three requirements
 
 ## Development Approach
@@ -45,9 +45,9 @@ Create a dedicated PR check workflow and golangci-lint config to enforce code qu
 - [ ] Create workflow that triggers on `pull_request` targeting `master` (and `workflow_dispatch` for manual runs)
 - [ ] Define a single job `quality` with these steps in order:
   1. `actions/checkout@v4`
-  2. `actions/setup-go@v5` with `go-version: '1.25.0'` and `cache: true` (built-in Go module cache)
+  2. `actions/setup-go@v5` with `go-version: '1.26.1'` and `cache: true` (built-in Go module cache)
   3. `golangci/golangci-lint-action@v8` — uses its own integrated cache, runs against vendor, passes `--timeout 5m`
-  4. Run `go test -mod=vendor -race -count=1 ./...`
+  4. Run `go test -race -count=1 ./...`
 - [ ] Set `permissions: contents: read` (minimal permissions for a read-only check job)
 - [ ] Do NOT add `needs:` between steps (sequential within one job is sufficient and simpler)
 - [ ] Expected wall-clock time: golangci-lint ~2-3 min cached, tests ~1-2 min, total well under 10 min

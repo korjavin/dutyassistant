@@ -1,6 +1,6 @@
 # Stage 1: Build environment
 # Use a specific version of golang-alpine for reproducibility
-FROM golang:1.25-alpine AS builder
+FROM golang:1.26.1-alpine AS builder
 
 WORKDIR /app
 
@@ -8,16 +8,18 @@ WORKDIR /app
 # Copy Go module files first for better caching
 COPY go.mod go.sum ./
 
-# Copy all source code and vendor dependencies in one layer
+# Download dependencies for better layer caching
+RUN go mod download
+
+# Copy all source code in one layer
 COPY . .
 
 # Add cache busting to HTML
 RUN sed -i "s/BUILD_TIME/$(date +%s)/g" /app/web/index.html
 
-# Compile the Go application to a static, CGo-free binary using vendored dependencies.
+# Compile the Go application to a static, CGo-free binary.
 # The -w and -s flags strip debugging information, reducing the binary size.
-# The -mod=vendor flag ensures we use vendored dependencies.
-RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -ldflags="-w -s" -o /roster-bot ./cmd/roster-bot/
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /roster-bot ./cmd/roster-bot/
 
 # Stage 2: Final production image
 # Use alpine instead of scratch to include CA certificates for HTTPS
