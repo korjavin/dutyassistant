@@ -203,3 +203,7 @@ body {
   cursor: pointer;
   text-align: center;
 }
+
+/* Additional Tailwind mappings requested in PR */
+.text-gray-400 { color: var(--text-light); }
+.text-gray-800 { color: #1f2937; }
