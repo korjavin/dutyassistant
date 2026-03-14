@@ -345,10 +345,7 @@ func main() {
 	router := httpserver.NewServer(store, telegramToken, dutySecret)
 
 	// Create HTTP server for graceful shutdown
-	srv := &http.Server{
-		Addr:		":8080",
-		Handler:	router,
-	}
+	srv := createHTTPServer(router)
 
 	// Start HTTP server in background
 	go func() {
@@ -401,4 +398,16 @@ func parseInt64(s string, defaultValue int64) int64 {
 		return defaultValue
 	}
 	return result
+}
+
+func createHTTPServer(handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              ":8080",
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    1 << 20, // 1MB
+	}
 }

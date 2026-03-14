@@ -22,6 +22,14 @@ func NewServer(s store.Store, botToken string, dutySecret string) *gin.Engine {
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
 
+	// Add security headers
+	router.Use(middleware.SecurityHeaders())
+
+	// Note on CORS: The frontend is served directly from the same domain
+	// as the API under the `/api/v1` path, making it same-origin.
+	// Therefore, cross-origin access is not required, and we rely
+	// on the browser's default same-origin policy to secure the API.
+
 	// Cache Control Middleware
 	cacheControlMiddleware := func(c *gin.Context) {
 		// Only cache CSS for a long time since we use cache-busting in index.html for it.
@@ -59,6 +67,12 @@ func NewServer(s store.Store, botToken string, dutySecret string) *gin.Engine {
 
 	// Group all API routes under /api/v1.
 	api := router.Group("/api/v1")
+
+	// Create rate limiters
+	apiLimiter := middleware.NewAPILimiter()
+	authLimiter := middleware.NewAuthLimiter()
+
+	api.Use(middleware.RateLimitMiddleware(apiLimiter))
 	{
 		// Public endpoints with optional auth (return limited data if not authenticated).
 		api.GET("/schedule/:year/:month", optionalAuthMiddleware, handlers.GetSchedule(s))
@@ -68,14 +82,14 @@ func NewServer(s store.Store, botToken string, dutySecret string) *gin.Engine {
 
 		// Endpoints requiring user authentication (via Telegram Web App).
 		authenticated := api.Group("/")
-		authenticated.Use(authMiddleware)
+		authenticated.Use(middleware.RateLimitMiddleware(authLimiter), authMiddleware)
 		{
 			authenticated.POST("/duties/volunteer", handlers.VolunteerForDuty(s))
 		}
 
 		// Endpoints requiring administrator privileges.
 		admin := api.Group("/")
-		admin.Use(authMiddleware, adminRequiredMiddleware)
+		admin.Use(middleware.RateLimitMiddleware(authLimiter), authMiddleware, adminRequiredMiddleware)
 		{
 			admin.POST("/duties", handlers.AdminAssignDuty(s))
 			admin.PUT("/duties/:date", handlers.AdminModifyDuty(s))

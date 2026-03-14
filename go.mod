@@ -1,8 +1,6 @@
 module github.com/korjavin/dutyassistant
 
-go 1.23.0
-
-toolchain go1.24.3
+go 1.25.0
 
 require (
 	github.com/gin-gonic/gin v1.11.0
@@ -10,6 +8,7 @@ require (
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/stretchr/testify v1.11.1
 	github.com/telegram-mini-apps/init-data-golang v1.5.0
+	golang.org/x/time v0.15.0
 	modernc.org/sqlite v1.39.0
 )
 
