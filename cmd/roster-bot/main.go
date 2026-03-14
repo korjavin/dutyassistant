@@ -71,11 +71,11 @@ func main() {
 		model, temp, url := llmClient.Config()
 		slog.Info(fmt.Sprintf("LLM Client: Enabled (Provider: OpenAI, Model: %s, Temperature: %.2f, BaseURL: %s)", model, temp, url))
 	} else {
-		slog.Info(fmt.Sprint("LLM Client: Disabled (OPENAI_API_KEY not set)"))
+		slog.Info("LLM Client: Disabled (OPENAI_API_KEY not set)")
 	}
 
 	// Initialize Telegram handlers
-	slog.Info(fmt.Sprint("Initializing Telegram handlers..."))
+	slog.Info("Initializing Telegram handlers...")
 	var telegramHandlers *handlers.Handlers
 	if adminID != 0 {
 		slog.Info(fmt.Sprintf("Admin ID configured: %d", adminID))
@@ -85,7 +85,7 @@ func main() {
 	}
 
 	// Initialize and start Telegram bot
-	slog.Info(fmt.Sprint("Initializing Telegram bot..."))
+	slog.Info("Initializing Telegram bot...")
 	bot, err := telegram.NewBot(telegramToken, telegramHandlers, dishGroupID, adminID)
 	if err != nil {
 		slog.Error(fmt.Sprintf("Failed to initialize Telegram bot: %v", err))
@@ -102,7 +102,7 @@ func main() {
 	go notification.StartPeriodicChoreReminders(botCtx, bot, store, getEnv("CHORE_TIMEZONE", "Europe/Berlin"))
 
 	// Initialize cron scheduler for scheduled jobs (all times in Europe/Berlin)
-	slog.Info(fmt.Sprint("Initializing cron scheduler..."))
+	slog.Info("Initializing cron scheduler...")
 	berlinLoc, err := time.LoadLocation("Europe/Berlin")
 	if err != nil {
 		slog.Error(fmt.Sprintf("Failed to load Europe/Berlin timezone: %v", err))
@@ -112,8 +112,8 @@ func main() {
 
 	// Daily at 11:00 AM Berlin - Assign today's duty and Process Recurring Chores
 	_, err = c.AddFunc("0 11 * * *", func() {
-		slog.Info(fmt.Sprint("═══════════════════════════════════════════════════════════"))
-		slog.Info(fmt.Sprint("Running daily duty assignment and recurring chores (11:00 AM Berlin)"), slog.String("component", "cron"))
+		slog.Info("═══════════════════════════════════════════════════════════")
+		slog.Info("Running daily duty assignment and recurring chores (11:00 AM Berlin)", slog.String("component", "cron"))
 		slog.Info(fmt.Sprintf("Current time: %s", time.Now().In(berlinLoc).Format("2006-01-02 15:04:05 MST")), slog.String("component", "cron"))
 
 		// Process Recurring Chores
@@ -215,12 +215,12 @@ func main() {
 
 	// Daily at 21:00 PM Berlin - Mark duty as completed
 	_, err = c.AddFunc("0 21 * * *", func() {
-		slog.Info(fmt.Sprint("Running daily duty completion (21:00 PM Berlin)"), slog.String("component", "cron"))
+		slog.Info("Running daily duty completion (21:00 PM Berlin)", slog.String("component", "cron"))
 		err := sched.CompleteTodaysDuty(context.Background())
 		if err != nil {
 			slog.Error(fmt.Sprintf("Error completing today's duty: %v", err), slog.String("component", "cron"))
 		} else {
-			slog.Info(fmt.Sprintf("Successfully marked today's duty as completed"), slog.String("component", "cron"))
+			slog.Info("Successfully marked today's duty as completed", slog.String("component", "cron"))
 		}
 	})
 	if err != nil {
@@ -230,10 +230,10 @@ func main() {
 
 	// Daily at 20:50 Berlin - Ask the admin to rate active participants
 	_, err = c.AddFunc("50 20 * * *", func() {
-		slog.Info(fmt.Sprint("Running daily participant rating reminder (20:50 Berlin)"), slog.String("component", "cron"))
+		slog.Info("Running daily participant rating reminder (20:50 Berlin)", slog.String("component", "cron"))
 
 		if adminID == 0 {
-			slog.Info(fmt.Sprint("Participant rating reminder skipped: ADMIN_ID is not configured"), slog.String("component", "cron"))
+			slog.Info("Participant rating reminder skipped: ADMIN_ID is not configured", slog.String("component", "cron"))
 			return
 		}
 
@@ -243,7 +243,7 @@ func main() {
 			return
 		}
 		if !ok {
-			slog.Info(fmt.Sprint("Participant rating reminder skipped: no active non-admin participants to rate"), slog.String("component", "cron"))
+			slog.Info("Participant rating reminder skipped: no active non-admin participants to rate", slog.String("component", "cron"))
 			return
 		}
 
@@ -262,10 +262,10 @@ func main() {
 
 	// Daily at 21:00 Berlin - On the last calendar day, publish the monthly participant rating winners
 	_, err = c.AddFunc("0 21 * * *", func() {
-		slog.Info(fmt.Sprint("Checking month-end participant ratings announcement (21:00 Berlin)"), slog.String("component", "cron"))
+		slog.Info("Checking month-end participant ratings announcement (21:00 Berlin)", slog.String("component", "cron"))
 
 		if dishGroupID == 0 {
-			slog.Info(fmt.Sprint("Month-end participant ratings announcement skipped: DISH_GROUP is not configured"), slog.String("component", "cron"))
+			slog.Info("Month-end participant ratings announcement skipped: DISH_GROUP is not configured", slog.String("component", "cron"))
 			return
 		}
 
@@ -275,7 +275,7 @@ func main() {
 			return
 		}
 		if !ok {
-			slog.Info(fmt.Sprint("Month-end participant ratings announcement skipped: today is not the last calendar day of the month"), slog.String("component", "cron"))
+			slog.Info("Month-end participant ratings announcement skipped: today is not the last calendar day of the month", slog.String("component", "cron"))
 			return
 		}
 
@@ -299,7 +299,7 @@ func main() {
 		if err != nil {
 			slog.Error(fmt.Sprintf("Error sending daily chore summary: %v", err), slog.String("component", "cron"))
 		} else {
-			slog.Info(fmt.Sprintf("Successfully sent daily chore summary"), slog.String("component", "cron"))
+			slog.Info("Successfully sent daily chore summary", slog.String("component", "cron"))
 		}
 	})
 	if err != nil {
@@ -309,14 +309,14 @@ func main() {
 
 	// Sunday at 21:10 PM Berlin - Send weekly stats
 	_, err = c.AddFunc("10 21 * * 0", func() {
-		slog.Info(fmt.Sprint("Running weekly stats (Sunday 21:10 PM Berlin)"), slog.String("component", "cron"))
+		slog.Info("Running weekly stats (Sunday 21:10 PM Berlin)", slog.String("component", "cron"))
 		err := notification.SendWeeklyChoreStats(context.Background(), bot.API(), store, dishGroupID)
 		if err != nil {
 			slog.Error(fmt.Sprintf("Error sending weekly chore stats: %v", err), slog.String("component", "cron"))
 		} else {
-			slog.Info(fmt.Sprintf("Successfully sent weekly chore stats"), slog.String("component", "cron"))
+			slog.Info("Successfully sent weekly chore stats", slog.String("component", "cron"))
 		}
-		slog.Info(fmt.Sprintf("Weekly stats job executed"), slog.String("component", "cron"))
+		slog.Info("Weekly stats job executed", slog.String("component", "cron"))
 	})
 	if err != nil {
 		slog.Error(fmt.Sprintf("Failed to schedule weekly stats job: %v", err))
@@ -325,22 +325,22 @@ func main() {
 
 	// Start cron scheduler
 	c.Start()
-	slog.Info(fmt.Sprint("═══════════════════════════════════════════════════════════"))
-	slog.Info(fmt.Sprint("Cron scheduler started with 6 jobs:"))
-	slog.Info(fmt.Sprint("  1. Daily at 11:00 AM Berlin - Assign today's duty and send notifications"))
-	slog.Info(fmt.Sprint("  2. Daily at 21:00 PM Berlin - Mark today's duty as completed"))
-	slog.Info(fmt.Sprint("  3. Daily at 20:50 PM Berlin - Send participant rating reminder to the admin"))
-	slog.Info(fmt.Sprint("  4. Daily at 21:00 PM Berlin - Publish month-end participant rating winners on the last calendar day"))
-	slog.Info(fmt.Sprint("  5. Daily at 16:00 Europe/Berlin - Send daily chore summary"))
-	slog.Info(fmt.Sprint("  6. Sunday at 21:10 PM Berlin - Send weekly stats"))
+	slog.Info("═══════════════════════════════════════════════════════════")
+	slog.Info("Cron scheduler started with 6 jobs:")
+	slog.Info("  1. Daily at 11:00 AM Berlin - Assign today's duty and send notifications")
+	slog.Info("  2. Daily at 21:00 PM Berlin - Mark today's duty as completed")
+	slog.Info("  3. Daily at 20:50 PM Berlin - Send participant rating reminder to the admin")
+	slog.Info("  4. Daily at 21:00 PM Berlin - Publish month-end participant rating winners on the last calendar day")
+	slog.Info("  5. Daily at 16:00 Europe/Berlin - Send daily chore summary")
+	slog.Info("  6. Sunday at 21:10 PM Berlin - Send weekly stats")
 	slog.Info(fmt.Sprintf("Current Berlin time: %s", time.Now().In(berlinLoc).Format("2006-01-02 15:04:05 MST")))
-	slog.Info(fmt.Sprint("═══════════════════════════════════════════════════════════"))
+	slog.Info("═══════════════════════════════════════════════════════════")
 
 	// Initialize HTTP server with Gin
-	slog.Info(fmt.Sprint("Initializing HTTP server on :8080..."))
+	slog.Info("Initializing HTTP server on :8080...")
 	dutySecret := getEnv("DUTY_SECRET", "")
 	if dutySecret == "" {
-		slog.Warn(fmt.Sprint("WARNING: DUTY_SECRET is not set. The /who endpoint will return 503 until it is configured."))
+		slog.Warn("WARNING: DUTY_SECRET is not set. The /who endpoint will return 503 until it is configured.")
 	}
 	router := httpserver.NewServer(store, telegramToken, dutySecret)
 
@@ -349,25 +349,25 @@ func main() {
 
 	// Start HTTP server in background
 	go func() {
-		slog.Info(fmt.Sprint("HTTP server listening on :8080"))
+		slog.Info("HTTP server listening on :8080")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error(fmt.Sprintf("HTTP server error: %v", err))
 			os.Exit(1)
 		}
 	}()
 
-	slog.Info(fmt.Sprint("Roster Bot v0.1.0 initialized successfully"))
-	slog.Info(fmt.Sprint("Press Ctrl+C to shut down"))
+	slog.Info("Roster Bot v0.1.0 initialized successfully")
+	slog.Info("Press Ctrl+C to shut down")
 
 	// Wait for interrupt signal
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	slog.Info(fmt.Sprint("Shutting down gracefully..."))
+	slog.Info("Shutting down gracefully...")
 
 	// Stop cron scheduler
-	slog.Info(fmt.Sprint("Stopping cron scheduler..."))
+	slog.Info("Stopping cron scheduler...")
 	cronCtx := c.Stop()
 	<-cronCtx.Done()
 
@@ -382,7 +382,7 @@ func main() {
 	// Stop Telegram bot
 	botCancel()
 
-	slog.Info(fmt.Sprint("Roster Bot stopped"))
+	slog.Info("Roster Bot stopped")
 }
 
 func getEnv(key, defaultValue string) string {

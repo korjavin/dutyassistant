@@ -630,7 +630,7 @@ func (h *Handlers) HandleAssignCustomCallback(q *tgbotapi.CallbackQuery) (tgbota
 	}
 
 	var userID int64
-	fmt.Sscanf(parts[1], "%d", &userID)
+	_, _ = fmt.Sscanf(parts[1], "%d", &userID)
 
 	// Get user
 	users, _ := h.Store.ListAllUsers(context.Background())
@@ -665,7 +665,7 @@ func (h *Handlers) HandleUnassignUserCallback(q *tgbotapi.CallbackQuery) (tgbota
 
 	userID := parts[1]
 	var id int64
-	fmt.Sscanf(userID, "%d", &id)
+	_, _ = fmt.Sscanf(userID, "%d", &id)
 
 	// Get user info (including queue size)
 	users, _ := h.Store.GetUsersWithAdminQueue(context.Background())
@@ -735,8 +735,8 @@ func (h *Handlers) HandleUnassignDaysCallback(q *tgbotapi.CallbackQuery) (tgbota
 	}
 
 	var userID, days int64
-	fmt.Sscanf(parts[1], "%d", &userID)
-	fmt.Sscanf(parts[2], "%d", &days)
+	_, _ = fmt.Sscanf(parts[1], "%d", &userID)
+	_, _ = fmt.Sscanf(parts[2], "%d", &days)
 
 	// Get user
 	users, _ := h.Store.ListAllUsers(context.Background())
