@@ -120,6 +120,49 @@ func TestTranslateToEnglish(t *testing.T) {
 	}
 }
 
+func TestTranslateToEnglish_CustomConfig(t *testing.T) {
+	ctx := context.Background()
+	text := "Помыть посуду"
+
+	mockHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req chatRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Errorf("Failed to decode request body: %v", err)
+		}
+
+		if req.Model != "custom-translate-model" {
+			t.Errorf("Expected model custom-translate-model, got: %s", req.Model)
+		}
+		if req.Temperature != 0.3 {
+			t.Errorf("Expected temperature 0.3 for translation, got: %f", req.Temperature)
+		}
+
+		w.WriteHeader(http.StatusOK)
+		resp := chatResponse{
+			Choices: []struct {
+				Message struct {
+					Content string `json:"content"`
+				} `json:"message"`
+			}{{Message: struct {
+				Content string `json:"content"`
+			}{Content: "Wash the dishes"}}},
+		}
+		json.NewEncoder(w).Encode(resp)
+	})
+
+	server := httptest.NewServer(mockHandler)
+	defer server.Close()
+
+	c := NewClient("test-key", server.URL, 10, "custom-translate-model", nil)
+	res, err := c.TranslateToEnglish(ctx, text)
+	if err != nil {
+		t.Errorf("Expected nil error, got: %v", err)
+	}
+	if res != "Wash the dishes" {
+		t.Errorf("Expected translated message 'Wash the dishes', got: %s", res)
+	}
+}
+
 func TestTranslateToEnglish_ErrorCases(t *testing.T) {
 	ctx := context.Background()
 	text := "Помыть посуду"

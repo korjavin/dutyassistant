@@ -94,8 +94,9 @@ func SanitizeTelegramHTML(input string) string {
 	for _, tag := range allowedTags {
 		allowRegexParts = append(allowRegexParts, fmt.Sprintf("</?%s>", tag))
 	}
-	// Special handling for a href
-	allowRegexParts = append(allowRegexParts, `<a href="[^"]*">`)
+	// Special handling for a href - only allow http/https URLs to prevent XSS
+	allowRegexParts = append(allowRegexParts, `<a href="(https?:\/\/[^"]*)">`)
+	allowRegexParts = append(allowRegexParts, `<a href='(https?:\/\/[^']*)'>`)
 	allowRegexParts = append(allowRegexParts, `</a>`)
 	// Special handling for tg-spoiler
 	allowRegexParts = append(allowRegexParts, `<tg-spoiler>`)
@@ -135,7 +136,7 @@ func (c *Client) TranslateToEnglish(ctx context.Context, text string) (string, e
 	systemPrompt := "You are a translator. Translate the given chore description to English. Be concise, do not be verbose. Return ONLY the translated text. Preserve emojis. If translation is not possible or text is already English, return original."
 
 	reqBody := chatRequest{
-		Model: "gpt-4o-mini",
+		Model: c.model,
 		Messages: []chatMessage{
 			{Role: "system", Content: systemPrompt},
 			{Role: "user", Content: text},
@@ -167,8 +168,13 @@ func (c *Client) TranslateToEnglish(ctx context.Context, text string) (string, e
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		err := fmt.Errorf("LLM TranslateToEnglish non-200 status: %d, body: %s", resp.StatusCode, string(bodyBytes))
-		slog.Error(fmt.Sprint(err.Error()))
+		bodyStr := string(bodyBytes)
+		// Truncate body to avoid logging sensitive information
+		if len(bodyStr) > 200 {
+			bodyStr = bodyStr[:200] + "..."
+		}
+		err := fmt.Errorf("LLM TranslateToEnglish non-200 status: %d, body: %s", resp.StatusCode, bodyStr)
+		slog.Error(err.Error())
 		return text, err
 	}
 

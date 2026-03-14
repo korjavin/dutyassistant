@@ -51,6 +51,16 @@ func New(s store.Store, sch scheduler.SchedulerInterface, groupID int64, llmClie
 	}
 }
 
+// hasNonLatinCharacters checks if the text contains non-Latin characters.
+func hasNonLatinCharacters(text string) bool {
+	for _, r := range text {
+		if unicode.IsLetter(r) && !unicode.Is(unicode.Latin, r) {
+			return true
+		}
+	}
+	return false
+}
+
 // translateIfNonLatin checks if the given description contains non-Latin letters.
 // If it does, it uses the LLMClient to translate it to English.
 // If no non-Latin characters are found, or if translation fails, it returns the original description.
@@ -59,15 +69,7 @@ func (h *Handlers) translateIfNonLatin(ctx context.Context, description string) 
 		return description
 	}
 
-	hasNonLatin := false
-	for _, r := range description {
-		if unicode.IsLetter(r) && !unicode.Is(unicode.Latin, r) {
-			hasNonLatin = true
-			break
-		}
-	}
-
-	if !hasNonLatin {
+	if !hasNonLatinCharacters(description) {
 		return description
 	}
 

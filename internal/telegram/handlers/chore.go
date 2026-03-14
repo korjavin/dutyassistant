@@ -77,7 +77,25 @@ func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 		return msg, nil
 	}
 
-	// 3. Parse for recurring chore suffix /<N>d
+	// 3. Check for translate subcommand: /chore translate <id>
+	// Be specific to avoid blocking chore descriptions starting with "translate"
+	lowerArgs := strings.ToLower(args)
+	if strings.HasPrefix(lowerArgs, "translate ") {
+		// Try to parse the ID after "translate "
+		parts := strings.SplitN(args, " ", 2)
+		if len(parts) == 2 {
+			trimmedID := strings.TrimSpace(parts[1])
+			_, err := strconv.ParseInt(trimmedID, 10, 64)
+			if err == nil {
+				// Valid ID found - route to translate handler
+				return h.HandleChoreTranslate(m)
+			}
+		}
+		// If we get here, it's "translate" but not followed by a valid ID
+		// Could be "translate the document" - treat as regular chore creation
+	}
+
+	// 4. Parse for recurring chore suffix /<N>d
 	recurringRe := regexp.MustCompile(`(?i)\s+/([1-9][0-9]*)d$`)
 	match := recurringRe.FindStringSubmatch(args)
 
@@ -415,4 +433,85 @@ func (h *Handlers) assignChore(chatID int64, fromUserID int64, description strin
 	}
 
 	return responseMsg, nil
+}
+
+// HandleChoreTranslate handles the "/chore translate <id>" command.
+// It translates an existing recurring chore's description if it contains non-Latin characters.
+// Only admins can use this command.
+func (h *Handlers) HandleChoreTranslate(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
+	// 1. Admin check
+	isAdmin, err := h.checkAdmin(m.From.ID)
+	if err != nil || !isAdmin {
+		msg := tgbotapi.NewMessage(m.Chat.ID, "❌ Only admins can translate chore descriptions.")
+		return msg, nil
+	}
+
+	// 2. Parse the chore ID from arguments (format: "/chore translate <id>")
+	args := strings.TrimSpace(m.CommandArguments())
+	// Convert to lowercase for case-insensitive parsing
+	lowerArgs := strings.ToLower(args)
+	// Remove "translate " prefix
+	prefix := "translate "
+	if !strings.HasPrefix(lowerArgs, prefix) {
+		msg := tgbotapi.NewMessage(m.Chat.ID, "❌ Invalid translate command format. Usage: /chore translate <id>")
+		return msg, nil
+	}
+
+	idStr := strings.TrimSpace(args[len(prefix):])
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id <= 0 {
+		msg := tgbotapi.NewMessage(m.Chat.ID, "❌ Invalid chore ID. Usage: /chore translate <id>")
+		return msg, nil
+	}
+
+	// 3. Fetch recurring chore
+	ctx := context.Background()
+	chore, err := h.Store.GetRecurringChore(ctx, id)
+	if err != nil {
+		slog.Error(fmt.Sprintf("Failed to get recurring chore %d: %v", id, err))
+		msg := tgbotapi.NewMessage(m.Chat.ID, "❌ Chore not found.")
+		return msg, nil
+	}
+	if chore == nil {
+		msg := tgbotapi.NewMessage(m.Chat.ID, "❌ Chore not found.")
+		return msg, nil
+	}
+	if !chore.IsActive {
+		msg := tgbotapi.NewMessage(m.Chat.ID, "❌ Recurring chore not found or is inactive.")
+		return msg, nil
+	}
+
+	// 4. Translate if non-Latin
+	translatedDesc := h.translateIfNonLatin(ctx, chore.Description)
+
+	if translatedDesc == chore.Description {
+		// Check if description has non-Latin characters to distinguish between
+		// "already in English" and "translation failed"
+		if hasNonLatinCharacters(chore.Description) && h.LLMClient != nil {
+			// Translation failed (LLM client exists but error occurred)
+			msg := tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("❌ Translation failed. Please check logs and try again.\n\nCurrent: <i>%s</i>",
+				html.EscapeString(chore.Description)))
+			msg.ParseMode = tgbotapi.ModeHTML
+			return msg, nil
+		} else {
+			// Already in English or LLM client not configured
+			msg := tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("ℹ️ Chore <b>%d</b> description is already in English or translation is disabled.\n\nCurrent: <i>%s</i>",
+				chore.ID, html.EscapeString(chore.Description)))
+			msg.ParseMode = tgbotapi.ModeHTML
+			return msg, nil
+		}
+	}
+
+	// 5. Update description
+	if err := h.Store.UpdateRecurringChoreDescription(ctx, id, translatedDesc); err != nil {
+		slog.Error(fmt.Sprintf("Failed to update recurring chore %d description: %v", id, err))
+		msg := tgbotapi.NewMessage(m.Chat.ID, "❌ Failed to update chore description.")
+		return msg, nil
+	}
+
+	// 6. Return success message
+	msg := tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("✅ Chore <b>%d</b> description translated!\n\n<b>Old:</b> <i>%s</i>\n<b>New:</b> <i>%s</i>",
+		chore.ID, html.EscapeString(chore.Description), html.EscapeString(translatedDesc)))
+	msg.ParseMode = tgbotapi.ModeHTML
+	return msg, nil
 }
