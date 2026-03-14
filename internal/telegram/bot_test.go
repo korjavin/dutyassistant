@@ -53,6 +53,31 @@ func TestHandleCommand_Chore(t *testing.T) {
 	mockStore.AssertExpectations(t)
 }
 
+// TestNewBot_RegistersCommands verifies that registerCommands doesn't panic
+func TestNewBot_RegistersCommands(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	mockScheduler := new(mocks.MockScheduler)
+
+	// Create handlers
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, 0, 123, nil)
+
+	// Create dummy API directly
+	dummyAPI, _ := tgbotapi.NewBotAPI("dummy:token")
+
+	bot := &Bot{
+		api:      dummyAPI,
+		handlers: h,
+		ownerID:  123,
+	}
+
+	// We verify that calling registerCommands directly doesn't panic
+	// even with a non-functional dummy API. The API calls will fail
+	// and be logged by registerCommands, but it shouldn't crash.
+	assert.NotPanics(t, func() {
+		bot.registerCommands()
+	})
+}
+
 // TestBot_HandleUpdate_SessionCancel verifies that the bot intercepts /cancel
 // commands when a user is in an active interactive session and correctly
 // routes them to the interactive session handler instead of the global command handler.

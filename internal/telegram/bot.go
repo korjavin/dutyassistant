@@ -31,12 +31,74 @@ func NewBot(apiToken string, h *handlers.Handlers, groupID, ownerID int64) (*Bot
 	// Inject bot API into handlers for notifications
 	h.SetBot(api)
 
-	return &Bot{
+	b := &Bot{
 		api:      api,
 		handlers: h,
 		groupID:  groupID,
 		ownerID:  ownerID,
-	}, nil
+	}
+
+	b.registerCommands()
+
+	return b, nil
+}
+
+// registerCommands registers bot commands with Telegram for autocomplete.
+func (b *Bot) registerCommands() {
+	if b.api == nil {
+		return
+	}
+
+	// Base user commands
+	userCommands := []tgbotapi.BotCommand{
+		{Command: "start", Description: "Register with the bot"},
+		{Command: "help", Description: "Show available commands"},
+		{Command: "status", Description: "View your duty statistics and queue status"},
+		{Command: "schedule", Description: "View the current month's duty schedule"},
+		{Command: "volunteer", Description: "Volunteer for duty"},
+		{Command: "explain", Description: "Explain how the most recent dish hero duty was assigned"},
+		{Command: "chores", Description: "View your active chores"},
+	}
+
+	userConfig := tgbotapi.NewSetMyCommands(userCommands...)
+	if _, err := b.api.Request(userConfig); err != nil {
+		slog.Error(fmt.Sprintf("Failed to set default bot commands: %v", err))
+	} else {
+		slog.Info("Successfully registered default bot commands")
+	}
+
+	// Admin commands (scoped to owner if configured)
+	if b.ownerID != 0 {
+		adminCommands := []tgbotapi.BotCommand{
+			{Command: "chores", Description: "Chore management menu"},
+			{Command: "newchore", Description: "Create a new chore interactively"},
+			{Command: "editchore", Description: "Edit a chore description"},
+			{Command: "translate", Description: "Translate a chore description to English"},
+			{Command: "stats", Description: "Show chore statistics"},
+			{Command: "activate", Description: "Toggle user active/inactive status"},
+			{Command: "assign", Description: "Assign days to a user's admin queue"},
+			{Command: "unassign", Description: "Remove days from a user's admin queue"},
+			{Command: "cancel", Description: "Cancel a duty, active chore, or recurring chore"},
+			{Command: "change", Description: "Change duty assignment for a date"},
+			{Command: "offduty", Description: "Set off-duty period for a user"},
+			{Command: "vacation", Description: "Toggle vacation mode to pause all duty assignments"},
+			{Command: "users", Description: "List all users with their queues and status"},
+			{Command: "ratings", Description: "Show the current month's participant rating calendar"},
+			{Command: "complete", Description: "Mark an active chore as completed"},
+			{Command: "overdue", Description: "Check for overdue chores"},
+		}
+
+		// Prepend base commands so admins get both
+		fullAdminCommands := append(userCommands, adminCommands...)
+
+		adminScope := tgbotapi.NewBotCommandScopeChat(b.ownerID)
+		adminConfig := tgbotapi.NewSetMyCommandsWithScopeAndLanguage(adminScope, "", fullAdminCommands...)
+		if _, err := b.api.Request(adminConfig); err != nil {
+			slog.Error(fmt.Sprintf("Failed to set admin bot commands for user %d: %v", b.ownerID, err))
+		} else {
+			slog.Info(fmt.Sprintf("Successfully registered admin bot commands for user %d", b.ownerID))
+		}
+	}
 }
 
 // SendMessage sends a text message to a specific chat ID.
