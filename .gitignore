@@ -8,8 +8,8 @@
 /roster-bot
 
 # Dependency directories
-# vendor/ is now committed to the repository for reproducible builds
 node_modules/
+vendor/
 
 # IDE and editor files
 .idea/
@@ -31,6 +31,7 @@ node_modules/
 # Test coverage
 coverage.out
 coverage.html
+coverage-master.out
 # ralphex progress logs
 .ralphex/progress/
 roster.db
