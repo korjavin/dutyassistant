@@ -5,6 +5,7 @@ Duty Assistant Bot is a Telegram bot designed to help manage on-call duty roster
 ## Features
 
 *   **Queue-Based Assignment System**: Three-tier priority system (Volunteer → Admin → Round-Robin)
+*   **Security Best Practices**: Includes HTTP timeout protections, rate-limiting, comprehensive security headers (CSP, X-Frame-Options), and safe DOM rendering.
 *   **Interactive UI**: All commands use inline keyboard buttons for easy interaction
 *   **Automated Daily Assignments**: Automatic duty assignment at 11:00 AM Berlin time
 *   **Duty Completion Tracking**: Automatic completion marking at 21:00 PM Berlin time

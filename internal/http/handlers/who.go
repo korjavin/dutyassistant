@@ -11,9 +11,9 @@ import (
 )
 
 type choreItem struct {
-	Description	string	`json:"description"`
-	DeadlineAt	string	`json:"deadline_at"`
-	Assignee	string	`json:"assignee"`
+	Description string `json:"description"`
+	DeadlineAt  string `json:"deadline_at"`
+	Assignee    string `json:"assignee"`
 }
 
 // TimeNow is exposed for testing
@@ -70,16 +70,16 @@ func GetWho(s store.Store) gin.HandlerFunc {
 			return
 		}
 
-		choreItems := make([]choreItem, 0)	// ensure it marshals to [] instead of null
+		choreItems := make([]choreItem, 0) // ensure it marshals to [] instead of null
 		for _, chore := range chores {
 			assignee := ""
 			if chore.User != nil {
 				assignee = chore.User.FirstName
 			}
 			choreItems = append(choreItems, choreItem{
-				Description:	chore.Description,
-				DeadlineAt:	formatRelativeDate(chore.DeadlineAt),
-				Assignee:	assignee,
+				Description: chore.Description,
+				DeadlineAt:  formatRelativeDate(chore.DeadlineAt),
+				Assignee:    assignee,
 			})
 		}
 
@@ -89,8 +89,8 @@ func GetWho(s store.Store) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{
-			"name":		name,
-			"chores":	choreItems,
+			"name":   name,
+			"chores": choreItems,
 		})
 	}
 }

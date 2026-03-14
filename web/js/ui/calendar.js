@@ -216,7 +216,10 @@ function renderCalendar(scheduleData = {}, prognosisData = {}) {
                     const existingModal = document.getElementById(modalId);
                     if (existingModal) existingModal.remove();
 
-                    document.body.insertAdjacentHTML('beforeend', createModal(`Duties for ${date}`, content, modalId));
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = createModal(`Duties for ${date}`, content, modalId);
+                    const modalNode = tempDiv.firstElementChild;
+                    document.body.appendChild(modalNode);
                     showModal(modalId);
 
                     const modalElement = document.getElementById(modalId);
@@ -247,7 +250,10 @@ function renderCalendar(scheduleData = {}, prognosisData = {}) {
                                 target.textContent = action.charAt(0).toUpperCase() + action.slice(1);
 
                                 const msg = createErrorMessage(`Failed to ${action}. Please try again.`);
-                                target.insertAdjacentHTML('afterend', `<div class="error-container mt-2">${msg}</div>`);
+                                const errDiv = document.createElement('div');
+                                errDiv.className = 'error-container mt-2';
+                                errDiv.innerHTML = msg;
+                                target.parentNode.insertBefore(errDiv, target.nextSibling);
                             }
                         }
                     });
@@ -272,15 +278,30 @@ function renderCalendar(scheduleData = {}, prognosisData = {}) {
                 const dateStr = normalizeDateKey(date) || `${self.selectedYear}-${String(self.selectedMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                 if (dutiesByDate[dateStr]) {
                     const duties = dutiesByDate[dateStr];
-                    const namesHTML = duties.map(duty => {
+
+                    const daySpan = document.createElement('span');
+                    daySpan.textContent = day;
+
+                    const namesContainer = document.createElement('div');
+                    namesContainer.style.fontSize = '10px';
+                    namesContainer.style.marginTop = '2px';
+
+                    duties.forEach(duty => {
                         const bgColor = duty.isPrognosis ? 'bg-gray-200' :
                                        duty.assignment_type === 'voluntary' ? 'bg-green-100' :
                                        duty.assignment_type === 'admin' ? 'bg-blue-100' : 'bg-gray-100';
                         const textColor = duty.isPrognosis ? 'text-gray-500' : 'text-gray-800';
                         const shortName = duty.displayName.substring(0, 3);
-                        return `<span class="${bgColor} ${textColor} px-1 rounded text-[10px]">${shortName}</span>`;
-                    }).join(' ');
-                    HTMLButtonElement.innerHTML = `<span>${day}</span><div style="font-size:10px;margin-top:2px;">${namesHTML}</div>`;
+
+                        const nameSpan = document.createElement('span');
+                        nameSpan.className = `${bgColor} ${textColor} px-1 rounded text-[10px] mr-1 inline-block`;
+                        nameSpan.textContent = shortName;
+                        namesContainer.appendChild(nameSpan);
+                    });
+
+                    HTMLButtonElement.innerHTML = '';
+                    HTMLButtonElement.appendChild(daySpan);
+                    HTMLButtonElement.appendChild(namesContainer);
                 }
             },
         },

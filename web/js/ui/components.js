@@ -3,6 +3,21 @@
  */
 
 /**
+ * Escapes HTML characters to prevent XSS.
+ * @param {string} unsafe - The unsafe string.
+ * @returns {string} The safe HTML string.
+ */
+export function escapeHtml(unsafe) {
+    if (!unsafe && unsafe !== 0) return '';
+    return String(unsafe)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+/**
  * Creates a user badge component.
  * @param {object} user - The user object.
  * @param {string} user.name - The user's name.
@@ -10,10 +25,12 @@
  * @returns {string} The HTML string for the user badge.
  */
 export function createUserBadge(user) {
+  const safeName = escapeHtml(user.name);
+  const safeAvatar = user.avatarUrl ? escapeHtml(user.avatarUrl) : '';
   return `
     <div class="inline-flex items-center bg-gray-200 rounded-full px-3 py-1 text-sm font-semibold text-gray-700 mr-2 mb-2">
-      ${user.avatarUrl ? `<img src="${user.avatarUrl}" class="w-6 h-6 rounded-full mr-2" alt="${user.name}">` : ''}
-      <span>${user.name}</span>
+      ${safeAvatar ? `<img src="${safeAvatar}" class="w-6 h-6 rounded-full mr-2" alt="${safeName}">` : ''}
+      <span>${safeName}</span>
     </div>
   `;
 }
@@ -30,19 +47,23 @@ export function createDutyCard(duty, currentUser) {
     const isAssigned = duty.assignees.some(assignee => assignee.id === currentUser?.id);
     const canVolunteer = !isAssigned; // Basic logic, can be expanded
 
+    const safeDutyId = escapeHtml(duty.id);
     let actionButton = '';
     if (currentUser) {
         if (isAssigned) {
-            actionButton = `<button data-duty-id="${duty.id}" data-action="withdraw" class="mt-2 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600">Withdraw</button>`;
+            actionButton = `<button data-duty-id="${safeDutyId}" data-action="withdraw" class="mt-2 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600">Withdraw</button>`;
         } else if (canVolunteer) {
-            actionButton = `<button data-duty-id="${duty.id}" data-action="volunteer" class="mt-2 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600">Volunteer</button>`;
+            actionButton = `<button data-duty-id="${safeDutyId}" data-action="volunteer" class="mt-2 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600">Volunteer</button>`;
         }
     }
 
+    const safeTitle = escapeHtml(duty.title);
+    const safeTime = escapeHtml(duty.time);
+
     return `
-    <div class="duty-card card mb-4" data-duty-id="${duty.id}">
-      <h3 class="font-bold text-lg">${duty.title}</h3>
-      <p class="text-gray-600">${duty.time}</p>
+    <div class="duty-card card mb-4" data-duty-id="${safeDutyId}">
+      <h3 class="font-bold text-lg">${safeTitle}</h3>
+      <p class="text-gray-600">${safeTime}</p>
       <div class="mt-2">
         ${duty.assignees.map(user => createUserBadge(user)).join('')}
       </div>
@@ -59,16 +80,18 @@ export function createDutyCard(duty, currentUser) {
  * @returns {string} The HTML string for the modal.
  */
 export function createModal(title, content, modalId) {
+  const safeTitle = escapeHtml(title);
+  const safeModalId = escapeHtml(modalId);
   return `
-    <div id="${modalId}" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+    <div id="${safeModalId}" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden" aria-labelledby="modal-title" role="dialog" aria-modal="true">
       <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
         <div class="mt-3 text-center">
-          <h3 class="text-lg leading-6 font-medium text-gray-900" id="modal-title">${title}</h3>
+          <h3 class="text-lg leading-6 font-medium text-gray-900" id="modal-title">${safeTitle}</h3>
           <div class="mt-2 px-7 py-3">
             ${content}
           </div>
           <div class="items-center px-4 py-3 flex justify-center">
-            <button id="close-${modalId}" class="px-4 py-2 bg-gray-500 text-white text-base font-medium rounded-md w-full shadow-lg hover:bg-gray-700 focus:outline-none focus:ring-2">
+            <button id="close-${safeModalId}" class="px-4 py-2 bg-gray-500 text-white text-base font-medium rounded-md w-full shadow-lg hover:bg-gray-700 focus:outline-none focus:ring-2">
               Close
             </button>
           </div>

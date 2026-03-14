@@ -5,6 +5,8 @@
 ## Development Guidelines
 
 *   **Logging:** Use `log/slog` for all structured logging instead of the standard library `log` or `fmt` packages to ensure consistent and parseable output.
+*   **API Security:** The application includes a security headers middleware enforcing strict Content-Security-Policy (CSP), `X-Content-Type-Options`, and `X-Frame-Options` on all HTTP endpoints. Rate-limiting is in place per-IP with API paths at 100/min or 1000/min, and auth-required at 10/min.
+*   **Frontend Security:** Frontend components dynamically generating DOM elements utilize an `escapeHtml` utility function (`web/js/ui/components.js`) to mitigate DOM-based XSS attacks. Safe DOM operations (`createElement`) should be preferred.
 
 ## Environment Variables
 

@@ -103,8 +103,8 @@ func (h *Handlers) assignRecurringChore(ctx context.Context, chore *store.Recurr
 
 	// 4. Weighted random assignment
 	type weightedUser struct {
-		user	*store.User
-		weight	float64
+		user   *store.User
+		weight float64
 	}
 
 	var weightedCandidates []weightedUser
@@ -178,11 +178,11 @@ func (h *Handlers) assignRecurringChore(ctx context.Context, chore *store.Recurr
 	reminderID := GenerateReminderID(selectedUser.TelegramUserID, time.Now())
 
 	dbChore := &store.Chore{
-		UserID:		selectedUser.ID,
-		Description:	chore.Description,
-		AssignedAt:	time.Now(),
-		DeadlineAt:	deadline,
-		ReminderID:	reminderID,
+		UserID:      selectedUser.ID,
+		Description: chore.Description,
+		AssignedAt:  time.Now(),
+		DeadlineAt:  deadline,
+		ReminderID:  reminderID,
 	}
 	if err := h.Store.CreateChore(ctx, dbChore); err != nil {
 		return fmt.Errorf("failed to save recurring chore to database: %v", err)
@@ -200,12 +200,12 @@ func (h *Handlers) assignRecurringChore(ctx context.Context, chore *store.Recurr
 	}
 
 	assignment := &ChoreAssignment{
-		UserID:		selectedUser.TelegramUserID,
-		UserName:	selectedUser.FirstName,
-		Description:	chore.Description,
-		AssignedAt:	time.Now(),
-		GroupID:	h.GroupID,
-		ReminderID:	reminderID,
+		UserID:      selectedUser.TelegramUserID,
+		UserName:    selectedUser.FirstName,
+		Description: chore.Description,
+		AssignedAt:  time.Now(),
+		GroupID:     h.GroupID,
+		ReminderID:  reminderID,
 	}
 
 	if err := h.ChoreReminderManager.SendInitialDM(assignment); err != nil {

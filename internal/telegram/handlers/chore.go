@@ -131,10 +131,10 @@ func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 		}
 
 		chore := &store.RecurringChore{
-			Description:	description,
-			Interval:	intervalDays,
-			NextRunAt:	nextRun,
-			CreatedAt:	now,
+			Description: description,
+			Interval:    intervalDays,
+			NextRunAt:   nextRun,
+			CreatedAt:   now,
 		}
 
 		if err := h.Store.CreateRecurringChore(context.Background(), chore); err != nil {
@@ -261,8 +261,8 @@ func (h *Handlers) assignChore(chatID int64, fromUserID int64, description strin
 	// Additional +2% chance for every pending admin assigned day
 
 	type weightedUser struct {
-		user	*store.User
-		weight	float64
+		user   *store.User
+		weight float64
 	}
 
 	var weightedCandidates []weightedUser
@@ -381,11 +381,11 @@ func (h *Handlers) assignChore(chatID int64, fromUserID int64, description strin
 	reminderID := GenerateReminderID(selectedUser.TelegramUserID, time.Now())
 
 	chore := &store.Chore{
-		UserID:		selectedUser.ID,
-		Description:	description,
-		AssignedAt:	time.Now(),
-		DeadlineAt:	deadline,
-		ReminderID:	reminderID,
+		UserID:      selectedUser.ID,
+		Description: description,
+		AssignedAt:  time.Now(),
+		DeadlineAt:  deadline,
+		ReminderID:  reminderID,
 	}
 	if err := h.Store.CreateChore(context.Background(), chore); err != nil {
 		slog.Error(fmt.Sprintf("Failed to create chore in database: %v", err))
@@ -393,12 +393,12 @@ func (h *Handlers) assignChore(chatID int64, fromUserID int64, description strin
 		return responseMsg, nil
 	}
 	assignment := &ChoreAssignment{
-		UserID:		selectedUser.TelegramUserID,
-		UserName:	selectedUser.FirstName,
-		Description:	description,	// Store unescaped
-		AssignedAt:	time.Now(),
-		GroupID:	h.GroupID,
-		ReminderID:	reminderID,
+		UserID:      selectedUser.TelegramUserID,
+		UserName:    selectedUser.FirstName,
+		Description: description, // Store unescaped
+		AssignedAt:  time.Now(),
+		GroupID:     h.GroupID,
+		ReminderID:  reminderID,
 	}
 
 	// SendInitialDM now handles storage internally only on success
