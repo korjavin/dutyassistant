@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/korjavin/dutyassistant/internal/store"
@@ -78,11 +79,11 @@ func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 	}
 
 	// 3. Check for translate subcommand
-	if strings.HasPrefix(strings.ToLower(args), "translate ") {
+	if strings.HasPrefix(strings.ToLower(args), "translate") {
 		return h.HandleChoreTranslate(m)
 	}
 
-	// 3. Parse for recurring chore suffix /<N>d
+	// 4. Parse for recurring chore suffix /<N>d
 	recurringRe := regexp.MustCompile(`(?i)\s+/([1-9][0-9]*)d$`)
 	match := recurringRe.FindStringSubmatch(args)
 
@@ -435,9 +436,11 @@ func (h *Handlers) HandleChoreTranslate(m *tgbotapi.Message) (tgbotapi.MessageCo
 
 	// 2. Parse the chore ID from arguments (format: "/chore translate <id>")
 	args := strings.TrimSpace(m.CommandArguments())
-	// Remove "translate " prefix (case insensitive)
+	// Convert to lowercase for case-insensitive parsing
+	lowerArgs := strings.ToLower(args)
+	// Remove "translate " prefix
 	prefix := "translate "
-	if !strings.HasPrefix(strings.ToLower(args), "translate ") {
+	if !strings.HasPrefix(lowerArgs, prefix) {
 		msg := tgbotapi.NewMessage(m.Chat.ID, "❌ Invalid translate command format. Usage: /chore translate <id>")
 		return msg, nil
 	}
@@ -452,7 +455,12 @@ func (h *Handlers) HandleChoreTranslate(m *tgbotapi.Message) (tgbotapi.MessageCo
 	// 3. Fetch recurring chore
 	ctx := context.Background()
 	chore, err := h.Store.GetRecurringChore(ctx, id)
-	if err != nil || chore == nil {
+	if err != nil {
+		slog.Error(fmt.Sprintf("Failed to get recurring chore %d: %v", id, err))
+		msg := tgbotapi.NewMessage(m.Chat.ID, "❌ Chore not found.")
+		return msg, nil
+	}
+	if chore == nil {
 		msg := tgbotapi.NewMessage(m.Chat.ID, "❌ Chore not found.")
 		return msg, nil
 	}
@@ -461,11 +469,29 @@ func (h *Handlers) HandleChoreTranslate(m *tgbotapi.Message) (tgbotapi.MessageCo
 	translatedDesc := h.translateIfNonLatin(ctx, chore.Description)
 
 	if translatedDesc == chore.Description {
-		// No translation occurred (already Latin or LLM client not configured)
-		msg := tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("ℹ️ Chore <b>%d</b> description is already in English or translation is disabled.\n\nCurrent: <i>%s</i>",
-			chore.ID, html.EscapeString(chore.Description)))
-		msg.ParseMode = tgbotapi.ModeHTML
-		return msg, nil
+		// Check if description has non-Latin characters to distinguish between
+		// "already in English" and "translation failed"
+		hasNonLatin := false
+		for _, r := range chore.Description {
+			if unicode.IsLetter(r) && !unicode.Is(unicode.Latin, r) {
+				hasNonLatin = true
+				break
+			}
+		}
+
+		if hasNonLatin && h.LLMClient != nil {
+			// Translation failed (LLM client exists but error occurred)
+			msg := tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("❌ Translation failed. Please check logs and try again.\n\nCurrent: <i>%s</i>",
+				html.EscapeString(chore.Description)))
+			msg.ParseMode = tgbotapi.ModeHTML
+			return msg, nil
+		} else {
+			// Already in English or LLM client not configured
+			msg := tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("ℹ️ Chore <b>%d</b> description is already in English or translation is disabled.\n\nCurrent: <i>%s</i>",
+				chore.ID, html.EscapeString(chore.Description)))
+			msg.ParseMode = tgbotapi.ModeHTML
+			return msg, nil
+		}
 	}
 
 	// 5. Update description

@@ -167,7 +167,12 @@ func (c *Client) TranslateToEnglish(ctx context.Context, text string) (string, e
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		err := fmt.Errorf("LLM TranslateToEnglish non-200 status: %d, body: %s", resp.StatusCode, string(bodyBytes))
+		bodyStr := string(bodyBytes)
+		// Truncate body to avoid logging sensitive information
+		if len(bodyStr) > 200 {
+			bodyStr = bodyStr[:200] + "..."
+		}
+		err := fmt.Errorf("LLM TranslateToEnglish non-200 status: %d, body: %s", resp.StatusCode, bodyStr)
 		slog.Error(fmt.Sprint(err.Error()))
 		return text, err
 	}

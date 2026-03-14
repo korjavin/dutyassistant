@@ -597,3 +597,76 @@ LLM integration opens up possibilities for implementing more "intelligent" featu
   * The LLM processes the prompt, extracts the necessary information from the provided context, and generates a natural language response, which the bot then sends to the user.
 
 This approach allows users to interact with the system in a more natural and conversational manner, not limited to strict commands.
+
+## **IX. LLM Integration Implementation**
+
+### **9.1. Actual Implementation**
+
+The LLM integration has been implemented in `/internal/llm/openai.go` with a `Client` struct that wraps OpenAI-compatible APIs. The implementation follows the adapter pattern described in section VIII but uses concrete types rather than an abstract interface.
+
+**Key Methods:**
+
+- `TranslateToEnglish(ctx, text) (string, error)`: Translates non-Latin chore descriptions to English
+  - Uses temperature 0.3 for consistent translations (hardcoded for deterministic output)
+  - Uses the configured model from `OPENAI_MODEL` environment variable
+  - Returns original text on error or if client is nil
+  - Logs errors for debugging but gracefully falls back to original text
+
+- `RefineMessage(ctx, intent, vanilla) string`: Refines messages for fun/humorous formatting
+  - Uses the configured temperature from `OPENAI_TEMPERATURE` (default 0.7)
+  - Sanitizes output to only allow Telegram-supported HTML tags
+  - Returns original message on error or if client is nil
+
+**Important Implementation Notes:**
+
+1. **Model Configuration**: The `TranslateToEnglish` method uses `c.model` (configured via OPENAI_MODEL) instead of a hardcoded model name. This is critical for compatibility with alternative LLM providers like DeepSeek that don't support the default "gpt-4o-mini" model.
+
+2. **Error Handling**: Both methods implement graceful fallback - if the LLM client is nil or an error occurs, they return the original text/message rather than failing. This ensures the bot continues to function even when LLM services are unavailable.
+
+3. **Security**: Error responses from the LLM API are truncated to 200 characters before logging to prevent potential information disclosure.
+
+### **9.2. Translation Integration in Telegram Handlers**
+
+The translation functionality is integrated into chore creation workflows:
+
+**Helper Function:** `translateIfNonLatin(ctx, description) string` in `/internal/telegram/handlers/handlers.go`
+- Checks if description contains non-Latin Unicode characters
+- Only translates if non-Latin characters are found
+- Returns original text if translation fails or LLM client is not configured
+- Logs translation errors for debugging
+
+**Usage Points:**
+- `/chore <description> [/<N>d]` - Translates both one-off and recurring chore descriptions automatically during creation
+- `/chore translate <id>` - Admin-only command to retrospectively translate existing recurring chore descriptions
+
+**Admin Command:** `HandleChoreTranslate()` in `/internal/telegram/handlers/chore.go`
+- Validates admin permissions
+- Parses chore ID from arguments (case-insensitive: "translate", "Translate", "TRANSLATE")
+- Fetches recurring chore from store
+- Uses `translateIfNonLatin()` for translation
+- Updates chore description via `Store.UpdateRecurringChoreDescription(id, translated)`
+- Provides user feedback with old/new description comparison
+- Distinguishes between "already in English" and "translation failed" error messages
+
+**Error Handling Flow:**
+1. If chore description has non-Latin characters → attempt translation
+2. If translation succeeds → update description and show success message
+3. If translation fails (network error, API error, etc.) → log error and show "Translation failed" message
+4. If no non-Latin characters or LLM client not configured → show "already in English or translation disabled" message
+
+### **9.3. Environment Variables**
+
+The LLM client is configured via environment variables:
+
+| Variable | Purpose | Required | Default |
+|----------|---------|----------|---------|
+| `OPENAI_API_KEY` | The API key for the LLM service | No (optional feature) | |
+| `OPENAI_URL` | The API base URL | No | `https://api.openai.com/v1` |
+| `OPENAI_MODEL` | The model to use for requests | No | `gpt-4o-mini` |
+| `OPENAI_TEMPERATURE` | Temperature for creative requests | No | `0.7` |
+| `OPENAI_TIMEOUT_SECONDS` | Timeout in seconds for LLM API calls | No | `10` |
+
+**Alternative Providers:** By setting `OPENAI_URL`, you can use any OpenAI-compatible API such as:
+- DeepSeek: `https://api.deepseek.com/v1`
+- Ollama: `http://localhost:11434/v1`
+- vLLM: `http://localhost:8000/v1`

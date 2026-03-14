@@ -218,8 +218,7 @@ func TestHandleChoreTranslate_LLMErrorFallback(t *testing.T) {
 
 	response, err := h.HandleChoreTranslate(message)
 	assert.NoError(t, err)
-	assert.Contains(t, response.Text, "ℹ️ Chore")
-	assert.Contains(t, response.Text, "already in English")
+	assert.Contains(t, response.Text, "❌ Translation failed")
 
 	mockStore.AssertExpectations(t)
 	mockStore.AssertNotCalled(t, "UpdateRecurringChoreDescription")
