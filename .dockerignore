@@ -8,8 +8,8 @@
 roster-bot
 web/node_modules
 
-# Exclude Go vendor directory (we're not using vendoring anymore)
-vendor/
+# Exclude Go vendor directory at root level (we're not using vendoring anymore)
+/vendor/
 
 # Exclude IDE files
 .idea
