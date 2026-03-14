@@ -87,23 +87,32 @@ The project uses GitHub Actions for automated builds and deployments. On push to
 - `/status` - View your duty statistics and queue status
 - `/schedule` - View the current month's duty schedule
 - `/volunteer` - Volunteer for duty (shows interactive day selection buttons)
-- `/chore` - View your currently assigned active chores
+- `/chores` - View your currently assigned active chores
 - `/explain` - Explain how the most recent dish hero duty was assigned
 
 ### Admin Commands
-- `/assign` - Assign days to a user's admin queue (interactive user + days selection)
-- `/chore <description> [/<N>d]` - Assign a one-off chore to a random user or make it periodic every `N` days.
-- `/chore translate <id>` - Translate a recurring chore's description to English (admin only).
-- `/list` - View all active periodic chores or regular tasks (interactive list type selection, or `/list chore` / `/list task`).
-- `/cancel` - Cancel a duty, active chore, or recurring chore (interactive item selection).
-- `/complete` - Mark any active chore as completed (interactive chore selection).
-- `/modify` or `/change` - Change duty assignment for a date (interactive date + user selection)
-- `/offduty` - Set off-duty period for a user (interactive user selection, text date input)
-- `/toggleactive` - Toggle user active/inactive status (interactive user selection with status indicators)
+
+**🗓️ Duty Management**
+- `/assign` - Add days to a user's admin queue (interactive user + days selection)
 - `/unassign` - Remove days from a user's admin queue (interactive user + days selection)
-- `/vacation [on|off]` - Toggle vacation mode to pause all duty assignments (interactive button UI when no argument provided)
+- `/change` - Change duty assignment for a date (interactive date + user selection)
+- `/cancel` - Cancel a duty, active chore, or recurring chore (interactive item selection)
+- `/offduty` - Set a temporary off-duty period for a user (interactive user selection, text date input)
+- `/vacation` - Toggle vacation mode to pause all duty assignments
+
+**🧹 Chore Management**
+- `/chores` - Open the chore management menu
+- `/newchore` - Create a new one-off or recurring chore interactively
+- `/editchore` - Edit a recurring chore description
+- `/translate` - Translate a recurring chore's description to English
+- `/stats` - Show chore statistics
+- `/complete` - Mark any active chore as completed (interactive chore selection)
+- `/overdue` - Check for overdue chores
+
+**👥 User Management**
 - `/users` - List all users with their queues and status
 - `/ratings` - Show the current month's participant rating calendar
+- `/activate` - Toggle a user's active/inactive status
 
 ### Participant Rating Flow
 

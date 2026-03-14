@@ -24,23 +24,30 @@ const (
 		"/help - Show this help message.\n" +
 		"/status - Show your current duty statistics.\n" +
 		"/schedule - View the duty schedule for the current month.\n" +
-		"/volunteer <days> - Add days to your volunteer queue.\n" +
+		"/volunteer - Volunteer for duty.\n" +
 		"/explain - Explain how the last assignment was made.\n" +
-		"/chore - View your currently assigned chores."
+		"/chores - View your currently assigned chores."
 
 	adminHelpMessageSection = "\n\n*Admin Commands:*\n" +
-		"/chore - Manage and assign chores interactively.\n" +
-		"/list - View all active periodic chores or regular tasks.\n" +
+		"🗓️ *Duty Management*\n" +
+		"/assign - Add days to a user's admin queue.\n" +
+		"/unassign - Remove days from a user's admin queue.\n" +
+		"/change - Change duty assignment for a date.\n" +
 		"/cancel - Cancel a duty, active chore, or recurring chore.\n" +
-		"/assign - Add days to user's admin queue.\n" +
-		"/unassign - Remove days from user's admin queue.\n" +
-		"/change - Change assigned user for a date.\n" +
-		"/offduty - Set off-duty period.\n" +
-		"/vacation - Toggle vacation mode.\n" +
+		"/offduty - Set a temporary off-duty period for a user.\n" +
+		"/vacation - Toggle vacation mode to pause all duty assignments.\n\n" +
+		"🧹 *Chore Management*\n" +
+		"/chores - Chore management menu.\n" +
+		"/newchore - Create a new chore interactively.\n" +
+		"/editchore - Edit a recurring chore description.\n" +
+		"/translate - Translate a chore description to English.\n" +
+		"/stats - Show chore statistics.\n" +
+		"/complete - Mark an active chore as completed.\n" +
+		"/overdue - Check for overdue chores.\n\n" +
+		"👥 *User Management*\n" +
 		"/users - List all users and their status.\n" +
 		"/ratings - Show the current month's participant rating calendar.\n" +
-		"/toggle\\_active - Toggle a user's participation in the rotation.\n" +
-		"/complete - Mark any active chore as completed."
+		"/activate - Toggle a user's active/inactive status."
 
 	statusMessage = "<b>Duty Status for %s:</b>\n\n" +
 		"📊 <b>Statistics:</b>\n" +

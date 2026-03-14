@@ -110,6 +110,13 @@ func TestHandleHelp_Admin(t *testing.T) {
 	assert.Contains(t, msg.Text, "/start - Show the welcome message")
 	assert.Contains(t, msg.Text, "*Admin Commands:*")
 	assert.Contains(t, msg.Text, "/cancel - Cancel a duty, active chore, or recurring chore.")
+	assert.Contains(t, msg.Text, "🗓️ *Duty Management*")
+	assert.Contains(t, msg.Text, "🧹 *Chore Management*")
+	assert.Contains(t, msg.Text, "👥 *User Management*")
+	assert.Contains(t, msg.Text, "/newchore")
+	assert.Contains(t, msg.Text, "/editchore")
+	assert.NotContains(t, msg.Text, "/toggle_active")
+	assert.Contains(t, msg.Text, "/activate")
 	assert.Equal(t, tgbotapi.ModeMarkdown, msg.ParseMode)
 }
 

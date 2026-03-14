@@ -221,8 +221,6 @@ func (b *Bot) handleCommand(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 		return b.handlers.HandleEdit(m)
 	case "unassign":
 		return b.handlers.HandleUnassign(m)
-	case "modify":
-		return b.handlers.HandleModify(m)
 	case "change":
 		return b.handlers.HandleChange(m)
 	case "offduty":

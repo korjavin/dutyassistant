@@ -185,9 +185,9 @@ func (h *Handlers) HandleUnassign(m *tgbotapi.Message) (tgbotapi.MessageConfig, 
 	return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("✅ Successfully removed %d day(s) from admin queue for %s.", days, userName)), nil
 }
 
-// HandleModify handles the /modify command. Format: /modify <date> <new_username>
+// HandleChange handles the /change command. Format: /change <date> <new_username>
 // This changes the assigned user for today or a future date.
-func (h *Handlers) HandleModify(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
+func (h *Handlers) HandleChange(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
 	isAdmin, err := h.checkAdmin(m.From.ID)
 	if err != nil || !isAdmin {
 		return tgbotapi.NewMessage(m.Chat.ID, adminOnlyMessage), nil
@@ -255,7 +255,7 @@ func (h *Handlers) HandleModify(m *tgbotapi.Message) (tgbotapi.MessageConfig, er
 	}
 
 	if len(args) != 2 {
-		msg := tgbotapi.NewMessage(m.Chat.ID, "⚠️ Invalid format.\n\nUsage: <code>/modify date username</code>\n\nExample: <code>/modify 2025-10-10 John</code>")
+		msg := tgbotapi.NewMessage(m.Chat.ID, "⚠️ Invalid format.\n\nUsage: <code>/change date username</code>\n\nExample: <code>/change 2025-10-10 John</code>")
 		msg.ParseMode = tgbotapi.ModeHTML
 		return msg, nil
 	}
@@ -268,14 +268,23 @@ func (h *Handlers) HandleModify(m *tgbotapi.Message) (tgbotapi.MessageConfig, er
 
 	user, err := h.Store.GetUserByName(context.Background(), userName)
 	if err != nil || user == nil {
-		return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf(userNotFoundMessage, userName)), nil
+		// Get list of users for suggestion
+		users, _ := h.Store.ListActiveUsers(context.Background())
+		suggestions := ""
+		if len(users) > 0 {
+			suggestions = "\n\nAvailable users:\n"
+			for _, u := range users {
+				suggestions += fmt.Sprintf("  • %s\n", u.FirstName)
+			}
+		}
+		return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("❌ User '%s' not found.%s", userName, suggestions)), nil
 	}
 
 	if _, err := h.Scheduler.ChangeDutyUser(context.Background(), dutyDate, user.ID); err != nil {
 		return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("Failed to change duty for %s: %v", dateStr, err)), nil
 	}
 
-	return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf(modifySuccessMessage, dateStr, userName)), nil
+	return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("✅ Successfully assigned %s to duty on %s.", userName, dateStr)), nil
 }
 
 // HandleUsers lists all users with their status.
@@ -510,12 +519,6 @@ func (h *Handlers) HandleOffDuty(m *tgbotapi.Message) (tgbotapi.MessageConfig, e
 	}
 
 	return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("✅ %s is now off-duty from %s to %s.", userName, args[1], args[2])), nil
-}
-
-// HandleChange changes the assigned user for today or a future date. Format: /change <date> <username>
-// This is an alias for /modify
-func (h *Handlers) HandleChange(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
-	return h.HandleModify(m)
 }
 
 // HandleAssignUserCallback handles the callback when a user is selected from inline keyboard

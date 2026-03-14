@@ -46,7 +46,7 @@ func TestAdminCommands_NotAdmin(t *testing.T) {
 		handler func(*tgbotapi.Message) (tgbotapi.MessageConfig, error)
 	}{
 		{"Assign", h.HandleAssign},
-		{"Modify", h.HandleModify},
+		{"Modify", h.HandleChange},
 		{"Users", h.HandleUsers},
 		{"ToggleActive", h.HandleToggleActive},
 	}
