@@ -4,374 +4,69 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
-	"os/signal"
-	"strconv"
-	"syscall"
 	"time"
 
-	"github.com/robfig/cron/v3"
-
-	httpserver "github.com/korjavin/dutyassistant/internal/http"
-	"github.com/korjavin/dutyassistant/internal/llm"
-	"github.com/korjavin/dutyassistant/internal/notification"
-	"github.com/korjavin/dutyassistant/internal/scheduler"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/korjavin/dutyassistant/internal/api"
+	"github.com/korjavin/dutyassistant/internal/bot"
+	"github.com/korjavin/dutyassistant/internal/domain"
+	"github.com/korjavin/dutyassistant/internal/service"
 	"github.com/korjavin/dutyassistant/internal/store/sqlite"
-	"github.com/korjavin/dutyassistant/internal/telegram"
-	"github.com/korjavin/dutyassistant/internal/telegram/handlers"
+	"github.com/robfig/cron/v3"
 )
 
 func main() {
-	log.Println("Roster Bot starting...")
-
-	// Get configuration from environment
-	dbPath := getEnv("DATABASE_PATH", "/app/data/roster.db")
 	telegramToken := getEnv("TELEGRAM_APITOKEN", "")
 	if telegramToken == "" {
-		log.Fatal("TELEGRAM_APITOKEN environment variable is required")
-	}
-	adminIDStr := getEnv("ADMIN_ID", "0")
-	adminID := parseInt64(adminIDStr, 0)
-	dishGroupIDStr := getEnv("DISH_GROUP", "0")
-	dishGroupID := parseInt64(dishGroupIDStr, 0)
-
-	openaiAPIKey := getEnv("OPENAI_API_KEY", "")
-	openaiURL := getEnv("OPENAI_URL", "")
-	openaiTimeout := parseInt64(getEnv("OPENAI_TIMEOUT_SECONDS", "10"), 10)
-	openaiModel := getEnv("OPENAI_MODEL", "gpt-4o-mini")
-
-	var openaiTemperature *float64
-	if tempStr := os.Getenv("OPENAI_TEMPERATURE"); tempStr != "" {
-		if temp, err := strconv.ParseFloat(tempStr, 64); err == nil {
-			openaiTemperature = &temp
-		}
+		log.Fatal("TELEGRAM_APITOKEN environment variable must be set")
 	}
 
-	// Initialize database
-	log.Println("Initializing database at", dbPath)
-	ctx := context.Background()
-	store, err := sqlite.New(ctx, dbPath)
+	botAPI, err := tgbotapi.NewBotAPI(telegramToken)
+	if err != nil {
+		log.Fatalf("Failed to create Telegram bot: %v", err)
+	}
+	botAPI.Debug = getEnv("GIN_MODE", "debug") == "debug"
+	log.Printf("Authorized on account %s", botAPI.Self.UserName)
+
+	dbPath := getEnv("DATABASE_PATH", "/app/data/roster.db")
+	dbStore, err := sqlite.New(context.Background(), dbPath)
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
+	repo := domain.NewStoreAdapter(dbStore)
 
-	// Initialize scheduler
-	log.Println("Initializing scheduler...")
-	sched := scheduler.NewScheduler(store)
+	dutyService := service.NewDutyService(repo)
+	choreService := service.NewChoreService(repo)
+	ratingService := service.NewRatingService(repo)
 
-	// Initialize LLM client
-	log.Println("Initializing LLM client...")
-	llmClient := llm.NewClient(openaiAPIKey, openaiURL, int(openaiTimeout), openaiModel, openaiTemperature)
-	if llmClient != nil {
-		model, temp, url := llmClient.Config()
-		log.Printf("LLM Client: Enabled (Provider: OpenAI, Model: %s, Temperature: %.2f, BaseURL: %s)", model, temp, url)
-	} else {
-		log.Println("LLM Client: Disabled (OPENAI_API_KEY not set)")
-	}
+	// In a real app we'd integrate cron jobs here instead of bot.go or do DI to bot.go
+	tgBot := bot.NewBot(botAPI, dutyService, choreService, ratingService)
+	go tgBot.Start()
 
-	// Initialize Telegram handlers
-	log.Println("Initializing Telegram handlers...")
-	var telegramHandlers *handlers.Handlers
-	if adminID != 0 {
-		log.Printf("Admin ID configured: %d", adminID)
-		telegramHandlers = handlers.NewWithAdminID(store, sched, dishGroupID, adminID, llmClient)
-	} else {
-		telegramHandlers = handlers.New(store, sched, dishGroupID, llmClient)
-	}
-
-	// Initialize and start Telegram bot
-	log.Println("Initializing Telegram bot...")
-	bot, err := telegram.NewBot(telegramToken, telegramHandlers, dishGroupID, adminID)
-	if err != nil {
-		log.Fatalf("Failed to initialize Telegram bot: %v", err)
-	}
-	log.Printf("Access control configured: GroupID=%d, OwnerID=%d", dishGroupID, adminID)
-
-	// Start bot in background
-	botCtx, botCancel := context.WithCancel(ctx)
-	defer botCancel()
-	go bot.Start(botCtx)
-
-	// Initialize cron scheduler for scheduled jobs (all times in Europe/Berlin)
-	log.Println("Initializing cron scheduler...")
-	berlinLoc, err := time.LoadLocation("Europe/Berlin")
-	if err != nil {
-		log.Fatalf("Failed to load Europe/Berlin timezone: %v", err)
-	}
+	// Setup background jobs
+	berlinLoc, _ := time.LoadLocation("Europe/Berlin")
 	c := cron.New(cron.WithLocation(berlinLoc))
 
-	// Daily at 11:00 AM Berlin - Assign today's duty and Process Recurring Chores
-	_, err = c.AddFunc("0 11 * * *", func() {
-		log.Println("═══════════════════════════════════════════════════════════")
-		log.Println("[CRON] Running daily duty assignment and recurring chores (11:00 AM Berlin)")
-		log.Printf("[CRON] Current time: %s", time.Now().In(berlinLoc).Format("2006-01-02 15:04:05 MST"))
-
-		// Process Recurring Chores
-		if err := telegramHandlers.ProcessRecurringChores(context.Background()); err != nil {
-			log.Printf("[CRON] ERROR: Failed to process recurring chores: %v", err)
-		}
-
-		duty, err := sched.AssignTodaysDuty(context.Background())
-		if err != nil {
-			log.Printf("[CRON] ERROR: Failed to assign today's duty: %v", err)
-			return
-		}
-
-		if duty == nil {
-			log.Printf("[CRON] WARNING: No duty was assigned (duty is nil)")
-			return
-		}
-
-		log.Printf("[CRON] ✓ Successfully assigned duty to user %d (Assignment Type: %s)", duty.UserID, duty.AssignmentType)
-
-		if duty.User == nil {
-			log.Printf("[CRON] ERROR: Duty.User is nil - cannot send notifications!")
-			return
-		}
-
-		log.Printf("[CRON] Duty details: UserID=%d, Name=%s, TelegramID=%d, Date=%s, Type=%s",
-			duty.UserID, duty.User.FirstName, duty.User.TelegramUserID,
-			duty.DutyDate.Format("2006-01-02"), duty.AssignmentType)
-
-		// Send DM to assigned user using our notification formatter
-		if duty.User.TelegramUserID != 0 {
-			log.Printf("[CRON] Preparing DM for user %s (TelegramID: %d)", duty.User.FirstName, duty.User.TelegramUserID)
-			dmMsg := notification.FormatDMToAssignee(duty)
-
-			if llmClient != nil {
-				dmMsg = llmClient.RefineMessage(context.Background(), "friendly congratulatory DM to person assigned chore", dmMsg)
-			}
-
-			log.Printf("[CRON] DM message content: %s", dmMsg)
-
-			if err := bot.SendMessageHTML(duty.User.TelegramUserID, dmMsg); err != nil {
-				log.Printf("[CRON] ERROR: Failed to send DM to user %d: %v", duty.User.TelegramUserID, err)
-				// Log failure to database
-				if dbErr := store.LogNotification(context.Background(), duty.DutyDate, duty.UserID, "DM", "FAILED", err.Error()); dbErr != nil {
-					log.Printf("[CRON] ERROR: Failed to log DM failure: %v", dbErr)
-				}
-			} else {
-				log.Printf("[CRON] ✓ Successfully sent DM notification to user %d", duty.User.TelegramUserID)
-				// Log success to database
-				if dbErr := store.LogNotification(context.Background(), duty.DutyDate, duty.UserID, "DM", "SUCCESS", ""); dbErr != nil {
-					log.Printf("[CRON] ERROR: Failed to log DM success: %v", dbErr)
-				}
-			}
-		} else {
-			log.Printf("[CRON] WARNING: User %s has TelegramUserID=0, cannot send DM", duty.User.FirstName)
-			// Log skip to database
-			if dbErr := store.LogNotification(context.Background(), duty.DutyDate, duty.UserID, "DM", "SKIPPED", "TelegramUserID is 0"); dbErr != nil {
-				log.Printf("[CRON] ERROR: Failed to log DM skip: %v", dbErr)
-			}
-		}
-
-		// Send notification to group chat using our notification formatter
-		if dishGroupID != 0 {
-			log.Printf("[CRON] Preparing group message for chat %d", dishGroupID)
-			groupMsg := notification.FormatDutyAssignedMessage(duty)
-
-			if llmClient != nil {
-				groupMsg = llmClient.RefineMessage(context.Background(), "congratulate duty assignee proudly", groupMsg)
-			}
-
-			log.Printf("[CRON] Group message content: %s", groupMsg)
-
-			if err := bot.SendMessageHTML(dishGroupID, groupMsg); err != nil {
-				log.Printf("[CRON] ERROR: Failed to send group notification to chat %d: %v", dishGroupID, err)
-				// Log failure to database
-				if dbErr := store.LogNotification(context.Background(), duty.DutyDate, duty.UserID, "GROUP", "FAILED", err.Error()); dbErr != nil {
-					log.Printf("[CRON] ERROR: Failed to log group notification failure: %v", dbErr)
-				}
-			} else {
-				log.Printf("[CRON] ✓ Successfully sent group notification to chat %d", dishGroupID)
-				// Log success to database
-				if dbErr := store.LogNotification(context.Background(), duty.DutyDate, duty.UserID, "GROUP", "SUCCESS", ""); dbErr != nil {
-					log.Printf("[CRON] ERROR: Failed to log group notification success: %v", dbErr)
-				}
-			}
-		} else {
-			log.Printf("[CRON] WARNING: DISH_GROUP not configured (dishGroupID=0), skipping group notification")
-			// Log skip to database
-			if dbErr := store.LogNotification(context.Background(), duty.DutyDate, duty.UserID, "GROUP", "SKIPPED", "dishGroupID not configured"); dbErr != nil {
-				log.Printf("[CRON] ERROR: Failed to log group notification skip: %v", dbErr)
-			}
-		}
-
-		log.Println("[CRON] Daily duty assignment completed")
-		log.Println("═══════════════════════════════════════════════════════════")
+	c.AddFunc("0 11 * * *", func() {
+		log.Println("Cron: Triggering auto assign duty...")
+		dutyService.AutoAssignDuty(context.Background(), time.Now())
 	})
-	if err != nil {
-		log.Fatalf("Failed to schedule daily assignment job: %v", err)
-	}
 
-	// Daily at 21:00 PM Berlin - Mark duty as completed
-	_, err = c.AddFunc("0 21 * * *", func() {
-		log.Println("[CRON] Running daily duty completion (21:00 PM Berlin)")
-		err := sched.CompleteTodaysDuty(context.Background())
-		if err != nil {
-			log.Printf("[CRON] Error completing today's duty: %v", err)
-		} else {
-			log.Printf("[CRON] Successfully marked today's duty as completed")
-		}
+	c.AddFunc("0 21 * * *", func() {
+		log.Println("Cron: Triggering duty completion...")
+		dutyService.CompleteTodaysDuty(context.Background())
 	})
-	if err != nil {
-		log.Fatalf("Failed to schedule daily completion job: %v", err)
-	}
 
-	// Daily at 20:50 Berlin - Ask the admin to rate active participants
-	_, err = c.AddFunc("50 20 * * *", func() {
-		log.Println("[CRON] Running daily participant rating reminder (20:50 Berlin)")
-
-		if adminID == 0 {
-			log.Println("[CRON] Participant rating reminder skipped: ADMIN_ID is not configured")
-			return
-		}
-
-		msg, ok, err := telegramHandlers.PrepareDailyRatingsReminder(adminID, adminID, time.Now().In(berlinLoc))
-		if err != nil {
-			log.Printf("[CRON] ERROR: Failed to prepare participant rating reminder: %v", err)
-			return
-		}
-		if !ok {
-			log.Println("[CRON] Participant rating reminder skipped: no active non-admin participants to rate")
-			return
-		}
-
-		if _, err := bot.API().Send(*msg); err != nil {
-			telegramHandlers.SessionManager.EndSession(adminID)
-			log.Printf("[CRON] ERROR: Failed to send participant rating reminder to admin %d: %v", adminID, err)
-			return
-		}
-
-		log.Printf("[CRON] Successfully sent participant rating reminder to admin %d", adminID)
-	})
-	if err != nil {
-		log.Fatalf("Failed to schedule participant rating reminder job: %v", err)
-	}
-
-	// Daily at 21:00 Berlin - On the last calendar day, publish the monthly participant rating winners
-	_, err = c.AddFunc("0 21 * * *", func() {
-		log.Println("[CRON] Checking month-end participant ratings announcement (21:00 Berlin)")
-
-		if dishGroupID == 0 {
-			log.Println("[CRON] Month-end participant ratings announcement skipped: DISH_GROUP is not configured")
-			return
-		}
-
-		msg, ok, err := telegramHandlers.BuildMonthlyRatingsWinnersAnnouncement(time.Now().In(berlinLoc))
-		if err != nil {
-			log.Printf("[CRON] ERROR: Failed to build month-end participant ratings announcement: %v", err)
-			return
-		}
-		if !ok {
-			log.Println("[CRON] Month-end participant ratings announcement skipped: today is not the last calendar day of the month")
-			return
-		}
-
-		if _, err := bot.API().Send(*msg); err != nil {
-			log.Printf("[CRON] ERROR: Failed to send month-end participant ratings announcement to group %d: %v", dishGroupID, err)
-			return
-		}
-
-		log.Printf("[CRON] Successfully sent month-end participant ratings announcement to group %d", dishGroupID)
-	})
-	if err != nil {
-		log.Fatalf("Failed to schedule month-end participant ratings announcement job: %v", err)
-	}
-
-	// Daily at 16:00 Berlin - Send daily chore summary
-	tz := getEnv("CHORE_TIMEZONE", "Europe/Berlin")
-	_, err = c.AddFunc("CRON_TZ="+tz+" 0 16 * * *", func() {
-		log.Printf("[CRON] Running daily chore summary (16:00 %s)", tz)
-		err := notification.SendDailyChoreSummary(context.Background(), bot.API(), store, dishGroupID, true, getEnv("CHORE_TIMEZONE", "Europe/Berlin"))
-		if err != nil {
-			log.Printf("[CRON] Error sending daily chore summary: %v", err)
-		} else {
-			log.Printf("[CRON] Successfully sent daily chore summary")
-		}
-	})
-	if err != nil {
-		log.Fatalf("Failed to schedule daily chore summary job: %v", err)
-	}
-
-	// Sunday at 21:10 PM Berlin - Send weekly stats
-	_, err = c.AddFunc("10 21 * * 0", func() {
-		log.Println("[CRON] Running weekly stats (Sunday 21:10 PM Berlin)")
-		err := notification.SendWeeklyChoreStats(context.Background(), bot.API(), store, dishGroupID)
-		if err != nil {
-			log.Printf("[CRON] Error sending weekly chore stats: %v", err)
-		} else {
-			log.Printf("[CRON] Successfully sent weekly chore stats")
-		}
-		log.Printf("[CRON] Weekly stats job executed")
-	})
-	if err != nil {
-		log.Fatalf("Failed to schedule weekly stats job: %v", err)
-	}
-
-	// Start cron scheduler
 	c.Start()
-	log.Println("═══════════════════════════════════════════════════════════")
-	log.Println("Cron scheduler started with 6 jobs:")
-	log.Println("  1. Daily at 11:00 AM Berlin - Assign today's duty and send notifications")
-	log.Println("  2. Daily at 21:00 PM Berlin - Mark today's duty as completed")
-	log.Println("  3. Daily at 20:50 PM Berlin - Send participant rating reminder to the admin")
-	log.Println("  4. Daily at 21:00 PM Berlin - Publish month-end participant rating winners on the last calendar day")
-	log.Println("  5. Daily at 16:00 Europe/Berlin - Send daily chore summary")
-	log.Println("  6. Sunday at 21:10 PM Berlin - Send weekly stats")
-	log.Printf("Current Berlin time: %s", time.Now().In(berlinLoc).Format("2006-01-02 15:04:05 MST"))
-	log.Println("═══════════════════════════════════════════════════════════")
 
-	// Initialize HTTP server with Gin
-	log.Println("Initializing HTTP server on :8080...")
 	dutySecret := getEnv("DUTY_SECRET", "")
-	if dutySecret == "" {
-		log.Println("WARNING: DUTY_SECRET is not set. The /who endpoint will return 503 until it is configured.")
+	router := api.NewServer(repo, dutyService, choreService, ratingService, telegramToken, dutySecret)
+
+	log.Println("HTTP server listening on :8080")
+	if err := router.Run(":8080"); err != nil {
+		log.Fatalf("HTTP server error: %v", err)
 	}
-	router := httpserver.NewServer(store, telegramToken, dutySecret)
-
-	// Create HTTP server for graceful shutdown
-	srv := &http.Server{
-		Addr:    ":8080",
-		Handler: router,
-	}
-
-	// Start HTTP server in background
-	go func() {
-		log.Println("HTTP server listening on :8080")
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("HTTP server error: %v", err)
-		}
-	}()
-
-	log.Println("Roster Bot v0.1.0 initialized successfully")
-	log.Println("Press Ctrl+C to shut down")
-
-	// Wait for interrupt signal
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-
-	log.Println("Shutting down gracefully...")
-
-	// Stop cron scheduler
-	log.Println("Stopping cron scheduler...")
-	cronCtx := c.Stop()
-	<-cronCtx.Done()
-
-	// Graceful shutdown of HTTP server
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer shutdownCancel()
-
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		log.Printf("HTTP server shutdown error: %v", err)
-	}
-
-	// Stop Telegram bot
-	botCancel()
-
-	log.Println("Roster Bot stopped")
 }
 
 func getEnv(key, defaultValue string) string {
