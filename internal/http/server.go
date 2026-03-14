@@ -24,11 +24,18 @@ func NewServer(s store.Store, botToken string, dutySecret string) *gin.Engine {
 
 	// Cache Control Middleware
 	cacheControlMiddleware := func(c *gin.Context) {
-		c.Header("Cache-Control", "public, max-age=86400")
+		// Only cache CSS for a long time since we use cache-busting in index.html for it.
+		// ES6 modules without fingerprints should not be cached.
+		path := c.Request.URL.Path
+		if len(path) > 4 && path[:4] == "/css" {
+			c.Header("Cache-Control", "public, max-age=86400")
+		} else {
+			c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
+		}
 		c.Next()
 	}
 
-	// Serve static files from web directory with caching
+	// Serve static files from web directory
 	staticRoutes := router.Group("/")
 	staticRoutes.Use(cacheControlMiddleware)
 	{
