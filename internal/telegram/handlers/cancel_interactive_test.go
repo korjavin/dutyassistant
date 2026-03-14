@@ -12,6 +12,69 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
+func TestHandleCancelIDSelection(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	sm := handlers.NewSessionManager()
+	h := &handlers.Handlers{
+		Store:          mockStore,
+		SessionManager: sm,
+	}
+
+	msg := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 456},
+		From: &tgbotapi.User{ID: 123},
+		Text: "/cancel 16",
+	}
+
+	resp, err := h.HandleCancelIDSelection(msg, "16")
+	assert.NoError(t, err)
+
+	assert.Contains(t, resp.Text, "What do you want to cancel with ID 16?")
+	assert.NotNil(t, resp.ReplyMarkup)
+
+	markup := resp.ReplyMarkup.(*tgbotapi.InlineKeyboardMarkup)
+	assert.Len(t, markup.InlineKeyboard, 4)
+	assert.Equal(t, "cancel_assignment:R16", *markup.InlineKeyboard[0][0].CallbackData)
+	assert.Equal(t, "cancel_assignment:A16", *markup.InlineKeyboard[1][0].CallbackData)
+}
+
+func TestHandleCancelWithIDArgument(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	sm := handlers.NewSessionManager()
+	h := &handlers.Handlers{
+		Store:          mockStore,
+		SessionManager: sm,
+	}
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(123)).Return(&store.User{IsAdmin: true}, nil)
+
+	// Test with valid single ID
+	msg := &tgbotapi.Message{
+		Chat:     &tgbotapi.Chat{ID: 456},
+		From:     &tgbotapi.User{ID: 123},
+		Text:     "/cancel 16",
+		Entities: []tgbotapi.MessageEntity{{Type: "bot_command", Offset: 0, Length: 7}},
+	}
+	// We need to simulate CommandArguments behavior
+	// In go-telegram-bot-api, CommandArguments is handled internally, but for tests we can just
+	// construct the message text to simulate it. But actually we just call HandleCancel
+
+	resp, err := h.HandleCancel(msg)
+	assert.NoError(t, err)
+	assert.Contains(t, resp.Text, "What do you want to cancel with ID 16?")
+
+	// Test with invalid ID string
+	msg2 := &tgbotapi.Message{
+		Chat:     &tgbotapi.Chat{ID: 456},
+		From:     &tgbotapi.User{ID: 123},
+		Text:     "/cancel abc",
+		Entities: []tgbotapi.MessageEntity{{Type: "bot_command", Offset: 0, Length: 7}},
+	}
+
+	resp2, err2 := h.HandleCancel(msg2)
+	assert.NoError(t, err2)
+	assert.Contains(t, resp2.Text, "Unknown cancel command.")
+}
+
 func TestHandleCancelInteractive(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	sm := handlers.NewSessionManager()
