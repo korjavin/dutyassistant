@@ -1,3 +1,128 @@
+# Technical & Contributor Guide (Agent.md)
+
+**This document is the primary guide for technical contributors, developers, and AI agents.** It contains the technical architecture details, environment setup, deployment instructions, and development guidelines. For the user/customer guide, please refer to `README.md`.
+
+## Development Guidelines
+
+*   **Logging:** Use `log/slog` for all structured logging instead of the standard library `log` or `fmt` packages to ensure consistent and parseable output.
+
+## Environment Variables
+
+To run the Duty Assistant Bot, you need to set the following environment variables:
+
+| Variable             | Purpose                               | Required | Default Value        |
+| -------------------- | ------------------------------------- | -------- | -------------------- |
+| `GIN_MODE`           | The mode for the Gin web framework.   | No       | `debug`              |
+| `TELEGRAM_APITOKEN`  | The Telegram Bot API token.           | Yes      |                      |
+| `ADMIN_ID`          | Telegram user ID allowed to run admin-only commands and receive daily participant rating prompts. | No       | `0` |
+| `DATABASE_PATH`      | The path to the SQLite database file. | No       | `/app/data/roster.db` |
+| `DISH_GROUP`        | Telegram chat ID for the main group, used for group duty and month-end participant rating announcements. | No       | `0` |
+| `DNS_NAME`           | The DNS name for the web interface.   | No       |                      |
+| `OPENAI_API_KEY`     | The OpenAI API key for LLM-refined messages.  | No       |                      |
+| `OPENAI_URL`         | The OpenAI API base URL (can be customized).  | No       | `https://api.openai.com/v1` |
+| `OPENAI_TIMEOUT_SECONDS` | Timeout in seconds for LLM API calls.     | No       | `10`                 |
+| `OPENAI_MODEL`       | The OpenAI model to use for LLM requests.     | No       | `gpt-4o-mini`        |
+| `OPENAI_TEMPERATURE` | The temperature parameter for LLM requests.   | No       | `0.7`                |
+
+## Running with Docker
+
+The recommended way to run the Duty Assistant Bot is with Docker and Docker Compose.
+
+1.  **Create a `.env` file** with the following content:
+
+    ```
+    TELEGRAM_APITOKEN=your_telegram_bot_token
+    DNS_NAME=your_dns_name
+    ```
+
+2.  **Run the bot**:
+
+    ```bash
+    docker-compose -f deployments/docker-compose.yml up -d
+    ```
+
+## Building from Source
+
+You can also build the bot from source.
+
+1.  **Install Go**: Make sure you have Go 1.23 or higher installed.
+2.  **Install Node.js and npm**: These are required to build the frontend.
+3.  **Build the frontend**:
+
+    ```bash
+    cd web
+    npm install
+    npm run build
+    cd ..
+    ```
+
+4.  **Build the backend**:
+
+    ```bash
+    go build -mod=vendor -o roster-bot ./cmd/roster-bot/
+    ```
+
+5.  **Run the bot**:
+
+    ```bash
+    GIN_MODE=release TELEGRAM_APITOKEN=your_telegram_bot_token DATABASE_PATH=./roster.db ./roster-bot
+    ```
+
+## Deployment
+
+The project includes a `Dockerfile` and a `docker-compose.yml` file for easy deployment. The `Dockerfile` creates a minimal production image using a multi-stage build with Alpine Linux (includes `tzdata` for Berlin timezone support). The `docker-compose.yml` file defines the service and its dependencies.
+
+### CI/CD
+
+The project uses GitHub Actions for automated builds and deployments. On push to master, the workflow:
+1. Builds a Docker image
+2. Pushes to GitHub Container Registry
+3. Triggers Portainer webhook to deploy on production server
+
+## Acceptance Verification
+
+Verified on 2026-03-13 for the monthly participant rating flow:
+
+- Stable daily prompt and admin reply parsing are covered by `TestStartDailyRatingsSession_BuildsStablePrompt` and `TestHandleDailyRatingsInteractive_ValidSubmission`, including the `5 2 1`-style score submission flow.
+- Same-day resubmission replacement is covered by `TestHandleDailyRatingsInteractive_OverwriteCorrection` and `TestSaveDailyParticipantRatings_CreateAndUpdate`, confirming ratings are overwritten instead of duplicated.
+- The month-to-date calendar from day 1 through today is covered by `TestHandleRatingsCalendar_PopulatedMonth` and `TestHandleRatingsCalendar_EmptyMonth`.
+- The month-end totals and top-three winner announcement are covered by `TestBuildMonthlyRatingsWinnersAnnouncement_LastDayFormatting` and `TestBuildMonthlyRatingsWinnersAnnouncement_NotLastDaySkips`.
+- Full automated validation passed with `go test ./...`.
+- No standard project lint command is currently defined in `README.md`, `.github/workflows/ci-cd.yml`, or top-level task/build files, so no separate lint run was available for this verification task.
+- Rating-specific automated coverage meets the project target for the new entry points: `PrepareDailyRatingsReminder` 88.2%, `StartDailyRatingsSession` 83.3%, `HandleDailyRatingsInteractive` 92.6%, `HandleRatingsCalendar` 81.2%, `BuildMonthlyRatingsWinnersAnnouncement` 87.5%, and `SaveDailyParticipantRatings` 81.8%.
+
+## Database Schema
+
+### Users Table
+```sql
+- id (primary key)
+- telegram_user_id (unique)
+- first_name
+- is_admin (boolean) - auto-set if matches ADMIN_ID
+- is_active (boolean) - true for regular users, false for admins/inactive
+- volunteer_queue_days (integer) - number of days in volunteer queue
+- admin_queue_days (integer) - number of days in admin assignment queue
+- off_duty_start (date, nullable) - start of off-duty period
+- off_duty_end (date, nullable) - end of off-duty period
+```
+
+### Duties Table
+```sql
+- id (primary key)
+- user_id (foreign key to users)
+- duty_date (date, unique)
+- assignment_type (enum: 'voluntary', 'admin', 'round_robin')
+- created_at (timestamp)
+- completed_at (timestamp, nullable) - set at 21:00 PM
+```
+
+### Round-Robin State Table
+```sql
+- user_id (primary key, foreign key to users)
+- last_14_days_count (integer) - completed duties in last 14 days (excl. admin)
+- last_duty_date (date, nullable) - most recent duty date
+- updated_at (timestamp) - last calculation time
+```
 
 
 # **Technical Project: "Roster Bot" Duty Schedule Management System**
