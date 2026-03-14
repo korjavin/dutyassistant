@@ -79,15 +79,37 @@ func TestHandleStart_BackfillsConfiguredAdminFlagsForExistingUser(t *testing.T) 
 	mockStore.AssertExpectations(t)
 }
 
-func TestHandleHelp(t *testing.T) {
-	h := handlers.New(nil, nil, 0, nil)
-	message := &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: 123}}
+func TestHandleHelp_RegularUser(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.NewWithAdminID(mockStore, nil, 0, 999, nil)
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 123},
+		From: &tgbotapi.User{ID: 123},
+	}
 
 	msg, err := h.HandleHelp(message)
 	assert.NoError(t, err)
+	assert.Contains(t, msg.Text, "/start - Show the welcome message")
+	assert.NotContains(t, msg.Text, "*Admin Commands:*")
+	assert.NotContains(t, msg.Text, "/cancel")
+	assert.Equal(t, tgbotapi.ModeMarkdown, msg.ParseMode)
+}
+
+func TestHandleHelp_Admin(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.NewWithAdminID(mockStore, nil, 0, 123, nil)
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 123},
+		From: &tgbotapi.User{ID: 123},
+	}
+
+	msg, err := h.HandleHelp(message)
+	assert.NoError(t, err)
+	assert.Contains(t, msg.Text, "/start - Show the welcome message")
+	assert.Contains(t, msg.Text, "*Admin Commands:*")
 	assert.Contains(t, msg.Text, "/cancel - Cancel a duty, active chore, or recurring chore.")
-	assert.Contains(t, msg.Text, "/complete - Mark any active chore as completed.")
-	assert.Contains(t, msg.Text, "/ratings - Show the current month's participant rating calendar.")
 	assert.Equal(t, tgbotapi.ModeMarkdown, msg.ParseMode)
 }
 
