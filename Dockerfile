@@ -2,17 +2,7 @@
 # Use a specific version of golang-alpine for reproducibility
 FROM golang:1.23-alpine AS builder
 
-# Install frontend build dependencies (Node.js, npm for Tailwind CSS)
-RUN apk add --no-cache nodejs npm
-
 WORKDIR /app
-
-# --- Frontend Build ---
-# First, copy only the package management files to leverage Docker's layer caching.
-# This step assumes package.json and package-lock.json will exist in the /web directory.
-COPY web/package.json ./web/
-COPY web/package-lock.json* ./web/
-RUN cd web && npm install
 
 # --- Backend Build ---
 # Copy Go module files first for better caching
@@ -20,10 +10,6 @@ COPY go.mod go.sum ./
 
 # Copy all source code and vendor dependencies in one layer
 COPY . .
-
-# Build frontend after full source copy so generated assets and cache-busting
-# are not overwritten by a later COPY instruction.
-RUN cd web && npm run build
 
 # Add cache busting to HTML
 RUN sed -i "s/BUILD_TIME/$(date +%s)/g" /app/web/index.html
@@ -47,10 +33,10 @@ WORKDIR /app
 COPY --from=builder /roster-bot /roster-bot
 
 # Copy the built frontend assets from the builder stage.
-# Copy the entire web directory structure (index.html, js/, dist/, vendor/)
+# Copy the entire web directory structure (index.html, js/, css/, vendor/)
 COPY --from=builder /app/web/index.html ./web/index.html
 COPY --from=builder /app/web/js ./web/js
-COPY --from=builder /app/web/dist ./web/dist
+COPY --from=builder /app/web/css ./web/css
 COPY --from=builder /app/web/vendor ./web/vendor
 
 # The application will store its persistent data (e.g., SQLite database) in /app/data.

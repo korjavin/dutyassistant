@@ -1,5 +1,5 @@
 import VanillaCalendar from '/vendor/vanilla-calendar/vanilla-calendar.min.js';
-import { getSchedule, getPrognosis, getUsers, getActiveChores, volunteerForDuty, withdrawFromDuty } from '../api.js';
+import { getSchedule, getPrognosis, volunteerForDuty, withdrawFromDuty } from '../api.js';
 import { getState, setState } from '../store.js';
 import { createDutyCard, createModal, showModal, createLoadingSpinner, createErrorMessage, hideModal } from './components.js';
 
@@ -74,11 +74,9 @@ async function loadAndDisplaySchedule() {
     calendarDebug('Loading month', { currentYear, currentMonth });
 
     try {
-        const [scheduleData, prognosisData, usersData, choresData] = await Promise.all([
+        const [scheduleData, prognosisData] = await Promise.all([
             getSchedule(currentYear, currentMonth),
-            getPrognosis(currentYear, currentMonth),
-            getUsers(),
-            getActiveChores()
+            getPrognosis(currentYear, currentMonth)
         ]);
 
         // Ignore stale async responses from older month loads.
@@ -86,10 +84,6 @@ async function loadAndDisplaySchedule() {
             calendarDebug('Skip stale load result', { loadSeq, scheduleLoadSeq, currentYear, currentMonth });
             return;
         }
-
-        // Display queue summary
-        displayQueueSummary(usersData);
-        displayPendingChores(choresData);
 
         if (scheduleData) {
             calendarDebug('Month payload ready', {
@@ -308,103 +302,6 @@ function renderCalendar(scheduleData = {}, prognosisData = {}) {
  * Displays the queue summary for all users with pending queues.
  * @param {Array} users - Array of user objects with queue information
  */
-function displayQueueSummary(users) {
-    const queueList = document.getElementById('queue-list');
-    if (!queueList) return;
-
-    if (!users || users.length === 0) {
-        queueList.innerHTML = '<p class="text-gray-500">No users found.</p>';
-        return;
-    }
-
-    // Filter active users with queues (API returns PascalCase)
-    const usersWithQueues = users.filter(u =>
-        u.IsActive && // Only show active users
-        ((u.VolunteerQueueDays && u.VolunteerQueueDays > 0) ||
-         (u.AdminQueueDays && u.AdminQueueDays > 0))
-    );
-
-    if (usersWithQueues.length === 0) {
-        queueList.innerHTML = '<p class="text-gray-500">No pending queues.</p>';
-        return;
-    }
-
-    // Build queue list HTML
-    const queueHTML = usersWithQueues.map(user => {
-        const parts = [];
-        if (user.VolunteerQueueDays > 0) {
-            parts.push(`<span class="text-green-600 font-semibold">V:${user.VolunteerQueueDays}</span>`);
-        }
-        if (user.AdminQueueDays > 0) {
-            parts.push(`<span class="text-blue-600 font-semibold">A:${user.AdminQueueDays}</span>`);
-        }
-        return `<div class="mb-1">👤 <strong>${user.FirstName}</strong>: ${parts.join(', ')}</div>`;
-    }).join('');
-
-    queueList.innerHTML = queueHTML;
-}
-
-/**
- * Escapes user-provided content before inserting it into HTML.
- * @param {string} value
- * @returns {string}
- */
-function escapeHTML(value) {
-    return String(value ?? '')
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#39;');
-}
-
-/**
- * Formats RFC3339 timestamp for display in the user's locale.
- * @param {string} dateValue
- * @returns {string}
- */
-function formatDateTime(dateValue) {
-    if (!dateValue) {
-        return 'unknown';
-    }
-
-    const parsed = new Date(dateValue);
-    if (Number.isNaN(parsed.getTime())) {
-        return escapeHTML(dateValue);
-    }
-
-    return parsed.toLocaleString();
-}
-
-/**
- * Displays active (not completed) chores above the calendar.
- * @param {object|null} choresData - API payload from /api/v1/chores/active.
- */
-function displayPendingChores(choresData) {
-    const choresList = document.getElementById('pending-chores-list');
-    if (!choresList) return;
-
-    const chores = Array.isArray(choresData?.chores) ? choresData.chores : [];
-    if (chores.length === 0) {
-        choresList.innerHTML = '<p class="text-gray-500">No active chores.</p>';
-        return;
-    }
-
-    const choresHTML = chores.map(chore => {
-        const description = escapeHTML(chore.description || 'No description');
-        const assignee = escapeHTML(chore.user_name || 'Unknown');
-        const createdAt = formatDateTime(chore.assigned_at);
-        return `
-            <div class="mb-2">
-                <div><strong>${description}</strong></div>
-                <div class="text-sm text-gray-600">Created: ${createdAt} | Assigned to: ${assignee}</div>
-            </div>
-        `;
-    }).join('');
-
-    choresList.innerHTML = choresHTML;
-}
-
 /**
  * Initializes the calendar view.
  */

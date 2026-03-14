@@ -22,12 +22,28 @@ func NewServer(s store.Store, botToken string, dutySecret string) *gin.Engine {
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
 
-	// Serve static files from web directory
-	router.Static("/dist", "./web/dist")
-	router.Static("/js", "./web/js")
-	router.Static("/vendor", "./web/vendor")
-	router.StaticFile("/", "./web/index.html")
-	router.StaticFile("/index.html", "./web/index.html")
+	// Cache Control Middleware
+	cacheControlMiddleware := func(c *gin.Context) {
+		c.Header("Cache-Control", "public, max-age=86400")
+		c.Next()
+	}
+
+	// Serve static files from web directory with caching
+	staticRoutes := router.Group("/")
+	staticRoutes.Use(cacheControlMiddleware)
+	{
+		staticRoutes.Static("/css", "./web/css")
+		staticRoutes.Static("/js", "./web/js")
+		staticRoutes.Static("/vendor", "./web/vendor")
+	}
+
+	// Serve index.html without caching
+	indexHandler := func(c *gin.Context) {
+		c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
+		c.File("./web/index.html")
+	}
+	router.GET("/", indexHandler)
+	router.GET("/index.html", indexHandler)
 
 	// Create an instance of the authentication middleware.
 	authMiddleware := middleware.Authenticate(s, botToken)

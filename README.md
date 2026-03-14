@@ -60,23 +60,13 @@ The recommended way to run the Duty Assistant Bot is with Docker and Docker Comp
 You can also build the bot from source.
 
 1.  **Install Go**: Make sure you have Go 1.23 or higher installed.
-2.  **Install Node.js and npm**: These are required to build the frontend.
-3.  **Build the frontend**:
-
-    ```bash
-    cd web
-    npm install
-    npm run build
-    cd ..
-    ```
-
-4.  **Build the backend**:
+2.  **Build the backend**:
 
     ```bash
     go build -mod=vendor -o roster-bot ./cmd/roster-bot/
     ```
 
-5.  **Run the bot**:
+3.  **Run the bot**:
 
     ```bash
     GIN_MODE=release TELEGRAM_APITOKEN=your_telegram_bot_token DATABASE_PATH=./roster.db ./roster-bot

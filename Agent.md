@@ -37,7 +37,7 @@ The choice of technologies is a fundamental decision that determines the system'
 * **Task Scheduler Library: github.com/robfig/cron/v3**. This library is the de-facto standard for working with cron expressions in Go.8 It has a reliable parser, supports standard and extended cron formats, and, critically for this project, supports specifying time zones (IANA Time Zone) directly in the schedule string (e.g.,  
   CRON\_TZ=Europe/Berlin), which ensures the scheduler operates correctly regardless of the server's system time.8  
 * **Telegram Web App Authentication: github.com/telegram-mini-apps/init-data-golang**. To securely authenticate users through the Telegram Web App, this library will be used to validate the initialization data (initData) sent from the client.34 It provides a reliable implementation of the validation algorithm specified by Telegram, which involves checking a cryptographic signature against the bot's token.37  
-* **Frontend Technologies: Vanilla JS (ES6 Modules) and Tailwind CSS (Standalone CLI)**. This combination fully meets the requirements of the technical specification. Using native ES6 modules allows for structuring the frontend code without introducing heavyweight frameworks like React or Vue.11 Tailwind CSS, in turn, provides a powerful utility-first CSS methodology for creating responsive interfaces. Using it in Standalone CLI mode allows it to be integrated into any project without Node.js dependencies in the production environment.13  
+* **Frontend Technologies: Vanilla HTML5/JS and Custom CSS**. This combination fully meets the requirements of the technical specification. Using native ES6 modules allows for structuring the frontend code without introducing heavyweight frameworks like React or Vue.11 Custom CSS provides a lightweight and maintainable approach for responsive interfaces without build dependencies.
 * **DevOps Tools: Docker, Docker Compose, GitHub Actions, Portainer**. This combination represents a modern, proven, and effective stack for automating the application lifecycle. Docker and Docker Compose ensure environment reproducibility, GitHub Actions automates CI/CD 15, and Portainer provides a convenient web interface for managing deployed applications on the server.
 
 The summary table below outlines the technological decisions made.
@@ -53,7 +53,7 @@ The summary table below outlines the technological decisions made.
 | **Cron Scheduler** | github.com/robfig/cron/v3 | gdgvda/cron 10 | An industry standard with a reliable implementation, excellent documentation, and crucial support for IANA time zones.8 |
 | **Telegram Auth** | telegram-mini-apps/init-data-golang | Custom Implementation, sgzmd/go-telegram-auth 38 | Provides a standard, tested implementation for validating Telegram Web App initData, which is more secure and reliable than a custom solution.34 |
 | **Frontend JS** | Vanilla JS (ES6 Modules) | React, Vue, Svelte | Directly meets the requirement. Modern Vanilla JS with modules allows for creating structured and maintainable applications without the overhead of frameworks.11 |
-| **Frontend CSS** | Tailwind CSS (Standalone CLI) | Bootstrap, Pure CSS | Tailwind CSS enables rapid development of responsive interfaces. The Standalone CLI 13 allows its use without Node.js dependencies, simplifying the build process. |
+| **Frontend CSS** | Custom CSS | Tailwind CSS, Bootstrap | Custom CSS enables maintainable responsive interfaces without requiring any build step or external dependencies. |
 | **CI/CD Platform** | GitHub Actions | GitLab CI, Jenkins | Native integration with the GitHub repository, an extensive marketplace of ready-made actions, and robust support for Docker containers.16 |
 
 ### **1.3. Project Structure: The Modular Monolith**
@@ -246,9 +246,9 @@ This module is responsible for implementing one of the key features of the syste
 
 It is critically important to adhere to the practice of storing all timestamps in the database in UTC format. Conversion to local time (Europe/Berlin) should only occur at the moment of processing logic related to the schedule or for display to the user. This approach avoids many common errors related to time zones and daylight saving time.
 
-## **V. User Interface: A Modern Frontend with Vanilla JS and Tailwind CSS**
+## **V. User Interface: A Modern Frontend with Vanilla HTML5/JS and Custom CSS**
 
-This section describes the strategy for creating a lightweight, mobile-responsive web interface. The main focus is on modern JavaScript practices without involving heavy frameworks, which aligns with the technical specification.
+This section describes the strategy for creating a lightweight, mobile-responsive web interface. The main focus is on modern JavaScript practices and native browser capabilities without involving heavy frameworks or build steps, which aligns with the technical specification.
 
 ### **5.1. Setting Up the Frontend Development Environment**
 
@@ -256,12 +256,10 @@ The entire frontend part will be located in the /web directory. The structure wi
 
 * /web/index.html: The main HTML file of the application.  
 * /web/js/: Directory for JavaScript modules.  
-* /web/css/: Directory for source CSS files.  
+* /web/css/: Directory for source CSS files (e.g., style.css).
 * /web/assets/: Directory for static resources (images, icons).
 
-To work with Tailwind CSS, its Standalone CLI version will be used.13 A script will be added to the
-
-package.json file in the project root to run the CLI in watch mode (--watch). This process will scan all .html and .js files for the use of Tailwind utility classes and automatically compile them into a single file /web/dist/output.css.13 This provides a convenient development process without the need to manually recompile styles constantly.
+No build step (like npm or Node.js) is required for frontend development. Files are served directly by the Go backend with appropriate cache headers.
 
 ### **5.2. Modular Architecture with Vanilla JS**
 
@@ -293,12 +291,11 @@ A multi-stage Dockerfile, located in the /deployments directory, will be used to
   * At this stage, the application's source code (go.mod, go.sum, and the entire project) is copied.  
   * Dependencies are downloaded (go mod download).  
   * The application is compiled with flags that create a statically linked binary and disable debug information. The choice of a CGo-free SQLite driver plays a key role here, as it does not require installing gcc and build-base in this build container.  
-  * Frontend resources are also built at this stage (running npm install and npm run build to compile Tailwind CSS).  
 * **Stage 2 (final):**  
   * Base image: scratch or gcr.io/distroless/static. scratch is an absolutely empty image containing nothing but the application itself. distroless is an image from Google that contains only the minimally necessary libraries for the application to run and does not include a shell or package manager. Both options significantly reduce the attack surface.  
   * At this stage, only two artifacts are copied from the builder stage:  
     1. The compiled application binary.  
-    2. The directory with static frontend resources (/web/dist).  
+    2. The directory with static frontend resources (/web).
   * The ENTRYPOINT is set to run the binary file.
 
 The result is an extremely small (typically 10-20 MB) and secure Docker image containing only what is necessary for the application to run.
