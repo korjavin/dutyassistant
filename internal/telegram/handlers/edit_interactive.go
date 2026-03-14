@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"html"
-	"log"
+	"log/slog"
 	"strconv"
 	"strings"
 
@@ -68,7 +68,7 @@ func (h *Handlers) HandleEditChoreCallback(q *tgbotapi.CallbackQuery) (tgbotapi.
 	)
 	if h.Bot != nil {
 		if _, err := h.Bot.Send(editMsg); err != nil {
-			log.Printf("Failed to clear inline keyboard: %v", err)
+			slog.Error(fmt.Sprintf("Failed to clear inline keyboard: %v", err))
 		}
 	}
 

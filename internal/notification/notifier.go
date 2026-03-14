@@ -4,7 +4,8 @@ import (
 	"context"
 	"fmt"
 	"html"
-	"log"
+	"log/slog"
+	"os"
 	"strings"
 	"time"
 
@@ -54,31 +55,32 @@ func NewNotifier(s store.Store, sched Scheduler, bot TelegramBot, chatID int64, 
 
 // Start initializes and starts the cron scheduler.
 func (n *Notifier) Start() {
-	log.Printf("Starting notifier with schedule '%s' in %s timezone", n.cronSpec, n.location)
+	slog.Info(fmt.Sprintf("Starting notifier with schedule '%s' in %s timezone", n.cronSpec, n.location))
 
 	n.cron = cron.New(cron.WithLocation(n.location))
 	_, err := n.cron.AddFunc(n.cronSpec, n.checkAndNotify)
 	if err != nil {
-		log.Fatalf("Failed to add cron job: %v", err)
+		slog.Error(fmt.Sprintf("Failed to add cron job: %v", err))
+		os.Exit(1)
 	}
 	n.cron.Start()
 }
 
 // Stop gracefully stops the cron scheduler.
 func (n *Notifier) Stop() {
-	log.Println("Stopping notifier...")
+	slog.Info(fmt.Sprint("Stopping notifier..."))
 	if n.cron != nil {
 		ctx := n.cron.Stop()
 		<-ctx.Done()
 	}
-	log.Println("Notifier stopped.")
+	slog.Info(fmt.Sprint("Notifier stopped."))
 }
 
 // checkAndNotify is the core function executed by the cron job.
 // It checks for tomorrow's duty, assigns one if needed, and sends notifications.
 func (n *Notifier) checkAndNotify() {
 	ctx := context.Background()
-	log.Println("Cron job triggered: checking for tomorrow's duty.")
+	slog.Info(fmt.Sprint("Cron job triggered: checking for tomorrow's duty."))
 
 	// Determine tomorrow's date in the service's configured timezone.
 	nowInLocation := n.now().In(n.location)
@@ -91,14 +93,14 @@ func (n *Notifier) checkAndNotify() {
 	if err != nil {
 		// We expect an error if no duty is found. Here we assume any error means "not found".
 		// A more robust implementation would check for specific store.ErrNotFound.
-		log.Printf("No duty found for %s. Attempting to assign one.", tomorrow.Format("2006-01-02"))
+		slog.Info(fmt.Sprintf("No duty found for %s. Attempting to assign one.", tomorrow.Format("2006-01-02")))
 	}
 
 	if duty == nil {
 		// 2. If no duty, trigger round-robin assignment.
 		newDuty, assignErr := n.scheduler.AssignDutyRoundRobin(ctx, tomorrow)
 		if assignErr != nil {
-			log.Printf("ERROR: Failed to auto-assign duty for %s: %v", tomorrow.Format("2006-01-02"), assignErr)
+			slog.Error(fmt.Sprintf("ERROR: Failed to auto-assign duty for %s: %v", tomorrow.Format("2006-01-02"), assignErr))
 			// Optionally, send an error notification to an admin. For now, we just log.
 			return
 		}
@@ -117,9 +119,9 @@ func (n *Notifier) checkAndNotify() {
 		groupMsg.ParseMode = tgbotapi.ModeHTML
 
 		if _, err := n.bot.Send(groupMsg); err != nil {
-			log.Printf("ERROR: Failed to send group notification to chat ID %d: %v", n.chatID, err)
+			slog.Error(fmt.Sprintf("ERROR: Failed to send group notification to chat ID %d: %v", n.chatID, err))
 		} else {
-			log.Printf("Successfully sent group notification for duty on %s.", tomorrow.Format("2006-01-02"))
+			slog.Info(fmt.Sprintf("Successfully sent group notification for duty on %s.", tomorrow.Format("2006-01-02")))
 		}
 
 		// Send DM to the assigned user
@@ -133,12 +135,12 @@ func (n *Notifier) checkAndNotify() {
 			dmMsg.ParseMode = tgbotapi.ModeHTML
 
 			if _, err := n.bot.Send(dmMsg); err != nil {
-				log.Printf("ERROR: Failed to send DM to user %s (ID: %d): %v", duty.User.FirstName, duty.User.TelegramUserID, err)
+				slog.Error(fmt.Sprintf("ERROR: Failed to send DM to user %s (ID: %d): %v", duty.User.FirstName, duty.User.TelegramUserID, err))
 			} else {
-				log.Printf("Successfully sent DM to user %s for duty on %s.", duty.User.FirstName, tomorrow.Format("2006-01-02"))
+				slog.Info(fmt.Sprintf("Successfully sent DM to user %s for duty on %s.", duty.User.FirstName, tomorrow.Format("2006-01-02")))
 			}
 		} else {
-			log.Printf("WARNING: Cannot send DM - user data is incomplete for duty on %s", tomorrow.Format("2006-01-02"))
+			slog.Warn(fmt.Sprintf("WARNING: Cannot send DM - user data is incomplete for duty on %s", tomorrow.Format("2006-01-02")))
 		}
 	}
 }
@@ -149,7 +151,7 @@ func SendDailyChoreSummary(ctx context.Context, bot *tgbotapi.BotAPI, db store.S
 	if isCron {
 		lastSent, _ := db.GetLastChoreDigestDate(ctx)
 		if lastSent == todayStr {
-			log.Printf("Daily chore summary already sent today (%s), skipping.", todayStr)
+			slog.Info(fmt.Sprintf("Daily chore summary already sent today (%s), skipping.", todayStr))
 			return nil
 		}
 	}
@@ -166,7 +168,7 @@ func SendDailyChoreSummary(ctx context.Context, bot *tgbotapi.BotAPI, db store.S
 		}
 		if isCron {
 			if err := db.SetLastChoreDigestDate(ctx, todayStr); err != nil {
-				log.Printf("Failed to set last chore digest date: %v", err)
+				slog.Error(fmt.Sprintf("Failed to set last chore digest date: %v", err))
 			}
 		}
 		return nil
@@ -252,14 +254,14 @@ func SendDailyChoreSummary(ctx context.Context, bot *tgbotapi.BotAPI, db store.S
 		msg.ParseMode = tgbotapi.ModeHTML
 		_, err = bot.Send(msg)
 		if err != nil {
-			log.Printf("Failed to send chore summary to group: %v", err)
+			slog.Error(fmt.Sprintf("Failed to send chore summary to group: %v", err))
 			return err
 		}
 	}
 
 	if isCron {
 		if err := db.SetLastChoreDigestDate(ctx, todayStr); err != nil {
-			log.Printf("Failed to set last chore digest date: %v", err)
+			slog.Error(fmt.Sprintf("Failed to set last chore digest date: %v", err))
 		}
 	}
 

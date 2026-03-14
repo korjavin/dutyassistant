@@ -3,7 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -28,14 +28,14 @@ func (h *Handlers) HandleSchedule(m *tgbotapi.Message) (tgbotapi.MessageConfig, 
 	// Also fetch all active users to show queue information
 	users, err := h.Store.ListActiveUsers(context.Background())
 	if err != nil {
-		log.Printf("Warning: could not get active users for schedule: %v", err)
+		slog.Error(fmt.Sprintf("Warning: could not get active users for schedule: %v", err))
 		users = []*store.User{}
 	}
 
 	// Check vacation mode status
 	isVacation, err := h.Scheduler.IsVacationMode(context.Background())
 	if err != nil {
-		log.Printf("Warning: could not check vacation mode: %v", err)
+		slog.Error(fmt.Sprintf("Warning: could not check vacation mode: %v", err))
 	}
 
 	text := fmt.Sprintf(scheduleMessage, now.Format("January 2006"))
@@ -76,14 +76,14 @@ func (h *Handlers) HandleCalendarCallback(q *tgbotapi.CallbackQuery) (tgbotapi.E
 	duties, err := h.Store.GetDutiesByMonth(context.Background(), newTime.Year(), newTime.Month())
 	if err != nil {
 		// Log the error but still show the calendar
-		log.Printf("Could not get duties for schedule refresh: %v", err)
+		slog.Error(fmt.Sprintf("Could not get duties for schedule refresh: %v", err))
 		duties = []*store.Duty{} // Send empty slice to render an empty calendar
 	}
 
 	// Also fetch all active users to show queue information
 	users, err := h.Store.ListActiveUsers(context.Background())
 	if err != nil {
-		log.Printf("Warning: could not get active users for schedule refresh: %v", err)
+		slog.Error(fmt.Sprintf("Warning: could not get active users for schedule refresh: %v", err))
 		users = []*store.User{}
 	}
 

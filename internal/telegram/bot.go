@@ -3,7 +3,7 @@ package telegram
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -26,7 +26,7 @@ func NewBot(apiToken string, h *handlers.Handlers, groupID, ownerID int64) (*Bot
 		return nil, err
 	}
 	api.Debug = false // Set to true for verbose logging
-	log.Printf("Authorized on account %s", api.Self.UserName)
+	slog.Info(fmt.Sprintf("Authorized on account %s", api.Self.UserName))
 
 	// Inject bot API into handlers for notifications
 	h.SetBot(api)
@@ -67,18 +67,18 @@ func (b *Bot) SendMessageMarkdown(chatID int64, text string) error {
 func (b *Bot) checkAccess(userID int64) bool {
 	// Owner always has access
 	if b.ownerID != 0 && userID == b.ownerID {
-		log.Printf("[ACCESS] User %d granted access as owner", userID)
+		slog.Info(fmt.Sprintf("User %d granted access as owner", userID), slog.String("component", "access"))
 		return true
 	}
 
 	// If no group is configured, allow access
 	if b.groupID == 0 {
-		log.Printf("[ACCESS] User %d granted access (no group restriction)", userID)
+		slog.Info(fmt.Sprintf("User %d granted access (no group restriction)", userID), slog.String("component", "access"))
 		return true
 	}
 
 	// Check if user is a member of the group
-	log.Printf("[ACCESS] Checking group membership for user %d in group %d", userID, b.groupID)
+	slog.Info(fmt.Sprintf("Checking group membership for user %d in group %d", userID, b.groupID), slog.String("component", "access"))
 	chatMember, err := b.api.GetChatMember(tgbotapi.GetChatMemberConfig{
 		ChatConfigWithUser: tgbotapi.ChatConfigWithUser{
 			ChatID: b.groupID,
@@ -87,14 +87,14 @@ func (b *Bot) checkAccess(userID int64) bool {
 	})
 
 	if err != nil {
-		log.Printf("[ACCESS] Error checking group membership for user %d: %v", userID, err)
+		slog.Info(fmt.Sprintf("Error checking group membership for user %d: %v", userID, err), slog.String("component", "access"))
 		return false
 	}
 
 	// Allow if user is a member, administrator, or creator
 	status := chatMember.Status
 	allowed := status == "member" || status == "administrator" || status == "creator"
-	log.Printf("[ACCESS] User %d status in group: %s, access granted: %v", userID, status, allowed)
+	slog.Info(fmt.Sprintf("User %d status in group: %s, access granted: %v", userID, status, allowed), slog.String("component", "access"))
 	return allowed
 }
 
@@ -133,14 +133,14 @@ func (b *Bot) handleUpdate(update tgbotapi.Update) {
 
 	// Verify user has access
 	if userID != 0 && !b.checkAccess(userID) {
-		log.Printf("Access denied for user %d", userID)
+		slog.Info(fmt.Sprintf("Access denied for user %d", userID))
 		ownerMention := ""
 		if b.ownerID != 0 {
 			ownerMention = fmt.Sprintf(" Please contact the bot owner (ID: %d) for access.", b.ownerID)
 		}
 		response = tgbotapi.NewMessage(chatID, fmt.Sprintf("🚫 Access denied. You must be a member of the authorized group to use this bot.%s", ownerMention))
 		if _, err := b.api.Send(response); err != nil {
-			log.Printf("Error sending access denied message: %v", err)
+			slog.Error(fmt.Sprintf("Error sending access denied message: %v", err))
 		}
 		return
 	}
@@ -169,7 +169,7 @@ func (b *Bot) handleUpdate(update tgbotapi.Update) {
 	}
 
 	if err != nil {
-		log.Printf("Error handling update: %v", err)
+		slog.Error(fmt.Sprintf("Error handling update: %v", err))
 		var chatID int64
 		if update.Message != nil {
 			chatID = update.Message.Chat.ID
@@ -185,7 +185,7 @@ func (b *Bot) handleUpdate(update tgbotapi.Update) {
 
 	if response != nil {
 		if _, err := b.api.Send(response); err != nil {
-			log.Printf("Error sending response: %v", err)
+			slog.Error(fmt.Sprintf("Error sending response: %v", err))
 		}
 	}
 }
@@ -248,7 +248,7 @@ func (b *Bot) handleCallbackQuery(q *tgbotapi.CallbackQuery) (tgbotapi.Chattable
 	// Answer the callback query to remove the "loading" state on the user's side.
 	callback := tgbotapi.NewCallback(q.ID, "")
 	if _, err := b.api.Request(callback); err != nil {
-		log.Printf("failed to answer callback query: %v", err)
+		slog.Error(fmt.Sprintf("failed to answer callback query: %v", err))
 	}
 
 	action := strings.Split(q.Data, ":")[0]
@@ -309,7 +309,7 @@ func (b *Bot) handleCallbackQuery(q *tgbotapi.CallbackQuery) (tgbotapi.Chattable
 	case "cancel_flow":
 		return b.handlers.HandleCancelFlow(q)
 	default:
-		log.Printf("Unknown callback action: %s", action)
+		slog.Info(fmt.Sprintf("Unknown callback action: %s", action))
 		return nil, nil
 	}
 }
@@ -332,7 +332,7 @@ func (b *Bot) handleMessage(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 	case handlers.SessionTypeEditChore:
 		return b.handlers.HandleEditChoreInteractive(m)
 	default:
-		log.Printf("Unknown session type: %s", session.Type)
+		slog.Info(fmt.Sprintf("Unknown session type: %s", session.Type))
 		return nil, nil
 	}
 }

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"html"
-	"log"
+	"log/slog"
 	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -15,7 +15,7 @@ func (h *Handlers) HandleChoreDoneCallback(q *tgbotapi.CallbackQuery) (tgbotapi.
 	// Extract reminderID from callback data: "chore_done:reminderID"
 	parts := strings.Split(q.Data, ":")
 	if len(parts) != 2 {
-		log.Printf("Invalid callback data format: %s", q.Data)
+		slog.Info(fmt.Sprintf("Invalid callback data format: %s", q.Data))
 		edit := tgbotapi.NewEditMessageText(
 			q.Message.Chat.ID,
 			q.Message.MessageID,
@@ -48,14 +48,14 @@ func (h *Handlers) HandleChoreDoneCallback(q *tgbotapi.CallbackQuery) (tgbotapi.
 
 	// Send completion message to group
 	if err := h.ChoreReminderManager.SendCompletionToGroup(assignment); err != nil {
-		log.Printf("Failed to send completion message to group: %v", err)
+		slog.Error(fmt.Sprintf("Failed to send completion message to group: %v", err))
 	}
 
 	// Mark as completed
 	h.ChoreReminderManager.CompleteChore(reminderID)
 
 	if err := h.Store.CompleteChoreByReminderID(context.Background(), reminderID); err != nil {
-		log.Printf("Failed to complete chore in database: %v", err)
+		slog.Error(fmt.Sprintf("Failed to complete chore in database: %v", err))
 	}
 
 	// Update the message to show completion
@@ -77,7 +77,7 @@ func (h *Handlers) HandleChoreRemindCallback(q *tgbotapi.CallbackQuery) (tgbotap
 	// Extract reminderID from callback data: "chore_remind:reminderID"
 	parts := strings.Split(q.Data, ":")
 	if len(parts) != 2 {
-		log.Printf("Invalid callback data format: %s", q.Data)
+		slog.Info(fmt.Sprintf("Invalid callback data format: %s", q.Data))
 		edit := tgbotapi.NewEditMessageText(
 			q.Message.Chat.ID,
 			q.Message.MessageID,

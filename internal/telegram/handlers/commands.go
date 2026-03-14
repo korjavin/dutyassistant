@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/korjavin/dutyassistant/internal/notification"
 	"html"
-	"log"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -57,17 +57,17 @@ const (
 
 // HandleStart creates a new user if they don't exist, or updates their name if it has changed.
 func (h *Handlers) HandleStart(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
-	log.Printf("[HandleStart] User %d (%s) triggered /start", m.From.ID, m.From.FirstName)
+	slog.Info(fmt.Sprintf("[HandleStart] User %d (%s) triggered /start", m.From.ID, m.From.FirstName))
 
 	user, err := h.Store.GetUserByTelegramID(context.Background(), m.From.ID)
 	if err != nil {
-		log.Printf("[HandleStart] Error getting user %d: %v", m.From.ID, err)
+		slog.Error(fmt.Sprintf("[HandleStart] Error getting user %d: %v", m.From.ID, err))
 		return tgbotapi.MessageConfig{}, fmt.Errorf("database error: %w", err)
 	}
 
 	if user == nil {
 		// User doesn't exist, create them
-		log.Printf("[HandleStart] User %d not found, creating new user", m.From.ID)
+		slog.Info(fmt.Sprintf("[HandleStart] User %d not found, creating new user", m.From.ID))
 
 		// Check if this user is the admin
 		isAdmin := h.AdminID != 0 && m.From.ID == h.AdminID
@@ -79,21 +79,21 @@ func (h *Handlers) HandleStart(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 			IsAdmin:        isAdmin,
 		}
 		if createErr := h.Store.CreateUser(context.Background(), newUser); createErr != nil {
-			log.Printf("[HandleStart] FAILED to create user %d: %v", m.From.ID, createErr)
+			slog.Error(fmt.Sprintf("[HandleStart] FAILED to create user %d: %v", m.From.ID, createErr))
 			return tgbotapi.MessageConfig{}, fmt.Errorf("failed to create user: %w", createErr)
 		}
-		log.Printf("[HandleStart] Successfully created user %d with ID %d (IsAdmin=%v, IsActive=%v)", m.From.ID, newUser.ID, newUser.IsAdmin, newUser.IsActive)
+		slog.Info(fmt.Sprintf("[HandleStart] Successfully created user %d with ID %d (IsAdmin=%v, IsActive=%v)", m.From.ID, newUser.ID, newUser.IsAdmin, newUser.IsActive))
 	} else {
 		isConfiguredAdmin := h.AdminID != 0 && m.From.ID == h.AdminID
 		needsUpdate := false
 
 		if user.FirstName != m.From.FirstName {
-			log.Printf("[HandleStart] Updating user %d name from '%s' to '%s'", m.From.ID, user.FirstName, m.From.FirstName)
+			slog.Info(fmt.Sprintf("[HandleStart] Updating user %d name from '%s' to '%s'", m.From.ID, user.FirstName, m.From.FirstName))
 			user.FirstName = m.From.FirstName
 			needsUpdate = true
 		}
 		if isConfiguredAdmin && (!user.IsAdmin || user.IsActive) {
-			log.Printf("[HandleStart] Backfilling configured admin flags for user %d", m.From.ID)
+			slog.Info(fmt.Sprintf("[HandleStart] Backfilling configured admin flags for user %d", m.From.ID))
 			user.IsAdmin = true
 			user.IsActive = false
 			needsUpdate = true
@@ -101,10 +101,10 @@ func (h *Handlers) HandleStart(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 
 		if needsUpdate {
 			if updateErr := h.Store.UpdateUser(context.Background(), user); updateErr != nil {
-				log.Printf("[HandleStart] Failed to update user %d: %v", m.From.ID, updateErr)
+				slog.Error(fmt.Sprintf("[HandleStart] Failed to update user %d: %v", m.From.ID, updateErr))
 			}
 		} else {
-			log.Printf("[HandleStart] User %d already exists, no changes needed", m.From.ID)
+			slog.Info(fmt.Sprintf("[HandleStart] User %d already exists, no changes needed", m.From.ID))
 		}
 	}
 
@@ -119,7 +119,7 @@ func (h *Handlers) HandleHelp(m *tgbotapi.Message) (tgbotapi.MessageConfig, erro
 		var err error
 		isAdmin, err = h.checkAdmin(m.From.ID)
 		if err != nil {
-			log.Printf("[HandleHelp] Error checking admin status for user %d: %v", m.From.ID, err)
+			slog.Error(fmt.Sprintf("[HandleHelp] Error checking admin status for user %d: %v", m.From.ID, err))
 			isAdmin = false
 		}
 	}
@@ -143,7 +143,7 @@ func (h *Handlers) HandleStatus(m *tgbotapi.Message) (tgbotapi.MessageConfig, er
 
 	stats, err := h.Store.GetUserStats(context.Background(), user.ID)
 	if err != nil {
-		log.Printf("Error getting user stats for user %d: %v", user.ID, err)
+		slog.Error(fmt.Sprintf("Error getting user stats for user %d: %v", user.ID, err))
 		return tgbotapi.NewMessage(m.Chat.ID, genericErrorMessage), nil
 	}
 
@@ -176,11 +176,11 @@ func (h *Handlers) HandleStatus(m *tgbotapi.Message) (tgbotapi.MessageConfig, er
 
 // HandleExplain provides an explanation of how the last assignment was made.
 func (h *Handlers) HandleExplain(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
-	log.Printf("[HandleExplain] User %d triggered /explain", m.From.ID)
+	slog.Info(fmt.Sprintf("[HandleExplain] User %d triggered /explain", m.From.ID))
 
 	explanation, err := h.Scheduler.ExplainLastAssignment(context.Background())
 	if err != nil {
-		log.Printf("[HandleExplain] Error explaining last assignment: %v", err)
+		slog.Error(fmt.Sprintf("[HandleExplain] Error explaining last assignment: %v", err))
 		return tgbotapi.NewMessage(m.Chat.ID, "Не удалось получить объяснение: "+err.Error()), nil
 	}
 
