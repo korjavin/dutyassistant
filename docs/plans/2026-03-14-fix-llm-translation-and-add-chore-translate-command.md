@@ -26,10 +26,10 @@ The `TranslateToEnglish` method in `internal/llm/openai.go` uses a hardcoded mod
 - Modify: `internal/llm/openai.go`
 - Modify: `internal/llm/openai_test.go`
 
-- [ ] Change line 138 in TranslateToEnglish: replace hardcoded `"gpt-4o-mini"` with `c.model`
-- [ ] Verify that temperature on line 143 is 0.3 (correct for translation - low temperature needed)
-- [ ] Add unit test in openai_test.go to verify TranslateToEnglish uses the configured model
-- [ ] Run `go test ./internal/llm/...`
+- [x] Change line 138 in TranslateToEnglish: replace hardcoded `"gpt-4o-mini"` with `c.model`
+- [x] Verify that temperature on line 143 is 0.3 (correct for translation - low temperature needed)
+- [x] Add unit test in openai_test.go to verify TranslateToEnglish uses the configured model
+- [x] Run `go test ./internal/llm/...`
 
 ### Task 2: Add /chore translate <id> Command
 

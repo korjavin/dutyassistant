@@ -135,7 +135,7 @@ func (c *Client) TranslateToEnglish(ctx context.Context, text string) (string, e
 	systemPrompt := "You are a translator. Translate the given chore description to English. Be concise, do not be verbose. Return ONLY the translated text. Preserve emojis. If translation is not possible or text is already English, return original."
 
 	reqBody := chatRequest{
-		Model: "gpt-4o-mini",
+		Model: c.model,
 		Messages: []chatMessage{
 			{Role: "system", Content: systemPrompt},
 			{Role: "user", Content: text},
