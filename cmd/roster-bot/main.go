@@ -93,6 +93,9 @@ func main() {
 	defer botCancel()
 	go bot.Start(botCtx)
 
+	// Launch periodic chore reminders goroutine
+	go notification.StartPeriodicChoreReminders(botCtx, bot, store, getEnv("CHORE_TIMEZONE", "Europe/Berlin"))
+
 	// Initialize cron scheduler for scheduled jobs (all times in Europe/Berlin)
 	log.Println("Initializing cron scheduler...")
 	berlinLoc, err := time.LoadLocation("Europe/Berlin")
