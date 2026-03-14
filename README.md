@@ -78,7 +78,6 @@ The project uses GitHub Actions for automated builds and deployments. On push to
 1. Builds a Docker image
 2. Pushes to GitHub Container Registry
 3. Triggers Portainer webhook to deploy on production server
-
 ## Bot Commands
 
 ### User Commands
