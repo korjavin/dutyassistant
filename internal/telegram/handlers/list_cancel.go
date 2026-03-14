@@ -181,6 +181,29 @@ func (h *Handlers) HandleListCallback(q *tgbotapi.CallbackQuery) (tgbotapi.Chatt
 	return editMsg, nil
 }
 
+// HandleCancelIDSelection shows an interactive menu for a specific ID
+func (h *Handlers) HandleCancelIDSelection(m *tgbotapi.Message, id string) (tgbotapi.MessageConfig, error) {
+	var keyboard [][]tgbotapi.InlineKeyboardButton
+
+	keyboard = append(keyboard, tgbotapi.NewInlineKeyboardRow(
+		tgbotapi.NewInlineKeyboardButtonData(fmt.Sprintf("Cancel periodic chore %s", id), fmt.Sprintf("cancel_assignment:R%s", id)),
+	))
+	keyboard = append(keyboard, tgbotapi.NewInlineKeyboardRow(
+		tgbotapi.NewInlineKeyboardButtonData(fmt.Sprintf("Cancel regular task %s", id), fmt.Sprintf("cancel_assignment:A%s", id)),
+	))
+	keyboard = append(keyboard, tgbotapi.NewInlineKeyboardRow(
+		tgbotapi.NewInlineKeyboardButtonData("Show all items", "cancel_interactive"),
+	))
+	keyboard = append(keyboard, tgbotapi.NewInlineKeyboardRow(
+		tgbotapi.NewInlineKeyboardButtonData("❌ Cancel operation", "cancel_flow"),
+	))
+
+	markup := tgbotapi.NewInlineKeyboardMarkup(keyboard...)
+	msg := tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("What do you want to cancel with ID %s?", id))
+	msg.ReplyMarkup = &markup
+	return msg, nil
+}
+
 // HandleCancel handles the /cancel command for admins. Format: /cancel chore <id>
 func (h *Handlers) HandleCancel(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
 	// 1. Admin check
@@ -195,6 +218,14 @@ func (h *Handlers) HandleCancel(m *tgbotapi.Message) (tgbotapi.MessageConfig, er
 	}
 
 	parts := strings.Fields(args)
+
+	// If there's only one argument, check if it's an ID
+	if len(parts) == 1 {
+		// Check if it's a number
+		if _, err := strconv.ParseInt(parts[0], 10, 64); err == nil {
+			return h.HandleCancelIDSelection(m, parts[0])
+		}
+	}
 
 	if len(parts) == 2 && strings.ToLower(parts[0]) == "chore" {
 		choreID, err := strconv.ParseInt(parts[1], 10, 64)

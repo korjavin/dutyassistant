@@ -12,6 +12,138 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
+func TestHandleCancelIDSelection(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	sm := handlers.NewSessionManager()
+	h := &handlers.Handlers{
+		Store:          mockStore,
+		SessionManager: sm,
+	}
+
+	msg := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 456},
+		From: &tgbotapi.User{ID: 123},
+		Text: "/cancel 16",
+	}
+
+	resp, err := h.HandleCancelIDSelection(msg, "16")
+	assert.NoError(t, err)
+
+	assert.Contains(t, resp.Text, "What do you want to cancel with ID 16?")
+	assert.NotNil(t, resp.ReplyMarkup)
+
+	markup := resp.ReplyMarkup.(*tgbotapi.InlineKeyboardMarkup)
+	assert.Len(t, markup.InlineKeyboard, 4)
+	assert.Equal(t, "cancel_assignment:R16", *markup.InlineKeyboard[0][0].CallbackData)
+	assert.Equal(t, "cancel_assignment:A16", *markup.InlineKeyboard[1][0].CallbackData)
+	assert.Equal(t, "cancel_interactive", *markup.InlineKeyboard[2][0].CallbackData)
+	assert.Equal(t, "cancel_flow", *markup.InlineKeyboard[3][0].CallbackData)
+}
+
+func TestHandleCancelInteractiveCallback(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	sm := handlers.NewSessionManager()
+	h := &handlers.Handlers{
+		Store:          mockStore,
+		SessionManager: sm,
+	}
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(123)).Return(&store.User{IsAdmin: true}, nil)
+
+	now := time.Now()
+	mockStore.On("ListActiveChores", mock.Anything).Return([]*store.Chore{{ID: 1, Description: "Task 1"}}, nil)
+	mockStore.On("GetActiveRecurringChores", mock.Anything).Return([]*store.RecurringChore{{ID: 2, Description: "Recurring 1"}}, nil)
+	mockStore.On("GetDutiesByMonth", mock.Anything, mock.Anything, mock.Anything).Return([]*store.Duty{
+		{UserID: 1, DutyDate: now.AddDate(0, 0, 1), User: &store.User{FirstName: "Alice"}},
+	}, nil)
+
+	q := &tgbotapi.CallbackQuery{
+		ID:   "cb1",
+		From: &tgbotapi.User{ID: 123},
+		Message: &tgbotapi.Message{
+			Chat:      &tgbotapi.Chat{ID: 456},
+			MessageID: 789,
+		},
+		Data: "cancel_interactive",
+	}
+
+	resp, err := h.HandleCancelInteractiveCallback(q)
+	assert.NoError(t, err)
+
+	editMsg, ok := resp.(tgbotapi.EditMessageTextConfig)
+	assert.True(t, ok)
+	assert.Contains(t, editMsg.Text, "Select an item to cancel:")
+	assert.NotNil(t, editMsg.ReplyMarkup)
+}
+
+func TestHandleCancelInteractiveCallback_NoItems(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	sm := handlers.NewSessionManager()
+	h := &handlers.Handlers{
+		Store:          mockStore,
+		SessionManager: sm,
+	}
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(123)).Return(&store.User{IsAdmin: true}, nil)
+
+	mockStore.On("ListActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
+	mockStore.On("GetActiveRecurringChores", mock.Anything).Return([]*store.RecurringChore{}, nil)
+	mockStore.On("GetDutiesByMonth", mock.Anything, mock.Anything, mock.Anything).Return([]*store.Duty{}, nil)
+
+	q := &tgbotapi.CallbackQuery{
+		ID:   "cb1",
+		From: &tgbotapi.User{ID: 123},
+		Message: &tgbotapi.Message{
+			Chat:      &tgbotapi.Chat{ID: 456},
+			MessageID: 789,
+		},
+		Data: "cancel_interactive",
+	}
+
+	resp, err := h.HandleCancelInteractiveCallback(q)
+	assert.NoError(t, err)
+
+	editMsg, ok := resp.(tgbotapi.EditMessageTextConfig)
+	assert.True(t, ok)
+	assert.Contains(t, editMsg.Text, "There are no active chores")
+	assert.Nil(t, editMsg.ReplyMarkup)
+}
+
+func TestHandleCancelWithIDArgument(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	sm := handlers.NewSessionManager()
+	h := &handlers.Handlers{
+		Store:          mockStore,
+		SessionManager: sm,
+	}
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(123)).Return(&store.User{IsAdmin: true}, nil)
+
+	// Test with valid single ID
+	msg := &tgbotapi.Message{
+		Chat:     &tgbotapi.Chat{ID: 456},
+		From:     &tgbotapi.User{ID: 123},
+		Text:     "/cancel 16",
+		Entities: []tgbotapi.MessageEntity{{Type: "bot_command", Offset: 0, Length: 7}},
+	}
+	// We need to simulate CommandArguments behavior
+	// In go-telegram-bot-api, CommandArguments is handled internally, but for tests we can just
+	// construct the message text to simulate it. But actually we just call HandleCancel
+
+	resp, err := h.HandleCancel(msg)
+	assert.NoError(t, err)
+	assert.Contains(t, resp.Text, "What do you want to cancel with ID 16?")
+
+	// Test with invalid ID string
+	msg2 := &tgbotapi.Message{
+		Chat:     &tgbotapi.Chat{ID: 456},
+		From:     &tgbotapi.User{ID: 123},
+		Text:     "/cancel abc",
+		Entities: []tgbotapi.MessageEntity{{Type: "bot_command", Offset: 0, Length: 7}},
+	}
+
+	resp2, err2 := h.HandleCancel(msg2)
+	assert.NoError(t, err2)
+	assert.Contains(t, resp2.Text, "Unknown cancel command.")
+}
+
 func TestHandleCancelInteractive(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	sm := handlers.NewSessionManager()

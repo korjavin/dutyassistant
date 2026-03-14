@@ -12,18 +12,18 @@ import (
 	"github.com/korjavin/dutyassistant/internal/store"
 )
 
-// HandleCancelInteractive handles the interactive cancel menu for admins
-func (h *Handlers) HandleCancelInteractive(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
+// HandleCancelInteractiveMenu generates the full cancel menu for a given chat ID
+func (h *Handlers) HandleCancelInteractiveMenu(chatID int64) (tgbotapi.MessageConfig, error) {
 	chores, err := h.Store.ListActiveChores(context.Background())
 	if err != nil {
 		slog.Error(fmt.Sprintf("Failed to get active chores for cancel menu: %v", err))
-		return tgbotapi.NewMessage(m.Chat.ID, "❌ Failed to load items to cancel."), nil
+		return tgbotapi.NewMessage(chatID, "❌ Failed to load items to cancel."), nil
 	}
 
 	rChores, err := h.Store.GetActiveRecurringChores(context.Background())
 	if err != nil {
 		slog.Error(fmt.Sprintf("Failed to get active recurring chores for cancel menu: %v", err))
-		return tgbotapi.NewMessage(m.Chat.ID, "❌ Failed to load items to cancel."), nil
+		return tgbotapi.NewMessage(chatID, "❌ Failed to load items to cancel."), nil
 	}
 
 	// Also get future scheduled duties (from today onwards)
@@ -50,7 +50,7 @@ func (h *Handlers) HandleCancelInteractive(m *tgbotapi.Message) (tgbotapi.Messag
 	}
 
 	if len(chores) == 0 && len(rChores) == 0 && len(upcomingDuties) == 0 {
-		return tgbotapi.NewMessage(m.Chat.ID, "✅ There are no active chores, recurring chores, or upcoming duties to cancel right now."), nil
+		return tgbotapi.NewMessage(chatID, "✅ There are no active chores, recurring chores, or upcoming duties to cancel right now."), nil
 	}
 
 	var keyboard [][]tgbotapi.InlineKeyboardButton
@@ -89,9 +89,40 @@ func (h *Handlers) HandleCancelInteractive(m *tgbotapi.Message) (tgbotapi.Messag
 	keyboard = append(keyboard, tgbotapi.NewInlineKeyboardRow(tgbotapi.NewInlineKeyboardButtonData("❌ Cancel", "cancel_flow")))
 	markup := tgbotapi.NewInlineKeyboardMarkup(keyboard...)
 
-	msg := tgbotapi.NewMessage(m.Chat.ID, "Select an item to cancel:")
+	msg := tgbotapi.NewMessage(chatID, "Select an item to cancel:")
 	msg.ReplyMarkup = &markup
 	return msg, nil
+}
+
+// HandleCancelInteractive handles the interactive cancel menu for admins
+func (h *Handlers) HandleCancelInteractive(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
+	return h.HandleCancelInteractiveMenu(m.Chat.ID)
+}
+
+// HandleCancelInteractiveCallback handles the callback to show the interactive cancel menu
+func (h *Handlers) HandleCancelInteractiveCallback(q *tgbotapi.CallbackQuery) (tgbotapi.Chattable, error) {
+	isAdmin, err := h.checkAdmin(q.From.ID)
+	if err != nil || !isAdmin {
+		return nil, nil // Ignore non-admin clicks silently
+	}
+
+	msgConfig, err := h.HandleCancelInteractiveMenu(q.Message.Chat.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert MessageConfig into an Edit message to replace the previous inline keyboard
+	if msgConfig.ReplyMarkup != nil {
+		markup := msgConfig.ReplyMarkup.(*tgbotapi.InlineKeyboardMarkup)
+		editMsg := tgbotapi.NewEditMessageTextAndMarkup(q.Message.Chat.ID, q.Message.MessageID, msgConfig.Text, *markup)
+		return editMsg, nil
+	}
+
+	// If there's no reply markup (e.g. when there are no items to cancel)
+	// just update the text and clear the keyboard
+	editMsg := tgbotapi.NewEditMessageText(q.Message.Chat.ID, q.Message.MessageID, msgConfig.Text)
+	editMsg.ReplyMarkup = nil
+	return editMsg, nil
 }
 
 // HandleCancelAssignmentCallback handles the confirmation prompt for cancelling an assignment
