@@ -306,7 +306,7 @@ func (h *Handlers) HandleUsers(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 	// Fetch future duties
 	futureDuties, err := h.Store.GetFutureDuties(context.Background(), today)
 	if err != nil {
-		log.Printf("Warning: could not fetch future duties: %v", err)
+		slog.Warn(fmt.Sprintf("Warning: could not fetch future duties: %v", err))
 	}
 
 	userFutureDuties := make(map[int64][]*store.Duty)
