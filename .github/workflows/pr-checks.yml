@@ -23,5 +23,7 @@ jobs:
         with:
           version: v1.64.5
           args: --timeout 5m
+        env:
+          GO_VERSION: 1.25.0
 
       - run: go test -mod=vendor -race -count=1 ./...
