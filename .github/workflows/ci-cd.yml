@@ -24,9 +24,10 @@ jobs:
   #     - name: Set up Go
   #       uses: actions/setup-go@v5
   #       with:
-  #         go-version: '1.25.0'
+  #         go-version: '1.26.1'
+  #         cache: true
   #     - name: Run tests
-  #       run: go test -mod=vendor -v ./...
+  #       run: go test -v ./...
 
   # --- Build and Push Job ---
   # This job builds the Docker image and pushes it to the GitHub Container Registry (GHCR).
@@ -50,7 +51,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25.0'
+          go-version: '1.26.1'
+          cache: true
 
 
       # Step 4: Log in to the GitHub Container Registry.

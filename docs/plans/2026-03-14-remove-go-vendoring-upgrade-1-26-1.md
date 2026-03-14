@@ -49,10 +49,10 @@ This plan removes Go vendoring from the project, upgrades the Go version to 1.26
 **Files:**
 - Modify: `.github/workflows/ci-cd.yml`
 
-- [ ] Update `go-version` to `1.26.1` in all jobs (including commented out `test` job)
-- [ ] Remove any `-mod=vendor` flags from `go` commands in the workflow (check `go test`)
-- [ ] Ensure `actions/setup-go` cache is working correctly without the vendor folder
-- [ ] run project test suite - must pass before task 4
+- [x] Update `go-version` to `1.26.1` in all jobs (including commented out `test` job)
+- [x] Remove any `-mod=vendor` flags from `go` commands in the workflow (check `go test`)
+- [x] Ensure `actions/setup-go` cache is working correctly without the vendor folder
+- [x] run project test suite - must pass before task 4
 
 ### Task 4: Update Documentation and Ignore Files
 
