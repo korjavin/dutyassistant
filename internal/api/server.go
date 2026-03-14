@@ -16,7 +16,7 @@ func NewServer(repo domain.Repository, dutyService domain.DutyService, choreServ
 		api.GET("/chores/active", middleware.OptionalAuth(repo, telegramToken), GetActiveChores(repo))
 		api.POST("/duties/volunteer", middleware.Authenticate(repo, telegramToken), VolunteerForDuty(dutyService))
 		api.GET("/schedule/:year/:month", middleware.OptionalAuth(repo, telegramToken), GetSchedule(dutyService))
-		api.GET("/users", GetUsers(repo))
+		api.GET("/users", middleware.OptionalAuth(repo, telegramToken), GetUsers(repo))
 
 		adminGroup := api.Group("")
 		adminGroup.Use(middleware.Authenticate(repo, telegramToken), middleware.AdminRequired())

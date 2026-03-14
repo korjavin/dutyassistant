@@ -146,7 +146,7 @@ func AdminModifyDuty(ds domain.DutyService) gin.HandlerFunc {
 			return
 		}
 
-		err = ds.AssignDuty(c.Request.Context(), dutyDate, req.UserID, domain.AssignmentTypeAdmin)
+		_, err = ds.ChangeDutyUser(c.Request.Context(), dutyDate, req.UserID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to modify duty"})
 			return
@@ -229,6 +229,14 @@ func GetSchedule(ds domain.DutyService) gin.HandlerFunc {
 
 func GetUsers(repo domain.Repository) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		user, authenticated := c.Request.Context().Value(middleware.UserKey).(*domain.User)
+		isAuthorized := authenticated && user != nil && (user.IsActive || user.IsAdmin)
+
+		if !isAuthorized {
+			c.JSON(http.StatusOK, make([]userResponse, 0))
+			return
+		}
+
 		users, err := repo.ListAllUsers(c.Request.Context())
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

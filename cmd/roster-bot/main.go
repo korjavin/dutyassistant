@@ -11,9 +11,12 @@ import (
 	"github.com/korjavin/dutyassistant/internal/api"
 	"github.com/korjavin/dutyassistant/internal/bot"
 	"github.com/korjavin/dutyassistant/internal/domain"
+	"github.com/korjavin/dutyassistant/internal/llm"
 	"github.com/korjavin/dutyassistant/internal/notification"
+	"github.com/korjavin/dutyassistant/internal/scheduler"
 	"github.com/korjavin/dutyassistant/internal/service"
 	"github.com/korjavin/dutyassistant/internal/store/sqlite"
+	"github.com/korjavin/dutyassistant/internal/telegram/handlers"
 	"github.com/robfig/cron/v3"
 )
 
@@ -41,14 +44,23 @@ func main() {
 	choreService := service.NewChoreService(repo)
 	ratingService := service.NewRatingService(repo)
 
-	tgBot := bot.NewBot(botAPI, repo, dutyService, choreService, ratingService)
+	// Initialize legacy dependencies for feature parity during migration
+	adminID := parseInt64(getEnv("ADMIN_ID", "0"), 0)
+	dishGroupID := parseInt64(getEnv("DISH_GROUP", "0"), 0)
+
+	sched := scheduler.NewScheduler(dbStore)
+	var llmClient *llm.Client // Setup standard empty LLM for simplicity unless configured
+
+	telegramHandlers := handlers.New(dbStore, sched, dishGroupID, llmClient)
+	telegramHandlers.AdminID = adminID
+
+	// In a real app we'd integrate cron jobs here instead of bot.go or do DI to bot.go
+	tgBot := bot.NewBotWithLegacy(botAPI, repo, dutyService, choreService, ratingService, telegramHandlers)
 	go tgBot.Start()
 
 	// Setup background jobs
 	berlinLoc, _ := time.LoadLocation("Europe/Berlin")
 	c := cron.New(cron.WithLocation(berlinLoc))
-	dishGroupID := parseInt64(getEnv("DISH_GROUP", "0"), 0)
-	adminID := parseInt64(getEnv("ADMIN_ID", "0"), 0)
 
 	c.AddFunc("0 11 * * *", func() {
 		log.Println("[CRON] Daily duty assignment")

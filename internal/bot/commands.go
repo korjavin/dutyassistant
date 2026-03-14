@@ -1,110 +1,78 @@
 package bot
 
 import (
-	"context"
-	"fmt"
 	"log"
-	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-func (b *Bot) handleStartHelp(msg *tgbotapi.Message) {
-	text := "🤖 *Welcome to the Duty Assistant Bot!*\n\n" +
-		"Here are the commands you can use:\n\n" +
-		"👤 *User Commands:*\n" +
-		"/status - View your duty statistics and queue status\n" +
-		"/schedule - View the current month's duty schedule\n" +
-		"/volunteer - Volunteer for duty (interactive)\n" +
-		"/chore - View your assigned active chores\n" +
-		"/explain - Explain how the most recent dish hero duty was assigned\n\n" +
-		"🛠 *Admin Commands:*\n" +
-		"/assign - Assign days to a user's admin queue\n" +
-		"/unassign - Remove days from a user's admin queue\n" +
-		"/chore <desc> [/<N>d] - Create a one-off or periodic chore\n" +
-		"/list - View active periodic or regular chores\n" +
-		"/cancel - Cancel a duty or chore\n" +
-		"/complete - Mark an active chore as completed\n" +
-		"/modify (or /change) - Change duty assignment for a date\n" +
-		"/offduty - Set off-duty period for a user\n" +
-		"/toggleactive - Toggle user active/inactive status\n" +
-		"/vacation - Toggle vacation mode to pause assignments\n" +
-		"/users - List all users with their queues and status\n" +
-		"/ratings - Show the current month's participant rating calendar\n"
+// To preserve 100% feature parity, we delegate the commands back to the restored legacy handlers.
+// The new FSM is fully available alongside it (via /chore_fsm for testing).
+// Slowly, flows will be moved from legacy to FSM.
 
-	reply := tgbotapi.NewMessage(msg.Chat.ID, text)
-	reply.ParseMode = tgbotapi.ModeMarkdown
-	b.api.Send(reply)
-}
-
-func (b *Bot) handleStatus(msg *tgbotapi.Message) {
-	user, err := b.repo.GetUserByTelegramID(context.Background(), msg.From.ID)
-	if err != nil || user == nil {
-		reply := tgbotapi.NewMessage(msg.Chat.ID, "User not found.")
-		b.api.Send(reply)
+func (b *Bot) handleLegacyCommand(msg *tgbotapi.Message) {
+	if b.legacyHandlers == nil {
+		log.Printf("Legacy handlers not initialized. Command %s ignored.", msg.Command())
 		return
 	}
 
-	stats, err := b.repo.GetUserStats(context.Background(), user.ID)
+	var resp tgbotapi.Chattable
+	var err error
+
+	switch msg.Command() {
+	case "start":
+		resp, err = b.legacyHandlers.HandleStart(msg)
+	case "help":
+		resp, err = b.legacyHandlers.HandleHelp(msg)
+	case "status":
+		resp, err = b.legacyHandlers.HandleStatus(msg)
+	case "schedule":
+		resp, err = b.legacyHandlers.HandleSchedule(msg)
+	case "volunteer":
+		resp, err = b.legacyHandlers.HandleVolunteer(msg)
+	case "explain":
+		resp, err = b.legacyHandlers.HandleExplain(msg)
+	case "chore":
+		resp, err = b.legacyHandlers.HandleChore(msg)
+	case "overdue":
+		resp, err = b.legacyHandlers.HandleOverdue(msg)
+	case "chore_stats":
+		resp, err = b.legacyHandlers.HandleChoreStats(msg)
+	case "assign":
+		resp, err = b.legacyHandlers.HandleAssign(msg)
+	case "list":
+		resp, err = b.legacyHandlers.HandleList(msg)
+	case "cancel":
+		resp, err = b.legacyHandlers.HandleCancel(msg)
+	case "edit":
+		resp, err = b.legacyHandlers.HandleEdit(msg)
+	case "unassign":
+		resp, err = b.legacyHandlers.HandleUnassign(msg)
+	case "modify":
+		resp, err = b.legacyHandlers.HandleModify(msg)
+	case "change":
+		resp, err = b.legacyHandlers.HandleChange(msg)
+	case "offduty":
+		resp, err = b.legacyHandlers.HandleOffDuty(msg)
+	case "users":
+		resp, err = b.legacyHandlers.HandleUsers(msg)
+	case "ratings":
+		resp, err = b.legacyHandlers.HandleRatingsCalendar(msg)
+	case "vacation":
+		resp, err = b.legacyHandlers.HandleVacation(msg)
+	case "toggle_active", "toggleactive":
+		resp, err = b.legacyHandlers.HandleToggleActive(msg)
+	case "complete":
+		resp, err = b.legacyHandlers.HandleComplete(msg)
+	default:
+		resp = tgbotapi.NewMessage(msg.Chat.ID, "Unknown command. Use /help for a list of commands.")
+	}
+
 	if err != nil {
-		log.Printf("Failed to get stats: %v", err)
-		return
+		log.Printf("Error in command %s: %v", msg.Command(), err)
 	}
 
-	text := fmt.Sprintf("📊 *Your Status:*\n\nTotal Duties: %d\nDuties This Month: %d\nNext Duty Date: %s", stats.TotalDuties, stats.DutiesThisMonth, stats.NextDutyDate)
-	reply := tgbotapi.NewMessage(msg.Chat.ID, text)
-	reply.ParseMode = tgbotapi.ModeMarkdown
-	b.api.Send(reply)
-}
-
-func (b *Bot) handleUsers(msg *tgbotapi.Message) {
-	users, err := b.repo.ListAllUsers(context.Background())
-	if err != nil {
-		reply := tgbotapi.NewMessage(msg.Chat.ID, "Failed to retrieve users.")
-		b.api.Send(reply)
-		return
+	if resp != nil {
+		b.api.Send(resp)
 	}
-
-	text := "👥 *Users:*\n"
-	for _, u := range users {
-		activeStr := "❌ Inactive"
-		if u.IsActive {
-			activeStr = "✅ Active"
-		}
-		text += fmt.Sprintf("• %s - %s\n", u.FirstName, activeStr)
-	}
-
-	reply := tgbotapi.NewMessage(msg.Chat.ID, text)
-	reply.ParseMode = tgbotapi.ModeMarkdown
-	b.api.Send(reply)
-}
-
-func (b *Bot) handleSchedule(msg *tgbotapi.Message) {
-	now := time.Now()
-	duties, err := b.dutyService.GetSchedule(context.Background(), now.Year(), now.Month())
-	if err != nil {
-		reply := tgbotapi.NewMessage(msg.Chat.ID, "Failed to retrieve schedule.")
-		b.api.Send(reply)
-		return
-	}
-
-	text := fmt.Sprintf("📅 *Schedule for %s %d:*\n\n", now.Month().String(), now.Year())
-	for _, d := range duties {
-		if d.User != nil {
-			text += fmt.Sprintf("%s: %s\n", d.DutyDate.Format("2006-01-02"), d.User.FirstName)
-		}
-	}
-	if len(duties) == 0 {
-		text += "No duties scheduled."
-	}
-
-	reply := tgbotapi.NewMessage(msg.Chat.ID, text)
-	reply.ParseMode = tgbotapi.ModeMarkdown
-	b.api.Send(reply)
-}
-
-// Add simple static response for remaining admin commands mapping to FSM integration
-func (b *Bot) handleLegacyStub(msg *tgbotapi.Message, command string) {
-	reply := tgbotapi.NewMessage(msg.Chat.ID, fmt.Sprintf("Command /%s is currently available via the Web interface during FSM migration.", command))
-	b.api.Send(reply)
 }

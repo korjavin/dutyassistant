@@ -83,6 +83,7 @@ type DutyService interface {
 	AutoAssignDuty(ctx context.Context, date time.Time) (*Duty, error)
 	CompleteTodaysDuty(ctx context.Context) error
 	GetSchedule(ctx context.Context, year int, month time.Month) ([]*Duty, error)
+	ChangeDutyUser(ctx context.Context, date time.Time, newUserID int64) (*Duty, error)
 }
 
 // ChoreService handles chore-related business logic.

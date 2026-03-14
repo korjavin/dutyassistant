@@ -51,6 +51,7 @@ func (s *DutyServiceImpl) AutoAssignDuty(ctx context.Context, date time.Time) (*
 		duty := &domain.Duty{
 			UserID:         user.ID,
 			DutyDate:       date,
+			User:           user,
 			AssignmentType: domain.AssignmentTypeVoluntary,
 			CreatedAt:      time.Now().UTC(),
 		}
@@ -71,6 +72,7 @@ func (s *DutyServiceImpl) AutoAssignDuty(ctx context.Context, date time.Time) (*
 		duty := &domain.Duty{
 			UserID:         user.ID,
 			DutyDate:       date,
+			User:           user,
 			AssignmentType: domain.AssignmentTypeAdmin,
 			CreatedAt:      time.Now().UTC(),
 		}
@@ -94,6 +96,7 @@ func (s *DutyServiceImpl) AutoAssignDuty(ctx context.Context, date time.Time) (*
 	duty := &domain.Duty{
 		UserID:         user.ID,
 		DutyDate:       date,
+		User:           user,
 		AssignmentType: domain.AssignmentTypeRoundRobin,
 		CreatedAt:      time.Now().UTC(),
 	}
@@ -199,4 +202,27 @@ func (s *DutyServiceImpl) CompleteTodaysDuty(ctx context.Context) error {
 
 func (s *DutyServiceImpl) GetSchedule(ctx context.Context, year int, month time.Month) ([]*domain.Duty, error) {
 	return s.repo.GetDutiesByMonth(ctx, year, month)
+}
+
+func (s *DutyServiceImpl) ChangeDutyUser(ctx context.Context, date time.Time, newUserID int64) (*domain.Duty, error) {
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	dutyDate := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC)
+
+	if dutyDate.Before(today) {
+		return nil, fmt.Errorf("cannot change past duties")
+	}
+
+	existingDuty, err := s.repo.GetDutyByDate(ctx, date)
+	if err != nil || existingDuty == nil {
+		return nil, fmt.Errorf("no duty found for this date")
+	}
+
+	existingDuty.UserID = newUserID
+	err = s.repo.UpdateDuty(ctx, existingDuty)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update duty: %w", err)
+	}
+
+	return existingDuty, nil
 }
