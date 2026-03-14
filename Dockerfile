@@ -11,9 +11,6 @@ COPY go.mod go.sum ./
 # Copy all source code and vendor dependencies in one layer
 COPY . .
 
-# are not overwritten by a later COPY instruction.
-RUN cd web && npm run build
-
 # Add cache busting to HTML
 RUN sed -i "s/BUILD_TIME/$(date +%s)/g" /app/web/index.html
 
@@ -36,10 +33,10 @@ WORKDIR /app
 COPY --from=builder /roster-bot /roster-bot
 
 # Copy the built frontend assets from the builder stage.
-# Copy the entire web directory structure (index.html, js/, dist/, vendor/)
+# Copy the entire web directory structure (index.html, js/, css/, vendor/)
 COPY --from=builder /app/web/index.html ./web/index.html
 COPY --from=builder /app/web/js ./web/js
-COPY --from=builder /app/web/dist ./web/dist
+COPY --from=builder /app/web/css ./web/css
 COPY --from=builder /app/web/vendor ./web/vendor
 
 # The application will store its persistent data (e.g., SQLite database) in /app/data.
