@@ -1,6 +1,6 @@
 # Stage 1: Build environment
 # Use a specific version of golang-alpine for reproducibility
-FROM golang:1.23-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 WORKDIR /app
 
