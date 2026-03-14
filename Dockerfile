@@ -2,17 +2,7 @@
 # Use a specific version of golang-alpine for reproducibility
 FROM golang:1.23-alpine AS builder
 
-# Install frontend build dependencies (Node.js, npm for Tailwind CSS)
-RUN apk add --no-cache nodejs npm
-
 WORKDIR /app
-
-# --- Frontend Build ---
-# First, copy only the package management files to leverage Docker's layer caching.
-# This step assumes package.json and package-lock.json will exist in the /web directory.
-COPY web/package.json ./web/
-COPY web/package-lock.json* ./web/
-RUN cd web && npm install
 
 # --- Backend Build ---
 # Copy Go module files first for better caching
@@ -21,7 +11,6 @@ COPY go.mod go.sum ./
 # Copy all source code and vendor dependencies in one layer
 COPY . .
 
-# Build frontend after full source copy so generated assets and cache-busting
 # are not overwritten by a later COPY instruction.
 RUN cd web && npm run build
 
