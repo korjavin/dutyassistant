@@ -1,0 +1,29 @@
+run:
+  timeout: 5m
+
+linters:
+  disable-all: true
+  enable:
+    - gofumpt
+    - gosec
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+    - misspell
+    - nolintlint
+
+linters-settings:
+  gofumpt:
+    extra-rules: true
+  gosec:
+    # default ruleset, no exclusions
+
+issues:
+  exclude-dirs:
+    - vendor
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - errcheck
+        - gosec

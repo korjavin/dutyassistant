@@ -1,0 +1,26 @@
+name: PR Quality Checks
+
+on:
+  pull_request:
+    branches: [ "master" ]
+  workflow_dispatch:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.0'
+          cache: true
+
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          args: --timeout 5m
+
+      - run: go test -mod=vendor -race -count=1 ./...
