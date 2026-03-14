@@ -342,6 +342,10 @@ func TestHandleDailyRatingsInteractive_SendsGroupNotification(t *testing.T) {
 		return len(ratings) == 2 && ratings[0].Score == 5 && ratings[1].Score == 3
 	})).Return(nil).Once()
 
+	originalTimeNow := TimeNow
+	TimeNow = func() time.Time { return ratingDate }
+	defer func() { TimeNow = originalTimeNow }()
+
 	_, err := h.StartDailyRatingsSession(700, 123, ratingDate)
 	assert.NoError(t, err)
 
@@ -380,6 +384,10 @@ func TestHandleDailyRatingsInteractive_ValidSubmission(t *testing.T) {
 			ratings[0].ParticipantID == 10 && ratings[0].ParticipantName == "Alice" && ratings[0].Score == 5 &&
 			ratings[1].ParticipantID == 11 && ratings[1].ParticipantName == "Bob" && ratings[1].Score == 3
 	})).Return(nil).Once()
+
+	originalTimeNow := TimeNow
+	TimeNow = func() time.Time { return ratingDate }
+	defer func() { TimeNow = originalTimeNow }()
 
 	_, err := h.StartDailyRatingsSession(700, 123, ratingDate)
 	assert.NoError(t, err)
@@ -423,6 +431,10 @@ func TestHandleDailyRatingsInteractive_InvalidCount(t *testing.T) {
 
 	mockStore.On("GetParticipantsForRating", mock.Anything).Return(participants, nil).Once()
 
+	originalTimeNow := TimeNow
+	TimeNow = func() time.Time { return ratingDate }
+	defer func() { TimeNow = originalTimeNow }()
+
 	_, err := h.StartDailyRatingsSession(701, 123, ratingDate)
 	assert.NoError(t, err)
 
@@ -459,6 +471,10 @@ func TestHandleDailyRatingsInteractive_InvalidRange(t *testing.T) {
 	}
 
 	mockStore.On("GetParticipantsForRating", mock.Anything).Return(participants, nil).Once()
+
+	originalTimeNow := TimeNow
+	TimeNow = func() time.Time { return ratingDate }
+	defer func() { TimeNow = originalTimeNow }()
 
 	_, err := h.StartDailyRatingsSession(702, 123, ratingDate)
 	assert.NoError(t, err)
@@ -540,6 +556,10 @@ func TestHandleDailyRatingsInteractive_UnauthorizedSenderIgnored(t *testing.T) {
 
 	mockStore.On("GetParticipantsForRating", mock.Anything).Return(participants, nil).Once()
 
+	originalTimeNow := TimeNow
+	TimeNow = func() time.Time { return ratingDate }
+	defer func() { TimeNow = originalTimeNow }()
+
 	_, err := h.StartDailyRatingsSession(703, 123, ratingDate)
 	assert.NoError(t, err)
 
@@ -581,6 +601,10 @@ func TestHandleDailyRatingsInteractive_OverwriteCorrection(t *testing.T) {
 	mockStore.On("SaveDailyParticipantRatings", mock.Anything, normalizeRatingDate(ratingDate), mock.MatchedBy(func(ratings []*store.ParticipantDailyRating) bool {
 		return len(ratings) == 2 && ratings[0].Score == 2 && ratings[1].Score == 1
 	})).Return(nil).Once()
+
+	originalTimeNow := TimeNow
+	TimeNow = func() time.Time { return ratingDate }
+	defer func() { TimeNow = originalTimeNow }()
 
 	_, err := h.StartDailyRatingsSession(704, 123, ratingDate)
 	assert.NoError(t, err)
@@ -630,6 +654,10 @@ func TestHandleDailyRatingsInteractive_SaveFailureReturnsGenericError(t *testing
 
 	mockStore.On("GetParticipantsForRating", mock.Anything).Return(participants, nil).Once()
 	mockStore.On("SaveDailyParticipantRatings", mock.Anything, normalizeRatingDate(ratingDate), mock.Anything).Return(assert.AnError).Once()
+
+	originalTimeNow := TimeNow
+	TimeNow = func() time.Time { return ratingDate }
+	defer func() { TimeNow = originalTimeNow }()
 
 	_, err := h.StartDailyRatingsSession(707, 123, ratingDate)
 	assert.NoError(t, err)

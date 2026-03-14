@@ -2,10 +2,6 @@
 
 Duty Assistant Bot is a Telegram bot designed to help manage on-call duty rosters using a queue-based assignment system. It features an interactive inline keyboard UI for all commands and provides both Telegram and web interfaces.
 
-## Development Guidelines
-
-*   **Logging:** Use `log/slog` for all structured logging instead of the standard library `log` or `fmt` packages to ensure consistent and parseable output.
-
 ## Features
 
 *   **Queue-Based Assignment System**: Three-tier priority system (Volunteer → Admin → Round-Robin)
@@ -114,7 +110,7 @@ The project uses GitHub Actions for automated builds and deployments. On push to
 - The prompt lists participants in a stable order. Reply with one space-separated score per participant, using integers from 1 to 5.
 - Sending another reply later on the same day overwrites that day's participant ratings instead of creating duplicates.
 - `/ratings` shows the current month from day 1 through today, with missing scores displayed as `-`.
-- At 21:00 Europe/Berlin on the last calendar day of the month, the bot posts the monthly participant totals and 1st, 2nd, and 3rd place winners to `DISH_GROUP`.
+- At 21:00 Europe/Berlin on the last calendar day of the month, the bot posts the monthly participant totals and 1st, 2nd, and 3rd place winners to the group.
 
 ### Interactive UX
 
@@ -125,63 +121,127 @@ All commands use **inline keyboard buttons** for a friendly user experience:
 - **Progressive disclosure**: Commands show relevant options step-by-step
 - **Real-time feedback**: Buttons update to show confirmation messages with ✅/❌ indicators
 
-## Queue System
+## Duty Assignment Logic
 
-The bot uses a queue-based system with three priority levels:
+The system manages duty assignments through a queue-based system with three priority levels: **Voluntary**, **Admin**, and **Round-Robin**. Assignments are finalized daily at 11:00 AM Berlin time.
 
-1. **Volunteer Queue** (Highest Priority)
-   - Users add days via `/volunteer` command
-   - Interactive button selection (1-7 days or custom amount)
-   - Decremented by 1 each day when assigned
+### 1. Voluntary Queue
+Users volunteer for a specific number of days using the `/volunteer` command.
 
-2. **Admin Queue** (Second Priority)
-   - Admin assigns days via `/assign` command
-   - Interactive user and day selection
-   - Decremented by 1 each day when assigned
+**Command Format:**
+- `/volunteer` - Shows **inline keyboard** with day selection buttons (1-7 + Custom)
+  - Buttons: `[1] [2] [3] [4]` on first row, `[5] [6] [7]` on second row, `[✏️ Custom]` on third row
+  - Clicking a number button immediately adds that many days to volunteer queue
+  - Clicking "Custom" prompts: "Please type the number of days: /volunteer [days]"
+- `/volunteer 3` - Direct text input also supported (adds 3 days directly)
 
-3. **Round-Robin** (Fallback)
-   - Automatic when no queue entries exist
-   - Based on fairness (last 14 days of completed duties)
-   - Excludes admin-assigned duties from fairness calculation
-   - Excludes off-duty users
+**Behavior:**
+- Adds the specified number of days to the user's volunteer queue
+- Does NOT pre-assign specific calendar dates
+- Has **highest priority** when assigning duties
+- Cannot change today's assignment (only affects future days)
+- Queue count is displayed on web calendar and `/schedule` command per user
+- Confirmation message shows with ✅ emoji
 
-## Automated Tasks
+### 2. Admin Assignment Queue
+Admin assigns a user to duty for a specific number of days using `/assign`.
 
-All times in **Europe/Berlin timezone**:
+**Command Format:**
+- `/assign` - Shows **inline keyboard** with user selection buttons
+  - Step 1: Shows list of users as buttons: `[👤 UserA]` `[👤 UserB]` etc.
+  - Step 2: After user selection, shows day buttons: `[1] [2] [3] [4]` `[5] [6] [7]` `[✏️ Custom]`
+  - Step 3: After day selection, shows confirmation and executes assignment
+- `/assign username 5` - Direct text input also supported
 
-- **11:00 AM Daily** - Assign today's duty based on queue priority and process due periodic chores.
-- **21:00 PM Daily** - Mark today's duty as completed
-- **20:50 PM Daily** - Send the admin the participant rating prompt when active non-admin participants exist
-- **21:00 PM Daily (last calendar day only)** - Publish monthly participant rating winners and totals to the main group
-- **21:10 PM Sunday** - Send weekly chore statistics report, including a summary of top overdue chores, top performers (with bar chart visualizations of completed chores, execution times, and lateness), and a "winner of the week".
+**Behavior:**
+- Adds the specified number of days to the user's admin assignment queue
+- Has **second-highest priority** (after voluntary queue)
+- Cannot change today's assignment (only affects future days)
+- Queue count is displayed on web calendar and `/schedule` command per user
+- Confirmation message shows with ✅ emoji
 
-## Acceptance Verification
+### 3. Round-Robin Assignment
+Automatic assignment when no volunteer or admin queue entries exist.
 
-Verified on 2026-03-13 for the monthly participant rating flow:
+**Selection Criteria:**
+- Only considers **active** users
+- Excludes **admin** users
+- Excludes users who are **off-duty**
+- Calculates fairness based on the **last 14 days** of completed duties
+- **Excludes admin-assigned days** from fairness calculation (only counts voluntary and round-robin)
 
-- Stable daily prompt and admin reply parsing are covered by `TestStartDailyRatingsSession_BuildsStablePrompt` and `TestHandleDailyRatingsInteractive_ValidSubmission`, including the `5 2 1`-style score submission flow.
-- Same-day resubmission replacement is covered by `TestHandleDailyRatingsInteractive_OverwriteCorrection` and `TestSaveDailyParticipantRatings_CreateAndUpdate`, confirming ratings are overwritten instead of duplicated.
-- The month-to-date calendar from day 1 through today is covered by `TestHandleRatingsCalendar_PopulatedMonth` and `TestHandleRatingsCalendar_EmptyMonth`.
-- The month-end totals and top-three winner announcement are covered by `TestBuildMonthlyRatingsWinnersAnnouncement_LastDayFormatting` and `TestBuildMonthlyRatingsWinnersAnnouncement_NotLastDaySkips`.
-- Full automated validation passed with `go test ./...`.
-- No standard project lint command is currently defined in `README.md`, `.github/workflows/ci-cd.yml`, or top-level task/build files, so no separate lint run was available for this verification task.
-- Rating-specific automated coverage meets the project target for the new entry points: `PrepareDailyRatingsReminder` 88.2%, `StartDailyRatingsSession` 83.3%, `HandleDailyRatingsInteractive` 92.6%, `HandleRatingsCalendar` 81.2%, `BuildMonthlyRatingsWinnersAnnouncement` 87.5%, and `SaveDailyParticipantRatings` 81.8%.
+**Calculation:**
+- Count completed duties per user in the last 14 days (voluntary + round-robin only)
+- Assign to the user with the fewest completed duties
+- If tied, use the user who served least recently
 
-### Explanation System
+## Daily Assignment Process
 
-The `/explain` command provides transparency into the bot's assignment logic. It shows:
-- The assigned user and timestamp of the assignment
-- The list of candidates considered
-- Users excluded and why (e.g., off-duty, recently assigned)
-- The final rule/tie-breaker used for the decision
+### 11:00 AM Daily Finalization (Berlin Time)
+Every day at 11:00 AM, the bot:
 
-## Database Schema
+1. **Determines today's assignee** using priority order:
+   - **Priority 1:** Check volunteer queues - select from user(s) with volunteer queue entries
+   - **Priority 2:** Check admin assignment queues - select from user(s) with admin queue entries
+   - **Priority 3:** Use round-robin algorithm to select an active user
 
-See [logic.md](logic.md) for complete database schema and assignment logic details.
+2. **Queue Balancing:** If multiple users have the same priority queue type:
+   - Round-robin between them to distribute fairly
 
-### Chore Notifications Configuration
-To enable chore notification digests:
-- Set `CHORE_TIMEZONE` (default: `Europe/Berlin`) to define when daily 16:00 reports are sent.
+3. **Send notifications:**
+   - Direct message to the assigned user
+   - Announcement to the group chat
 
-### `/explain` - Explain Last Assignment
-Explain how the most recent dish hero duty was assigned. Shows the logic behind the choice (e.g., candidate availability, cooldowns, queues, and final criteria).
+### 21:00 PM Daily Completion
+Every day at 21:00 PM (Berlin time):
+
+1. **Mark duty as completed** by the assigned user
+2. **Record in calendar** with assignment type (voluntary, admin, or round-robin)
+3. **Update round-robin statistics** (used for next assignments)
+
+## Off-Duty and Active Status
+
+### Temporary Exclusion (`/offduty`)
+Put a user off-duty for a specified period.
+
+**Behavior During Off-Duty Period:**
+- User is **excluded from round-robin** selection
+- User's volunteer queue is **frozen** (days remain but aren't used)
+- User's admin queue is **frozen** (days remain but aren't used)
+- User is marked visibly as "Off-Duty" on calendar
+
+**After Off-Duty Period Ends:**
+- User automatically returns to active status
+- Queues resume from where they were frozen
+
+### Toggle User Active Status (`/toggleactive`)
+Permanently toggle a user between active and inactive status.
+
+**Inactive Users:**
+- Completely hidden from calendar displays, round-robin selection, admin command suggestions, and statistics
+- Treated as if they don't exist in the system
+- Can be toggled back to active at any time
+
+## User Status Overview
+
+| Status | In Round-Robin? | Queues Active? | Visible in Calendar? | In Stats? |
+|--------|-----------------|----------------|----------------------|-----------|
+| Active | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes |
+| Off-Duty (temp) | ❌ No | ⏸️ Frozen | ✅ Yes (marked) | ✅ Yes |
+| Inactive (perm) | ❌ No | ❌ No | ❌ No | ❌ No |
+| Admin | ❌ No (default) | ✅ Yes | ✅ Yes (if assigned) | ✅ Yes (if assigned) |
+
+## Weekly Statistics
+
+### Sunday 21:10 PM - Weekly Report (Berlin Time)
+The bot sends a summary showing duty statistics for the past week.
+Only includes users who had **at least 1 completed duty** during the past week. Counts all assignment types (voluntary, admin, round-robin).
+
+## Contribution
+
+For developers, technical contributors, and AI agents, please refer to the detailed **[Agent.md](Agent.md)**. It contains:
+- Architecture Design
+- Environment Variables setup
+- Docker and Source build instructions
+- Deployment (CI/CD)
+- Database Schema details
