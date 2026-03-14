@@ -286,7 +286,7 @@ func (h *Handlers) assignChore(chatID int64, fromUserID int64, description strin
 	var weightedCandidates []weightedUser
 	var totalWeight float64
 
-	slog.Info(fmt.Sprintf("[CHORE] Starting weighted selection for chore assignment"))
+	slog.Info("[CHORE] Starting weighted selection for chore assignment")
 	slog.Info(fmt.Sprintf("[CHORE] Number of candidates after filtering: %d", len(candidates)))
 
 	for _, u := range candidates {

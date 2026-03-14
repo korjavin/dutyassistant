@@ -3,7 +3,7 @@ package scheduler
 import (
 	"context"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"time"
 
 	"github.com/korjavin/dutyassistant/internal/store"
@@ -203,7 +203,7 @@ func (s *Scheduler) selectUserWithBalancing(ctx context.Context, users []*store.
 	}
 
 	// Randomly select from users with max queue count for fairness
-	return maxQueueUsers[rand.Intn(len(maxQueueUsers))]
+	return maxQueueUsers[rand.IntN(len(maxQueueUsers))]
 }
 
 // selectRoundRobinUser selects the user with the least completed duties in the last 14 days.
@@ -227,7 +227,7 @@ func (s *Scheduler) selectRoundRobinUser(ctx context.Context, users []*store.Use
 	duties, err := s.store.GetCompletedDutiesInRange(ctx, start, today)
 	if err != nil {
 		// If error, randomize selection among all available users
-		return users[rand.Intn(len(users))]
+		return users[rand.IntN(len(users))]
 	}
 
 	// Count duties per user (excluding admin assignments)
@@ -258,10 +258,10 @@ func (s *Scheduler) selectRoundRobinUser(ctx context.Context, users []*store.Use
 
 	// Randomly select from candidates for fairness
 	if len(candidateUsers) == 0 {
-		return users[rand.Intn(len(users))]
+		return users[rand.IntN(len(users))]
 	}
 
-	return candidateUsers[rand.Intn(len(candidateUsers))]
+	return candidateUsers[rand.IntN(len(candidateUsers))]
 }
 
 // assignDuty creates a new duty assignment.

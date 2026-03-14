@@ -257,7 +257,7 @@ If formatting text, ONLY use Telegram-supported HTML tags (<b>, <i>, <a>, <code>
 	}
 
 	if len(chatResp.Choices) == 0 {
-		slog.Info(fmt.Sprintf("LLM RefineMessage no choices returned"))
+		slog.Info("LLM RefineMessage no choices returned")
 		return vanilla
 	}
 

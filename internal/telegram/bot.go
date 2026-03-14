@@ -147,7 +147,6 @@ func (b *Bot) checkAccess(userID int64) bool {
 			UserID: userID,
 		},
 	})
-
 	if err != nil {
 		slog.Info(fmt.Sprintf("Error checking group membership for user %d: %v", userID, err), slog.String("component", "access"))
 		return false

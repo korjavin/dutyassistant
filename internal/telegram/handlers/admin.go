@@ -532,7 +532,7 @@ func (h *Handlers) HandleAssignUserCallback(q *tgbotapi.CallbackQuery) (tgbotapi
 
 	// Get user info
 	var id int64
-	fmt.Sscanf(userID, "%d", &id)
+	_, _ = fmt.Sscanf(userID, "%d", &id)
 	user, err := h.Store.GetUserByTelegramID(context.Background(), id)
 	if err != nil || user == nil {
 		// Try by ID directly
@@ -587,8 +587,8 @@ func (h *Handlers) HandleAssignDaysCallback(q *tgbotapi.CallbackQuery) (tgbotapi
 	}
 
 	var userID, days int64
-	fmt.Sscanf(parts[1], "%d", &userID)
-	fmt.Sscanf(parts[2], "%d", &days)
+	_, _ = fmt.Sscanf(parts[1], "%d", &userID)
+	_, _ = fmt.Sscanf(parts[2], "%d", &days)
 
 	// Get user
 	users, _ := h.Store.ListAllUsers(context.Background())
@@ -633,7 +633,7 @@ func (h *Handlers) HandleAssignCustomCallback(q *tgbotapi.CallbackQuery) (tgbota
 	}
 
 	var userID int64
-	fmt.Sscanf(parts[1], "%d", &userID)
+	_, _ = fmt.Sscanf(parts[1], "%d", &userID)
 
 	// Get user
 	users, _ := h.Store.ListAllUsers(context.Background())
@@ -668,7 +668,7 @@ func (h *Handlers) HandleUnassignUserCallback(q *tgbotapi.CallbackQuery) (tgbota
 
 	userID := parts[1]
 	var id int64
-	fmt.Sscanf(userID, "%d", &id)
+	_, _ = fmt.Sscanf(userID, "%d", &id)
 
 	// Get user info (including queue size)
 	users, _ := h.Store.GetUsersWithAdminQueue(context.Background())
@@ -738,8 +738,8 @@ func (h *Handlers) HandleUnassignDaysCallback(q *tgbotapi.CallbackQuery) (tgbota
 	}
 
 	var userID, days int64
-	fmt.Sscanf(parts[1], "%d", &userID)
-	fmt.Sscanf(parts[2], "%d", &days)
+	_, _ = fmt.Sscanf(parts[1], "%d", &userID)
+	_, _ = fmt.Sscanf(parts[2], "%d", &days)
 
 	// Get user
 	users, _ := h.Store.ListAllUsers(context.Background())
@@ -822,7 +822,7 @@ func (h *Handlers) HandleModifyUserCallback(q *tgbotapi.CallbackQuery) (tgbotapi
 
 	dateStr := parts[1]
 	var userID int64
-	fmt.Sscanf(parts[2], "%d", &userID)
+	_, _ = fmt.Sscanf(parts[2], "%d", &userID)
 
 	dutyDate, err := time.Parse("2006-01-02", dateStr)
 	if err != nil {
@@ -874,7 +874,7 @@ func (h *Handlers) HandleToggleUserCallback(q *tgbotapi.CallbackQuery) (tgbotapi
 	}
 
 	var userID int64
-	fmt.Sscanf(parts[1], "%d", &userID)
+	_, _ = fmt.Sscanf(parts[1], "%d", &userID)
 
 	users, _ := h.Store.ListAllUsers(context.Background())
 	var user *store.User

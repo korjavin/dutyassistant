@@ -68,19 +68,19 @@ func (n *Notifier) Start() {
 
 // Stop gracefully stops the cron scheduler.
 func (n *Notifier) Stop() {
-	slog.Info(fmt.Sprint("Stopping notifier..."))
+	slog.Info("Stopping notifier...")
 	if n.cron != nil {
 		ctx := n.cron.Stop()
 		<-ctx.Done()
 	}
-	slog.Info(fmt.Sprint("Notifier stopped."))
+	slog.Info("Notifier stopped.")
 }
 
 // checkAndNotify is the core function executed by the cron job.
 // It checks for tomorrow's duty, assigns one if needed, and sends notifications.
 func (n *Notifier) checkAndNotify() {
 	ctx := context.Background()
-	slog.Info(fmt.Sprint("Cron job triggered: checking for tomorrow's duty."))
+	slog.Info("Cron job triggered: checking for tomorrow's duty.")
 
 	// Determine tomorrow's date in the service's configured timezone.
 	nowInLocation := n.now().In(n.location)

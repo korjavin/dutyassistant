@@ -76,7 +76,7 @@ func (h *Handlers) HandleVolunteerDaysCallback(q *tgbotapi.CallbackQuery) (tgbot
 	}
 
 	var days int
-	fmt.Sscanf(parts[1], "%d", &days)
+	_, _ = fmt.Sscanf(parts[1], "%d", &days)
 
 	user, err := h.Store.GetUserByTelegramID(context.Background(), q.From.ID)
 	if err != nil || user == nil {
