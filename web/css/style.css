@@ -1,0 +1,199 @@
+/* Vanilla CSS to replace Tailwind */
+
+:root {
+  --color-gray-100: #f3f4f6;
+  --color-gray-200: #e5e7eb;
+  --color-gray-300: #d1d5db;
+  --color-gray-400: #9ca3af;
+  --color-gray-500: #6b7280;
+  --color-gray-600: #4b5563;
+  --color-gray-700: #374151;
+  --color-gray-900: #111827;
+
+  --color-white: #ffffff;
+
+  --color-blue-50: #eff6ff;
+  --color-blue-100: #dbeafe;
+  --color-blue-300: #93c5fd;
+  --color-blue-500: #3b82f6;
+  --color-blue-600: #2563eb;
+
+  --color-green-100: #d1fae5;
+  --color-green-300: #6ee7b7;
+  --color-green-500: #10b981;
+  --color-green-600: #059669;
+
+  --color-red-100: #fee2e2;
+  --color-red-400: #f87171;
+  --color-red-500: #ef4444;
+  --color-red-600: #dc2626;
+  --color-red-700: #b91c1c;
+
+  --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+body {
+    margin: 0;
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background-color: var(--color-gray-100);
+    color: var(--color-gray-900);
+}
+
+.container {
+    width: 100%;
+    margin-right: auto;
+    margin-left: auto;
+    padding: 1rem;
+}
+
+@media (min-width: 640px) { .container { max-width: 640px; } }
+@media (min-width: 768px) { .container { max-width: 768px; } }
+@media (min-width: 1024px) { .container { max-width: 1024px; } }
+
+.text-2xl { font-size: 1.5rem; line-height: 2rem; }
+.text-lg { font-size: 1.125rem; line-height: 1.75rem; }
+.text-sm { font-size: 0.875rem; line-height: 1.25rem; }
+.text-[10px] { font-size: 10px; line-height: 1; }
+
+.font-bold { font-weight: 700; }
+.font-semibold { font-weight: 600; }
+.font-medium { font-weight: 500; }
+.italic { font-style: italic; }
+
+.mt-2 { margin-top: 0.5rem; }
+.mt-3 { margin-top: 0.75rem; }
+.mt-4 { margin-top: 1rem; }
+.mb-1 { margin-bottom: 0.25rem; }
+.mb-2 { margin-bottom: 0.5rem; }
+.mb-4 { margin-bottom: 1rem; }
+.mr-2 { margin-right: 0.5rem; }
+.mx-auto { margin-left: auto; margin-right: auto; }
+
+.p-3 { padding: 0.75rem; }
+.p-4 { padding: 1rem; }
+.p-5 { padding: 1.25rem; }
+.p-8 { padding: 2rem; }
+.px-1 { padding-left: 0.25rem; padding-right: 0.25rem; }
+.px-3 { padding-left: 0.75rem; padding-right: 0.75rem; }
+.py-1 { padding-top: 0.25rem; padding-bottom: 0.25rem; }
+.px-4 { padding-left: 1rem; padding-right: 1rem; }
+.py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+.py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+.px-7 { padding-left: 1.75rem; padding-right: 1.75rem; }
+
+.card {
+    background-color: var(--color-white);
+    border-radius: 0.5rem;
+    box-shadow: var(--shadow);
+    padding: 1rem;
+    margin-top: 1rem;
+}
+
+.card-blue {
+    background-color: var(--color-blue-50);
+    border-radius: 0.5rem;
+    box-shadow: var(--shadow);
+    padding: 1rem;
+    margin-top: 1rem;
+}
+
+.rounded { border-radius: 0.25rem; }
+.rounded-md { border-radius: 0.375rem; }
+.rounded-lg { border-radius: 0.5rem; }
+.rounded-full { border-radius: 9999px; }
+
+.shadow { box-shadow: var(--shadow); }
+.shadow-lg { box-shadow: var(--shadow-lg); }
+
+.border { border-width: 1px; border-style: solid; border-color: var(--color-gray-200); }
+.border-t-2 { border-top-width: 2px; border-top-style: solid; }
+.border-b-2 { border-bottom-width: 2px; border-bottom-style: solid; }
+.border-green-300 { border-color: var(--color-green-300); }
+.border-blue-300 { border-color: var(--color-blue-300); }
+.border-blue-500 { border-color: var(--color-blue-500); }
+.border-gray-300 { border-color: var(--color-gray-300); }
+.border-red-400 { border-color: var(--color-red-400); }
+
+.bg-white { background-color: var(--color-white); }
+.bg-gray-100 { background-color: var(--color-gray-100); }
+.bg-gray-200 { background-color: var(--color-gray-200); }
+.bg-gray-500 { background-color: var(--color-gray-500); }
+.bg-gray-600 { background-color: var(--color-gray-600); }
+.bg-green-100 { background-color: var(--color-green-100); }
+.bg-green-500 { background-color: var(--color-green-500); }
+.bg-blue-100 { background-color: var(--color-blue-100); }
+.bg-red-100 { background-color: var(--color-red-100); }
+.bg-red-500 { background-color: var(--color-red-500); }
+
+.bg-opacity-50 { background-color: rgba(75, 85, 99, 0.5); }
+
+.text-white { color: var(--color-white); }
+.text-gray-400 { color: var(--color-gray-400); }
+.text-gray-500 { color: var(--color-gray-500); }
+.text-gray-600 { color: var(--color-gray-600); }
+.text-gray-700 { color: var(--color-gray-700); }
+.text-gray-800 { color: #1f2937; }
+.text-gray-900 { color: var(--color-gray-900); }
+.text-green-600 { color: var(--color-green-600); }
+.text-blue-600 { color: var(--color-blue-600); }
+.text-red-700 { color: var(--color-red-700); }
+
+.hover\:bg-gray-700:hover { background-color: var(--color-gray-700); cursor: pointer; }
+.hover\:bg-green-600:hover { background-color: var(--color-green-600); cursor: pointer; }
+.hover\:bg-red-600:hover { background-color: var(--color-red-600); cursor: pointer; }
+
+.flex { display: flex; }
+.inline-flex { display: inline-flex; }
+.flex-col { flex-direction: column; }
+.flex-wrap { flex-wrap: wrap; }
+.items-center { align-items: center; }
+.justify-center { justify-content: center; }
+.justify-start { justify-content: flex-start; }
+.gap-4 { gap: 1rem; }
+
+.w-4 { width: 1rem; }
+.h-4 { height: 1rem; }
+.w-6 { width: 1.5rem; }
+.h-6 { height: 1.5rem; }
+.w-16 { width: 4rem; }
+.h-16 { height: 4rem; }
+.w-96 { width: 24rem; }
+.w-full { width: 100%; }
+.h-full { height: 100%; }
+
+.fixed { position: fixed; }
+.relative { position: relative; }
+.absolute { position: absolute; }
+.inset-0 { top: 0; right: 0; bottom: 0; left: 0; }
+.top-20 { top: 5rem; }
+
+.hidden { display: none !important; }
+.block { display: block; }
+.sm\:inline { display: inline; }
+@media (min-width: 640px) { .sm\:inline { display: inline; } }
+
+.text-center { text-align: center; }
+.leading-6 { line-height: 1.5rem; }
+
+.overflow-y-auto { overflow-y: auto; }
+
+.focus\:outline-none:focus { outline: 2px solid transparent; outline-offset: 2px; }
+.focus\:ring-2:focus { box-shadow: 0 0 0 2px var(--color-white), 0 0 0 4px var(--color-gray-300); }
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.animate-spin { animation: spin 1s linear infinite; }
+
+button {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+}
+
+button[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+}

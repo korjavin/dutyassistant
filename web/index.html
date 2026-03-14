@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Roster Bot</title>
     <!-- The compiled Tailwind CSS will be linked here -->
-    <link href="/css/styles.css?v=BUILD_TIME" rel="stylesheet">
+    <link href="/css/style.css?v=BUILD_TIME" rel="stylesheet">
     <!-- Vanilla Calendar Pro CSS -->
     <link href="/vendor/vanilla-calendar/vanilla-calendar.min.css?v=BUILD_TIME" rel="stylesheet">
     <style>
@@ -29,12 +29,12 @@
     </style>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
-<body class="bg-gray-100">
-    <div class="container mx-auto p-4">
+<body>
+    <main class="container">
         <h1 class="text-2xl font-bold">Roster Bot Schedule</h1>
 
         <!-- Active Chores Summary -->
-        <div id="pending-chores-summary" class="mt-4 p-4 bg-white rounded-lg shadow">
+        <div id="pending-chores-summary" class="card">
             <h3 class="font-bold mb-2">Assigned, not yet confirmed chores:</h3>
             <div id="pending-chores-list" class="text-sm">
                 <p class="text-gray-500">Loading...</p>
@@ -42,7 +42,7 @@
         </div>
 
         <!-- Queue Summary -->
-        <div id="queue-summary" class="mt-4 p-4 bg-blue-50 rounded-lg shadow">
+        <div id="queue-summary" class="card-blue">
             <h3 class="font-bold mb-2">Current Queues:</h3>
             <div id="queue-list" class="text-sm">
                 <p class="text-gray-500">Loading...</p>
@@ -55,7 +55,7 @@
         </div>
 
         <!-- Legend for assignment types -->
-        <div class="mt-4 p-4 bg-white rounded-lg shadow">
+        <div class="card">
             <h3 class="font-bold mb-2">Legend:</h3>
             <div class="flex flex-wrap gap-4">
                 <div class="flex items-center">
@@ -72,7 +72,7 @@
                 </div>
             </div>
         </div>
-    </div>
+    </main>
 
     <!-- The main JavaScript entry point -->
     <script src="/js/main.js?v=BUILD_TIME" type="module"></script>

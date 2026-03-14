@@ -1,4 +1,7 @@
 import { initializeCalendar } from './ui/calendar.js';
+import { displayQueueSummary } from './ui/queue.js';
+import { displayPendingChores } from './ui/chores.js';
+import { getUsers, getActiveChores } from './api.js';
 import { setState } from './store.js';
 
 // Main entry point for the frontend application.
@@ -25,6 +28,15 @@ function initializeApp() {
 
     // Initialize the calendar
     initializeCalendar();
+
+    // Fetch and display queue and chores independently
+    getUsers()
+        .then(users => displayQueueSummary(users))
+        .catch(error => console.error("Failed to fetch users:", error));
+
+    getActiveChores()
+        .then(chores => displayPendingChores(chores))
+        .catch(error => console.error("Failed to fetch chores:", error));
 }
 
 // This is where the application will be initialized.

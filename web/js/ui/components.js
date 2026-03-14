@@ -40,7 +40,7 @@ export function createDutyCard(duty, currentUser) {
     }
 
     return `
-    <div class="duty-card bg-white p-4 rounded-lg shadow mb-4" data-duty-id="${duty.id}">
+    <div class="duty-card card mb-4" data-duty-id="${duty.id}">
       <h3 class="font-bold text-lg">${duty.title}</h3>
       <p class="text-gray-600">${duty.time}</p>
       <div class="mt-2">
@@ -67,8 +67,8 @@ export function createModal(title, content, modalId) {
           <div class="mt-2 px-7 py-3">
             ${content}
           </div>
-          <div class="items-center px-4 py-3">
-            <button id="close-${modalId}" class="px-4 py-2 bg-gray-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-300">
+          <div class="items-center px-4 py-3 flex justify-center">
+            <button id="close-${modalId}" class="px-4 py-2 bg-gray-500 text-white text-base font-medium rounded-md w-full shadow-lg hover:bg-gray-700 focus:outline-none focus:ring-2">
               Close
             </button>
           </div>

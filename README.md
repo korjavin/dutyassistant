@@ -16,6 +16,68 @@ Duty Assistant Bot is a Telegram bot designed to help manage on-call duty roster
 *   **Monthly Participant Ratings**: Daily admin scoring prompt, month-to-date rating calendar, and month-end winners announcement
 *   **Web Interface**: View duty schedule and queue status in browser
 
+## Environment Variables
+
+To run the Duty Assistant Bot, you need to set the following environment variables:
+
+| Variable             | Purpose                               | Required | Default Value        |
+| -------------------- | ------------------------------------- | -------- | -------------------- |
+| `GIN_MODE`           | The mode for the Gin web framework.   | No       | `debug`              |
+| `TELEGRAM_APITOKEN`  | The Telegram Bot API token.           | Yes      |                      |
+| `ADMIN_ID`          | Telegram user ID allowed to run admin-only commands and receive daily participant rating prompts. | No       | `0` |
+| `DATABASE_PATH`      | The path to the SQLite database file. | No       | `/app/data/roster.db` |
+| `DISH_GROUP`        | Telegram chat ID for the main group, used for group duty and month-end participant rating announcements. | No       | `0` |
+| `DNS_NAME`           | The DNS name for the web interface.   | No       |                      |
+| `OPENAI_API_KEY`     | The OpenAI API key for LLM-refined messages.  | No       |                      |
+| `OPENAI_URL`         | The OpenAI API base URL (can be customized).  | No       | `https://api.openai.com/v1` |
+| `OPENAI_TIMEOUT_SECONDS` | Timeout in seconds for LLM API calls.     | No       | `10`                 |
+| `OPENAI_MODEL`       | The OpenAI model to use for LLM requests.     | No       | `gpt-4o-mini`        |
+| `OPENAI_TEMPERATURE` | The temperature parameter for LLM requests.   | No       | `0.7`                |
+
+## Running with Docker
+
+The recommended way to run the Duty Assistant Bot is with Docker and Docker Compose.
+
+1.  **Create a `.env` file** with the following content:
+
+    ```
+    TELEGRAM_APITOKEN=your_telegram_bot_token
+    DNS_NAME=your_dns_name
+    ```
+
+2.  **Run the bot**:
+
+    ```bash
+    docker-compose -f deployments/docker-compose.yml up -d
+    ```
+
+## Building from Source
+
+You can also build the bot from source.
+
+1.  **Install Go**: Make sure you have Go 1.23 or higher installed.
+2.  **Build the backend**:
+
+    ```bash
+    go build -mod=vendor -o roster-bot ./cmd/roster-bot/
+    ```
+
+3.  **Run the bot**:
+
+    ```bash
+    GIN_MODE=release TELEGRAM_APITOKEN=your_telegram_bot_token DATABASE_PATH=./roster.db ./roster-bot
+    ```
+
+## Deployment
+
+The project includes a `Dockerfile` and a `docker-compose.yml` file for easy deployment. The `Dockerfile` creates a minimal production image using a multi-stage build with Alpine Linux (includes `tzdata` for Berlin timezone support). The `docker-compose.yml` file defines the service and its dependencies.
+
+### CI/CD
+
+The project uses GitHub Actions for automated builds and deployments. On push to master, the workflow:
+1. Builds a Docker image
+2. Pushes to GitHub Container Registry
+3. Triggers Portainer webhook to deploy on production server
 ## Bot Commands
 
 ### User Commands

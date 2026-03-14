@@ -22,12 +22,35 @@ func NewServer(s store.Store, botToken string, dutySecret string) *gin.Engine {
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
 
+	// Cache Control Middleware
+	cacheControlMiddleware := func(c *gin.Context) {
+		// Only cache CSS for a long time since we use cache-busting in index.html for it.
+		// ES6 modules without fingerprints should not be cached.
+		path := c.Request.URL.Path
+		if len(path) > 4 && path[:4] == "/css" {
+			c.Header("Cache-Control", "public, max-age=86400")
+		} else {
+			c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
+		}
+		c.Next()
+	}
+
 	// Serve static files from web directory
-	router.Static("/js", "./web/js")
-	router.Static("/css", "./web/css")
-	router.Static("/vendor", "./web/vendor")
-	router.StaticFile("/", "./web/index.html")
-	router.StaticFile("/index.html", "./web/index.html")
+	staticRoutes := router.Group("/")
+	staticRoutes.Use(cacheControlMiddleware)
+	{
+		staticRoutes.Static("/css", "./web/css")
+		staticRoutes.Static("/js", "./web/js")
+		staticRoutes.Static("/vendor", "./web/vendor")
+	}
+
+	// Serve index.html without caching
+	indexHandler := func(c *gin.Context) {
+		c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
+		c.File("./web/index.html")
+	}
+	router.GET("/", indexHandler)
+	router.GET("/index.html", indexHandler)
 
 	// Create an instance of the authentication middleware.
 	authMiddleware := middleware.Authenticate(s, botToken)
