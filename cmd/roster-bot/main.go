@@ -11,6 +11,7 @@ import (
 	"github.com/korjavin/dutyassistant/internal/api"
 	"github.com/korjavin/dutyassistant/internal/bot"
 	"github.com/korjavin/dutyassistant/internal/domain"
+	"github.com/korjavin/dutyassistant/internal/notification"
 	"github.com/korjavin/dutyassistant/internal/service"
 	"github.com/korjavin/dutyassistant/internal/store/sqlite"
 	"github.com/robfig/cron/v3"
@@ -40,7 +41,7 @@ func main() {
 	choreService := service.NewChoreService(repo)
 	ratingService := service.NewRatingService(repo)
 
-	tgBot := bot.NewBot(botAPI, dutyService, choreService, ratingService)
+	tgBot := bot.NewBot(botAPI, repo, dutyService, choreService, ratingService)
 	go tgBot.Start()
 
 	// Setup background jobs
@@ -54,12 +55,16 @@ func main() {
 		duty, err := dutyService.AutoAssignDuty(context.Background(), time.Now())
 		if err == nil && duty != nil {
 			if duty.User != nil && duty.User.TelegramUserID != 0 {
-				msg := tgbotapi.NewMessage(duty.User.TelegramUserID, fmt.Sprintf("You are on duty today!"))
-				botAPI.Send(msg)
+				msg := fmt.Sprintf("You are on duty today, %s!", duty.User.FirstName)
+				dm := tgbotapi.NewMessage(duty.User.TelegramUserID, msg)
+				dm.ParseMode = tgbotapi.ModeHTML
+				botAPI.Send(dm)
 			}
 			if dishGroupID != 0 {
-				msg := tgbotapi.NewMessage(dishGroupID, fmt.Sprintf("Duty today: %s", duty.User.FirstName))
-				botAPI.Send(msg)
+				msg := fmt.Sprintf("Duty today is assigned to %s", duty.User.FirstName)
+				grp := tgbotapi.NewMessage(dishGroupID, msg)
+				grp.ParseMode = tgbotapi.ModeHTML
+				botAPI.Send(grp)
 			}
 		}
 	})
@@ -73,7 +78,7 @@ func main() {
 		if now.Month() != now.AddDate(0, 0, 1).Month() && dishGroupID != 0 {
 			winners, _ := ratingService.GetMonthlyWinners(context.Background(), now.Year(), now.Month())
 			if len(winners) > 0 {
-				msg := tgbotapi.NewMessage(dishGroupID, "Month-end ratings announced!")
+				msg := tgbotapi.NewMessage(dishGroupID, fmt.Sprintf("🏆 Month-end ratings announced! %s takes 1st place!", winners[0].ParticipantName))
 				botAPI.Send(msg)
 			}
 		}
@@ -82,7 +87,7 @@ func main() {
 	c.AddFunc("50 20 * * *", func() {
 		log.Println("[CRON] Daily rating reminder")
 		if adminID != 0 {
-			msg := tgbotapi.NewMessage(adminID, "Time to rate today's duty performance!")
+			msg := tgbotapi.NewMessage(adminID, "It's 20:50! Time to rate today's duty performance! (Interactive flow starting soon)")
 			botAPI.Send(msg)
 		}
 	})
@@ -90,16 +95,20 @@ func main() {
 	c.AddFunc("0 16 * * *", func() {
 		log.Println("[CRON] Daily chore summary")
 		if dishGroupID != 0 {
-			msg := tgbotapi.NewMessage(dishGroupID, "Daily chore summary report")
-			botAPI.Send(msg)
+			err := notification.SendDailyChoreSummary(context.Background(), botAPI, dbStore, dishGroupID, true, "Europe/Berlin")
+			if err != nil {
+				log.Printf("Error sending chore summary: %v", err)
+			}
 		}
 	})
 
 	c.AddFunc("10 21 * * 0", func() {
 		log.Println("[CRON] Weekly stats")
 		if dishGroupID != 0 {
-			msg := tgbotapi.NewMessage(dishGroupID, "Weekly stats report")
-			botAPI.Send(msg)
+			err := notification.SendWeeklyChoreStats(context.Background(), botAPI, dbStore, dishGroupID)
+			if err != nil {
+				log.Printf("Error sending weekly stats: %v", err)
+			}
 		}
 	})
 

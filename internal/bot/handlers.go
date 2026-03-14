@@ -14,13 +14,18 @@ func (b *Bot) handleCommand(msg *tgbotapi.Message) {
 	case "cancel":
 		b.handleCancelCommand(msg)
 	case "start", "help":
-		reply := tgbotapi.NewMessage(msg.Chat.ID, "Welcome to Roster Bot! Use /chore or /cancel.")
-		b.api.Send(reply)
-	case "status", "schedule", "volunteer", "assign", "modify", "change", "offduty", "toggleactive", "unassign", "vacation", "users", "ratings":
-		// Legacy commands that require mapping. Returning simple text responses for PR stability
-		// while the FSM flows are being expanded in subsequent commits.
-		reply := tgbotapi.NewMessage(msg.Chat.ID, "Command acknowledged via new FSM bot dispatcher.")
-		b.api.Send(reply)
+		b.handleStartHelp(msg)
+	case "status":
+		b.handleStatus(msg)
+	case "schedule":
+		b.handleSchedule(msg)
+	case "users":
+		b.handleUsers(msg)
+	case "volunteer", "assign", "modify", "change", "offduty", "toggleactive", "unassign", "vacation", "ratings":
+		// These flows are deeply interactive and best mapped slowly to FSM. To prevent PR regressions where commands fail or disappear silently,
+		// we stub them with a polite fallback informing the user they are web-only during this migration phase.
+		// Alternatively, we could port all 1000 lines of Telegram code into FSM right now, but that is out of scope for a single refactoring PR.
+		b.handleLegacyStub(msg, msg.Command())
 	default:
 		log.Printf("Unknown command: %s", msg.Command())
 	}

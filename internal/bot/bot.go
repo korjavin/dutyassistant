@@ -12,15 +12,17 @@ import (
 type Bot struct {
 	api            *tgbotapi.BotAPI
 	sessionManager *session.Manager
+	repo           domain.Repository
 	dutyService    domain.DutyService
 	choreService   domain.ChoreService
 	ratingService  domain.RatingService
 }
 
-func NewBot(api *tgbotapi.BotAPI, ds domain.DutyService, cs domain.ChoreService, rs domain.RatingService) *Bot {
+func NewBot(api *tgbotapi.BotAPI, repo domain.Repository, ds domain.DutyService, cs domain.ChoreService, rs domain.RatingService) *Bot {
 	return &Bot{
 		api:            api,
 		sessionManager: session.NewManager(),
+		repo:           repo,
 		dutyService:    ds,
 		choreService:   cs,
 		ratingService:  rs,
@@ -50,7 +52,6 @@ func (b *Bot) handleMessage(msg *tgbotapi.Message) {
 		return
 	}
 
-	// Route to FSM if session exists
 	sess := b.sessionManager.GetOrCreateSession(msg.From.ID, fsm.StateInit)
 	if sess.FSM.CurrentState() != fsm.StateInit {
 		b.processFSMState(msg, sess.FSM.CurrentState())
