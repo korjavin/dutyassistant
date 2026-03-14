@@ -132,6 +132,7 @@ type Store interface {
 	UpdateDuty(ctx context.Context, duty *Duty) error
 	DeleteDuty(ctx context.Context, date time.Time) error
 	GetDutiesByMonth(ctx context.Context, year int, month time.Month) ([]*Duty, error)
+	GetFutureDuties(ctx context.Context, from time.Time) ([]*Duty, error)
 	CompleteDuty(ctx context.Context, date time.Time) error
 	GetTodaysDuty(ctx context.Context) (*Duty, error)
 	GetCompletedDutiesInRange(ctx context.Context, start, end time.Time) ([]*Duty, error)

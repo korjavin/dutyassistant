@@ -96,6 +96,7 @@ func TestHandleUsers_Success(t *testing.T) {
 		{FirstName: "Bob", IsActive: false, IsAdmin: false},
 	}
 	mockStore.On("ListAllUsers", mock.Anything).Return(userList, nil)
+	mockStore.On("GetFutureDuties", mock.Anything, mock.AnythingOfType("time.Time")).Return([]*store.Duty{}, nil)
 	// Mock scheduler for vacation mode check
 	mockScheduler.On("IsVacationMode", mock.Anything).Return(false, nil) // Add this
 
@@ -105,6 +106,90 @@ func TestHandleUsers_Success(t *testing.T) {
 	assert.Contains(t, msg.Text, "Alice</b> 👑: ✅ Active")
 	assert.Contains(t, msg.Text, "Bob</b>: ❌ Inactive")
 	assert.Equal(t, tgbotapi.ModeHTML, msg.ParseMode)
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleUsers_WithAssignments(t *testing.T) {
+	mockStore, mockScheduler, h := setupAdminTest(t)
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 789},
+		From: &tgbotapi.User{ID: 123},
+	}
+
+	userList := []*store.User{
+		{ID: 1, FirstName: "Alice", IsActive: true, IsAdmin: true},
+	}
+	mockStore.On("ListAllUsers", mock.Anything).Return(userList, nil)
+
+	futureDuties := []*store.Duty{
+		{
+			UserID:   1,
+			DutyDate: time.Date(2025, 10, 10, 0, 0, 0, 0, time.UTC),
+		},
+	}
+	mockStore.On("GetFutureDuties", mock.Anything, mock.AnythingOfType("time.Time")).Return(futureDuties, nil)
+	mockScheduler.On("IsVacationMode", mock.Anything).Return(false, nil)
+
+	msg, err := h.HandleUsers(message)
+	assert.NoError(t, err)
+	assert.Contains(t, msg.Text, "📅 Duty: 2025-10-10")
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleUsers_ExpiredOffDuty(t *testing.T) {
+	mockStore, mockScheduler, h := setupAdminTest(t)
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 789},
+		From: &tgbotapi.User{ID: 123},
+	}
+
+	originalNow := handlers.TimeNow
+	handlers.TimeNow = func() time.Time { return time.Date(2025, 1, 15, 12, 0, 0, 0, time.UTC) }
+	defer func() { handlers.TimeNow = originalNow }()
+
+	start := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2025, 1, 10, 0, 0, 0, 0, time.UTC) // Past date relative to our mocked TimeNow
+
+	userList := []*store.User{
+		{ID: 1, FirstName: "Alice", IsActive: true, OffDutyStart: &start, OffDutyEnd: &end},
+	}
+	mockStore.On("ListAllUsers", mock.Anything).Return(userList, nil)
+	mockStore.On("GetFutureDuties", mock.Anything, mock.AnythingOfType("time.Time")).Return([]*store.Duty{}, nil)
+	mockScheduler.On("IsVacationMode", mock.Anything).Return(false, nil)
+
+	msg, err := h.HandleUsers(message)
+	assert.NoError(t, err)
+	assert.NotContains(t, msg.Text, "Off-duty")
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleUsers_ActiveOffDuty(t *testing.T) {
+	mockStore, mockScheduler, h := setupAdminTest(t)
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 789},
+		From: &tgbotapi.User{ID: 123},
+	}
+
+	originalNow := handlers.TimeNow
+	handlers.TimeNow = func() time.Time { return time.Date(2025, 1, 5, 12, 0, 0, 0, time.UTC) }
+	defer func() { handlers.TimeNow = originalNow }()
+
+	start := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2025, 1, 10, 0, 0, 0, 0, time.UTC) // Future date relative to our mocked TimeNow
+
+	userList := []*store.User{
+		{ID: 1, FirstName: "Alice", IsActive: true, OffDutyStart: &start, OffDutyEnd: &end},
+	}
+	mockStore.On("ListAllUsers", mock.Anything).Return(userList, nil)
+	mockStore.On("GetFutureDuties", mock.Anything, mock.AnythingOfType("time.Time")).Return([]*store.Duty{}, nil)
+	mockScheduler.On("IsVacationMode", mock.Anything).Return(false, nil)
+
+	msg, err := h.HandleUsers(message)
+	assert.NoError(t, err)
+	assert.Contains(t, msg.Text, "🏖 Off-duty: 2025-01-01 to 2025-01-10")
 	mockStore.AssertExpectations(t)
 }
 

@@ -300,6 +300,20 @@ func (h *Handlers) HandleUsers(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 		log.Printf("Warning: could not check vacation mode: %v", err)
 	}
 
+	now := TimeNow()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+
+	// Fetch future duties
+	futureDuties, err := h.Store.GetFutureDuties(context.Background(), today)
+	if err != nil {
+		log.Printf("Warning: could not fetch future duties: %v", err)
+	}
+
+	userFutureDuties := make(map[int64][]*store.Duty)
+	for _, d := range futureDuties {
+		userFutureDuties[d.UserID] = append(userFutureDuties[d.UserID], d)
+	}
+
 	var builder strings.Builder
 	builder.WriteString("<b>📋 User List</b>\n")
 	if isVacation {
@@ -318,16 +332,26 @@ func (h *Handlers) HandleUsers(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 
 		builder.WriteString(fmt.Sprintf("<b>%s</b>%s: %s\n", u.FirstName, adminStatus, status))
 
+		// Show upcoming duties if any
+		if duties, ok := userFutureDuties[u.ID]; ok && len(duties) > 0 {
+			for _, d := range duties {
+				builder.WriteString(fmt.Sprintf("  📅 Duty: %s\n", d.DutyDate.Format("2006-01-02")))
+			}
+		}
+
 		// Show queues if any
 		if u.VolunteerQueueDays > 0 || u.AdminQueueDays > 0 {
 			builder.WriteString(fmt.Sprintf("  Queues: V:%d A:%d\n", u.VolunteerQueueDays, u.AdminQueueDays))
 		}
 
-		// Show off-duty if set
+		// Show off-duty if set and active/future
 		if u.OffDutyStart != nil && u.OffDutyEnd != nil {
-			builder.WriteString(fmt.Sprintf("  🏖 Off-duty: %s to %s\n",
-				u.OffDutyStart.Format("2006-01-02"),
-				u.OffDutyEnd.Format("2006-01-02")))
+			offDutyEnd := time.Date(u.OffDutyEnd.Year(), u.OffDutyEnd.Month(), u.OffDutyEnd.Day(), 0, 0, 0, 0, time.UTC)
+			if !offDutyEnd.Before(today) {
+				builder.WriteString(fmt.Sprintf("  🏖 Off-duty: %s to %s\n",
+					u.OffDutyStart.Format("2006-01-02"),
+					u.OffDutyEnd.Format("2006-01-02")))
+			}
 		}
 		builder.WriteString("\n")
 	}
