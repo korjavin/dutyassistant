@@ -8,9 +8,12 @@
 roster-bot
 web/node_modules
 
+# Exclude Go vendor directory (we're not using vendoring anymore)
+vendor/
+
 # Exclude IDE files
 .idea
 .vscode
 .claude
 
-# Don't exclude anything else - we need cmd, internal, vendor, web, etc.
+# Don't exclude anything else - we need cmd, internal, web, etc.

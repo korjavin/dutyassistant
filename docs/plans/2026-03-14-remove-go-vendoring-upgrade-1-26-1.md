@@ -38,11 +38,11 @@ This plan removes Go vendoring from the project, upgrades the Go version to 1.26
 **Files:**
 - Modify: `Dockerfile`, `.dockerignore`
 
-- [ ] Update builder image to `golang:1.26.1-alpine` in `Dockerfile`
-- [ ] Add `RUN go mod download` after copying `go.mod` and `go.sum` for better layer caching in `Dockerfile`
-- [ ] Remove `-mod=vendor` flag from all `go build` commands in `Dockerfile`
-- [ ] Add `vendor/` to `.dockerignore` to ensure it's not sent to the Docker daemon
-- [ ] run project test suite - must pass before task 3
+- [x] Update builder image to `golang:1.26.1-alpine` in `Dockerfile`
+- [x] Add `RUN go mod download` after copying `go.mod` and `go.sum` for better layer caching in `Dockerfile`
+- [x] Remove `-mod=vendor` flag from all `go build` commands in `Dockerfile`
+- [x] Add `vendor/` to `.dockerignore` to ensure it's not sent to the Docker daemon
+- [x] run project test suite - must pass before task 3
 
 ### Task 3: Update GitHub Actions
 
