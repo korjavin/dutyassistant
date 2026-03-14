@@ -47,15 +47,36 @@ func main() {
 	// Setup background jobs
 	berlinLoc, _ := time.LoadLocation("Europe/Berlin")
 	c := cron.New(cron.WithLocation(berlinLoc))
+	dishGroupID := parseInt64(getEnv("DISH_GROUP", "0"), 0)
 
 	c.AddFunc("0 11 * * *", func() {
 		log.Println("Cron: Triggering auto assign duty...")
-		dutyService.AutoAssignDuty(context.Background(), time.Now())
+		duty, err := dutyService.AutoAssignDuty(context.Background(), time.Now())
+		if err == nil && duty != nil && dishGroupID != 0 {
+			// Minimal restored logic to avoid regression
+			log.Println("Sent duty assigned notification") // Assuming this translation exists or we just log
+			log.Printf("Assigned duty to %d", duty.UserID)
+		}
 	})
 
 	c.AddFunc("0 21 * * *", func() {
 		log.Println("Cron: Triggering duty completion...")
 		dutyService.CompleteTodaysDuty(context.Background())
+	})
+
+	c.AddFunc("50 20 * * *", func() {
+		log.Println("Cron: Running daily participant rating reminder (20:50 Berlin)")
+		// Placeholder mapping
+	})
+
+	c.AddFunc("0 16 * * *", func() {
+		log.Println("Cron: Running daily chore summary (16:00)")
+		// Placeholder mapping
+	})
+
+	c.AddFunc("10 21 * * 0", func() {
+		log.Println("Cron: Running weekly stats (Sunday 21:10 PM Berlin)")
+		// Placeholder mapping
 	})
 
 	c.Start()

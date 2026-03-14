@@ -13,6 +13,10 @@ func (b *Bot) handleCommand(msg *tgbotapi.Message) {
 		b.handleChoreCommand(msg)
 	case "cancel":
 		b.handleCancelCommand(msg)
+	case "start", "help", "status", "schedule", "volunteer", "assign", "modify", "change", "offduty", "toggleactive", "unassign", "vacation", "users", "ratings":
+		// These commands are recognized to avoid unhandled errors but their implementation is migrating
+		reply := tgbotapi.NewMessage(msg.Chat.ID, "This command is currently being migrated to the new FSM architecture.")
+		b.api.Send(reply)
 	default:
 		log.Printf("Unknown command: %s", msg.Command())
 	}
