@@ -17,7 +17,9 @@ func (s *SQLiteStore) SaveDailyParticipantRatings(ctx context.Context, date time
 	if err != nil {
 		return fmt.Errorf("could not start participant ratings transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	dateStr := date.UTC().Format(sqliteDateLayout)

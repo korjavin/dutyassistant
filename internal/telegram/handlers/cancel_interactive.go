@@ -44,9 +44,7 @@ func (h *Handlers) HandleCancelInteractive(m *tgbotapi.Message) (tgbotapi.Messag
 	nextMonth := today.AddDate(0, 1, 0)
 	nextMonthDuties, errNext := h.Store.GetDutiesByMonth(context.Background(), nextMonth.Year(), nextMonth.Month())
 	if errNext == nil {
-		for _, d := range nextMonthDuties {
-			upcomingDuties = append(upcomingDuties, d)
-		}
+		upcomingDuties = append(upcomingDuties, nextMonthDuties...)
 	}
 
 	if len(chores) == 0 && len(rChores) == 0 && len(upcomingDuties) == 0 {

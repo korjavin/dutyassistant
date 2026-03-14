@@ -103,7 +103,7 @@ func (s *Scheduler) AssignTodaysDuty(ctx context.Context) (*store.Duty, error) {
 			return nil, err
 		}
 		// Decrement volunteer queue
-		s.store.DecrementVolunteerQueue(ctx, user.ID)
+		_ = s.store.DecrementVolunteerQueue(ctx, user.ID)
 		return duty, nil
 	}
 
@@ -124,7 +124,7 @@ func (s *Scheduler) AssignTodaysDuty(ctx context.Context) (*store.Duty, error) {
 			return nil, err
 		}
 		// Decrement admin queue
-		s.store.DecrementAdminQueue(ctx, user.ID)
+		_ = s.store.DecrementAdminQueue(ctx, user.ID)
 		return duty, nil
 	}
 

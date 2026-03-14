@@ -3,7 +3,7 @@ package notification
 import (
 	"context"
 	"log/slog"
-	"math/rand"
+	"math/rand/v2"
 	"time"
 
 	"github.com/korjavin/dutyassistant/internal/store"
@@ -56,13 +56,13 @@ func nextReminderTime(now time.Time, loc *time.Location) time.Time {
 
 	if hour < 16 {
 		// Advance to 16:00 same day + random minutes (0-30)
-		randMinutes := time.Duration(rand.Intn(30)) * time.Minute
+		randMinutes := time.Duration(rand.IntN(30)) * time.Minute
 		return time.Date(year, month, day, 16, 0, 0, 0, loc).Add(randMinutes)
 	}
 
 	if hour >= 19 {
 		// Advance to 16:00 next day + 0-30 min random offset
-		randMinutes := time.Duration(rand.Intn(30)) * time.Minute
+		randMinutes := time.Duration(rand.IntN(30)) * time.Minute
 		nextDay := next.AddDate(0, 0, 1)
 		return time.Date(nextDay.Year(), nextDay.Month(), nextDay.Day(), 16, 0, 0, 0, loc).Add(randMinutes)
 	}

@@ -17,7 +17,7 @@ func TestNewClient(t *testing.T) {
 
 	client = NewClient("some-key", "", 10, "", nil)
 	if client == nil {
-		t.Errorf("Expected non-nil client with valid key")
+		t.Fatalf("Expected non-nil client with valid key")
 	}
 	if client.baseURL != "https://api.openai.com/v1" {
 		t.Errorf("Expected default baseURL, got: %s", client.baseURL)

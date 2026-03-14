@@ -25,13 +25,13 @@ import (
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	slog.SetDefault(logger)
-	slog.Info(fmt.Sprint("Roster Bot starting..."))
+	slog.Info("Roster Bot starting...")
 
 	// Get configuration from environment
 	dbPath := getEnv("DATABASE_PATH", "/app/data/roster.db")
 	telegramToken := getEnv("TELEGRAM_APITOKEN", "")
 	if telegramToken == "" {
-		slog.Error(fmt.Sprint("TELEGRAM_APITOKEN environment variable is required"))
+		slog.Error("TELEGRAM_APITOKEN environment variable is required")
 		os.Exit(1)
 	}
 	adminIDStr := getEnv("ADMIN_ID", "0")
@@ -61,11 +61,11 @@ func main() {
 	}
 
 	// Initialize scheduler
-	slog.Info(fmt.Sprint("Initializing scheduler..."))
+	slog.Info("Initializing scheduler...")
 	sched := scheduler.NewScheduler(store)
 
 	// Initialize LLM client
-	slog.Info(fmt.Sprint("Initializing LLM client..."))
+	slog.Info("Initializing LLM client...")
 	llmClient := llm.NewClient(openaiAPIKey, openaiURL, int(openaiTimeout), openaiModel, openaiTemperature)
 	if llmClient != nil {
 		model, temp, url := llmClient.Config()
@@ -128,14 +128,14 @@ func main() {
 		}
 
 		if duty == nil {
-			slog.Warn(fmt.Sprintf("WARNING: No duty was assigned (duty is nil)"), slog.String("component", "cron"))
+			slog.Warn("WARNING: No duty was assigned (duty is nil)", slog.String("component", "cron"))
 			return
 		}
 
 		slog.Info(fmt.Sprintf("✓ Successfully assigned duty to user %d (Assignment Type: %s)", duty.UserID, duty.AssignmentType), slog.String("component", "cron"))
 
 		if duty.User == nil {
-			slog.Error(fmt.Sprintf("ERROR: Duty.User is nil - cannot send notifications!"), slog.String("component", "cron"))
+			slog.Error("ERROR: Duty.User is nil - cannot send notifications!", slog.String("component", "cron"))
 			return
 		}
 
@@ -198,15 +198,15 @@ func main() {
 				}
 			}
 		} else {
-			slog.Warn(fmt.Sprintf("WARNING: DISH_GROUP not configured (dishGroupID=0), skipping group notification"), slog.String("component", "cron"))
+			slog.Warn("WARNING: DISH_GROUP not configured (dishGroupID=0), skipping group notification", slog.String("component", "cron"))
 			// Log skip to database
 			if dbErr := store.LogNotification(context.Background(), duty.DutyDate, duty.UserID, "GROUP", "SKIPPED", "dishGroupID not configured"); dbErr != nil {
 				slog.Error(fmt.Sprintf("ERROR: Failed to log group notification skip: %v", dbErr), slog.String("component", "cron"))
 			}
 		}
 
-		slog.Info(fmt.Sprint("Daily duty assignment completed"), slog.String("component", "cron"))
-		slog.Info(fmt.Sprint("═══════════════════════════════════════════════════════════"))
+		slog.Info("Daily duty assignment completed", slog.String("component", "cron"))
+		slog.Info("═══════════════════════════════════════════════════════════")
 	})
 	if err != nil {
 		slog.Error(fmt.Sprintf("Failed to schedule daily assignment job: %v", err))

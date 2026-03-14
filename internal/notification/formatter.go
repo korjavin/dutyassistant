@@ -7,11 +7,6 @@ import (
 	"github.com/korjavin/dutyassistant/internal/store"
 )
 
-const (
-	// dutyDateFormat defines the format for dates in notifications (e.g., "Monday, 02 January 2006").
-	dutyDateFormat = "Monday, 02 January 2006"
-)
-
 // FormatDutyAssignedMessage formats the notification message for a pre-existing duty.
 // It reminds the group who is on duty for the upcoming day.
 func FormatDutyAssignedMessage(duty *store.Duty) string {

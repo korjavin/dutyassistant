@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"testing"
 	"time"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
 	"github.com/korjavin/dutyassistant/internal/store"
 	"github.com/stretchr/testify/assert"
@@ -32,6 +33,7 @@ func (m *MockStore) GetDutyByDate(ctx context.Context, date time.Time) (*store.D
 func (m *MockStore) GetUserByTelegramID(ctx context.Context, id int64) (*store.User, error) {
 	return nil, nil
 }
+
 func (m *MockStore) GetUserByName(ctx context.Context, name string) (*store.User, error) {
 	return nil, nil
 }
@@ -65,21 +67,27 @@ func (m *MockStore) GetFutureDuties(ctx context.Context, from time.Time) ([]*sto
 	}
 	return args.Get(0).([]*store.Duty), args.Error(1)
 }
+
 func (m *MockStore) GetCompletedDutiesInRange(ctx context.Context, start, end time.Time) ([]*store.Duty, error) {
 	return nil, nil
 }
+
 func (m *MockStore) SaveDailyParticipantRatings(ctx context.Context, date time.Time, ratings []*store.ParticipantDailyRating) error {
 	return nil
 }
+
 func (m *MockStore) GetParticipantsForRating(ctx context.Context) ([]*store.User, error) {
 	return nil, nil
 }
+
 func (m *MockStore) GetCurrentMonthParticipantRatings(ctx context.Context, now time.Time) ([]*store.ParticipantDailyRating, error) {
 	return nil, nil
 }
+
 func (m *MockStore) GetMonthlyParticipantTotals(ctx context.Context, year int, month time.Month) ([]*store.ParticipantMonthlyTotal, error) {
 	return nil, nil
 }
+
 func (m *MockStore) AddToVolunteerQueue(ctx context.Context, userID int64, days int) error {
 	return nil
 }
@@ -90,9 +98,11 @@ func (m *MockStore) ReduceAdminQueue(ctx context.Context, userID int64, days int
 func (m *MockStore) GetUsersWithVolunteerQueue(ctx context.Context) ([]*store.User, error) {
 	return nil, nil
 }
+
 func (m *MockStore) GetUsersWithAdminQueue(ctx context.Context) ([]*store.User, error) {
 	return nil, nil
 }
+
 func (m *MockStore) SetOffDuty(ctx context.Context, userID int64, start, end time.Time) error {
 	return nil
 }
@@ -100,6 +110,7 @@ func (m *MockStore) ClearOffDuty(ctx context.Context, userID int64) error { retu
 func (m *MockStore) IsUserOffDuty(ctx context.Context, userID int64, date time.Time) (bool, error) {
 	return false, nil
 }
+
 func (m *MockStore) GetOffDutyUsers(ctx context.Context, date time.Time) ([]*store.User, error) {
 	return nil, nil
 }
@@ -108,15 +119,19 @@ func (m *MockStore) IsVacationMode(ctx context.Context) (bool, error)        { r
 func (m *MockStore) CreateRecurringChore(ctx context.Context, chore *store.RecurringChore) error {
 	return nil
 }
+
 func (m *MockStore) GetRecurringChore(ctx context.Context, id int64) (*store.RecurringChore, error) {
 	return nil, nil
 }
+
 func (m *MockStore) GetActiveRecurringChores(ctx context.Context) ([]*store.RecurringChore, error) {
 	return nil, nil
 }
+
 func (m *MockStore) GetDueRecurringChores(ctx context.Context, before time.Time) ([]*store.RecurringChore, error) {
 	return nil, nil
 }
+
 func (m *MockStore) UpdateRecurringChoreNextRun(ctx context.Context, id int64, nextRun time.Time) error {
 	return nil
 }
@@ -279,6 +294,7 @@ func (m *MockStore) CreateChore(ctx context.Context, chore *store.Chore) error {
 	args := m.Called(ctx, chore)
 	return args.Error(0)
 }
+
 func (m *MockStore) GetChoreByReminderID(ctx context.Context, reminderID string) (*store.Chore, error) {
 	args := m.Called(ctx, reminderID)
 	if args.Get(0) == nil {
@@ -286,6 +302,7 @@ func (m *MockStore) GetChoreByReminderID(ctx context.Context, reminderID string)
 	}
 	return args.Get(0).(*store.Chore), args.Error(1)
 }
+
 func (m *MockStore) GetActiveChores(ctx context.Context) ([]*store.Chore, error) {
 	args := m.Called(ctx)
 	if args.Get(0) == nil {
@@ -293,6 +310,7 @@ func (m *MockStore) GetActiveChores(ctx context.Context) ([]*store.Chore, error)
 	}
 	return args.Get(0).([]*store.Chore), args.Error(1)
 }
+
 func (m *MockStore) GetActiveChoresByUserID(ctx context.Context, userID int64) ([]*store.Chore, error) {
 	args := m.Called(ctx, userID)
 	if args.Get(0) == nil {
@@ -300,6 +318,7 @@ func (m *MockStore) GetActiveChoresByUserID(ctx context.Context, userID int64) (
 	}
 	return args.Get(0).([]*store.Chore), args.Error(1)
 }
+
 func (m *MockStore) GetOverdueChores(ctx context.Context) ([]*store.Chore, error) {
 	args := m.Called(ctx)
 	if args.Get(0) == nil {
@@ -307,10 +326,12 @@ func (m *MockStore) GetOverdueChores(ctx context.Context) ([]*store.Chore, error
 	}
 	return args.Get(0).([]*store.Chore), args.Error(1)
 }
+
 func (m *MockStore) CompleteChoreByReminderID(ctx context.Context, reminderID string) error {
 	args := m.Called(ctx, reminderID)
 	return args.Error(0)
 }
+
 func (m *MockStore) GetTopOverdueChores(ctx context.Context, limit int) ([]*store.ChoreStat, error) {
 	args := m.Called(ctx, limit)
 	if args.Get(0) == nil {
@@ -318,6 +339,7 @@ func (m *MockStore) GetTopOverdueChores(ctx context.Context, limit int) ([]*stor
 	}
 	return args.Get(0).([]*store.ChoreStat), args.Error(1)
 }
+
 func (m *MockStore) GetTopCompletedChoresUsers(ctx context.Context, limit int) ([]*store.UserChoreStat, error) {
 	args := m.Called(ctx, limit)
 	if args.Get(0) == nil {
@@ -325,6 +347,7 @@ func (m *MockStore) GetTopCompletedChoresUsers(ctx context.Context, limit int) (
 	}
 	return args.Get(0).([]*store.UserChoreStat), args.Error(1)
 }
+
 func (m *MockStore) GetUserWeeklyStats(ctx context.Context, since time.Time) ([]*store.UserWeeklyStats, error) {
 	args := m.Called(ctx, since)
 	if args.Get(0) == nil {
@@ -332,10 +355,12 @@ func (m *MockStore) GetUserWeeklyStats(ctx context.Context, since time.Time) ([]
 	}
 	return args.Get(0).([]*store.UserWeeklyStats), args.Error(1)
 }
+
 func (m *MockStore) GetLastChoreDigestDate(ctx context.Context) (string, error) {
 	args := m.Called(ctx)
 	return args.String(0), args.Error(1)
 }
+
 func (m *MockStore) CancelChore(ctx context.Context, id int64) (*store.Chore, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
@@ -343,10 +368,12 @@ func (m *MockStore) CancelChore(ctx context.Context, id int64) (*store.Chore, er
 	}
 	return args.Get(0).(*store.Chore), args.Error(1)
 }
+
 func (m *MockStore) ListActiveChores(ctx context.Context) ([]*store.Chore, error) {
 	args := m.Called(ctx)
 	return args.Get(0).([]*store.Chore), args.Error(1)
 }
+
 func (m *MockStore) SetLastChoreDigestDate(ctx context.Context, date string) error {
 	args := m.Called(ctx, date)
 	return args.Error(0)
@@ -408,6 +435,7 @@ type RoundTripFunc func(req *http.Request) *http.Response
 func (f RoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return f(req), nil
 }
+
 func NewTestClient(fn RoundTripFunc) *http.Client {
 	return &http.Client{Transport: fn}
 }

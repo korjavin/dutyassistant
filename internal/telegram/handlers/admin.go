@@ -529,7 +529,7 @@ func (h *Handlers) HandleAssignUserCallback(q *tgbotapi.CallbackQuery) (tgbotapi
 
 	// Get user info
 	var id int64
-	fmt.Sscanf(userID, "%d", &id)
+	_, _ = fmt.Sscanf(userID, "%d", &id)
 	user, err := h.Store.GetUserByTelegramID(context.Background(), id)
 	if err != nil || user == nil {
 		// Try by ID directly
@@ -584,8 +584,8 @@ func (h *Handlers) HandleAssignDaysCallback(q *tgbotapi.CallbackQuery) (tgbotapi
 	}
 
 	var userID, days int64
-	fmt.Sscanf(parts[1], "%d", &userID)
-	fmt.Sscanf(parts[2], "%d", &days)
+	_, _ = fmt.Sscanf(parts[1], "%d", &userID)
+	_, _ = fmt.Sscanf(parts[2], "%d", &days)
 
 	// Get user
 	users, _ := h.Store.ListAllUsers(context.Background())
