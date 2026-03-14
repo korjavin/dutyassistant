@@ -94,8 +94,9 @@ func SanitizeTelegramHTML(input string) string {
 	for _, tag := range allowedTags {
 		allowRegexParts = append(allowRegexParts, fmt.Sprintf("</?%s>", tag))
 	}
-	// Special handling for a href
-	allowRegexParts = append(allowRegexParts, `<a href="[^"]*">`)
+	// Special handling for a href - only allow http/https URLs to prevent XSS
+	allowRegexParts = append(allowRegexParts, `<a href="(https?:\/\/[^"]*)">`)
+	allowRegexParts = append(allowRegexParts, `<a href='(https?:\/\/[^']*)'>`)
 	allowRegexParts = append(allowRegexParts, `</a>`)
 	// Special handling for tg-spoiler
 	allowRegexParts = append(allowRegexParts, `<tg-spoiler>`)
@@ -173,7 +174,7 @@ func (c *Client) TranslateToEnglish(ctx context.Context, text string) (string, e
 			bodyStr = bodyStr[:200] + "..."
 		}
 		err := fmt.Errorf("LLM TranslateToEnglish non-200 status: %d, body: %s", resp.StatusCode, bodyStr)
-		slog.Error(fmt.Sprint(err.Error()))
+		slog.Error(err.Error())
 		return text, err
 	}
 
