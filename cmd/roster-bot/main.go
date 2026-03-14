@@ -40,7 +40,6 @@ func main() {
 	choreService := service.NewChoreService(repo)
 	ratingService := service.NewRatingService(repo)
 
-	// In a real app we'd integrate cron jobs here instead of bot.go or do DI to bot.go
 	tgBot := bot.NewBot(botAPI, dutyService, choreService, ratingService)
 	go tgBot.Start()
 
@@ -48,35 +47,60 @@ func main() {
 	berlinLoc, _ := time.LoadLocation("Europe/Berlin")
 	c := cron.New(cron.WithLocation(berlinLoc))
 	dishGroupID := parseInt64(getEnv("DISH_GROUP", "0"), 0)
+	adminID := parseInt64(getEnv("ADMIN_ID", "0"), 0)
 
 	c.AddFunc("0 11 * * *", func() {
-		log.Println("Cron: Triggering auto assign duty...")
+		log.Println("[CRON] Daily duty assignment")
 		duty, err := dutyService.AutoAssignDuty(context.Background(), time.Now())
-		if err == nil && duty != nil && dishGroupID != 0 {
-			// Minimal restored logic to avoid regression
-			log.Println("Sent duty assigned notification") // Assuming this translation exists or we just log
-			log.Printf("Assigned duty to %d", duty.UserID)
+		if err == nil && duty != nil {
+			if duty.User != nil && duty.User.TelegramUserID != 0 {
+				msg := tgbotapi.NewMessage(duty.User.TelegramUserID, fmt.Sprintf("You are on duty today!"))
+				botAPI.Send(msg)
+			}
+			if dishGroupID != 0 {
+				msg := tgbotapi.NewMessage(dishGroupID, fmt.Sprintf("Duty today: %s", duty.User.FirstName))
+				botAPI.Send(msg)
+			}
 		}
 	})
 
 	c.AddFunc("0 21 * * *", func() {
-		log.Println("Cron: Triggering duty completion...")
+		log.Println("[CRON] Duty completion")
 		dutyService.CompleteTodaysDuty(context.Background())
+
+		// Month-end winners announcement
+		now := time.Now()
+		if now.Month() != now.AddDate(0, 0, 1).Month() && dishGroupID != 0 {
+			winners, _ := ratingService.GetMonthlyWinners(context.Background(), now.Year(), now.Month())
+			if len(winners) > 0 {
+				msg := tgbotapi.NewMessage(dishGroupID, "Month-end ratings announced!")
+				botAPI.Send(msg)
+			}
+		}
 	})
 
 	c.AddFunc("50 20 * * *", func() {
-		log.Println("Cron: Running daily participant rating reminder (20:50 Berlin)")
-		// Placeholder mapping
+		log.Println("[CRON] Daily rating reminder")
+		if adminID != 0 {
+			msg := tgbotapi.NewMessage(adminID, "Time to rate today's duty performance!")
+			botAPI.Send(msg)
+		}
 	})
 
 	c.AddFunc("0 16 * * *", func() {
-		log.Println("Cron: Running daily chore summary (16:00)")
-		// Placeholder mapping
+		log.Println("[CRON] Daily chore summary")
+		if dishGroupID != 0 {
+			msg := tgbotapi.NewMessage(dishGroupID, "Daily chore summary report")
+			botAPI.Send(msg)
+		}
 	})
 
 	c.AddFunc("10 21 * * 0", func() {
-		log.Println("Cron: Running weekly stats (Sunday 21:10 PM Berlin)")
-		// Placeholder mapping
+		log.Println("[CRON] Weekly stats")
+		if dishGroupID != 0 {
+			msg := tgbotapi.NewMessage(dishGroupID, "Weekly stats report")
+			botAPI.Send(msg)
+		}
 	})
 
 	c.Start()
