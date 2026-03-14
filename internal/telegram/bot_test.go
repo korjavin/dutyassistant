@@ -33,8 +33,8 @@ func TestHandleCommand_Chore(t *testing.T) {
 	msg := &tgbotapi.Message{
 		Chat:     &tgbotapi.Chat{ID: 100},
 		From:     &tgbotapi.User{ID: 123},
-		Text:     "/chore Clean",
-		Entities: []tgbotapi.MessageEntity{{Type: "bot_command", Offset: 0, Length: 6}},
+		Text:     "/chores Clean",
+		Entities: []tgbotapi.MessageEntity{{Type: "bot_command", Offset: 0, Length: 7}},
 	}
 
 	// Call private handleCommand method
