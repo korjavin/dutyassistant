@@ -323,6 +323,14 @@ func TestHandleDailyRatingsInteractive_SendsGroupNotification(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	h := NewWithAdminID(mockStore, nil, -1001, 123, nil)
 
+	originalNow := TimeNow
+	TimeNow = func() time.Time {
+		return time.Date(2026, time.March, 13, 20, 50, 0, 0, time.UTC)
+	}
+	defer func() {
+		TimeNow = originalNow
+	}()
+
 	ratingDate := time.Date(2026, time.March, 13, 20, 50, 0, 0, time.UTC)
 	participants := []*store.User{
 		{ID: 10, FirstName: "Alice"},
@@ -355,6 +363,14 @@ func TestHandleDailyRatingsInteractive_SendsGroupNotification(t *testing.T) {
 func TestHandleDailyRatingsInteractive_ValidSubmission(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	h := NewWithAdminID(mockStore, nil, 0, 123, nil)
+
+	originalNow := TimeNow
+	TimeNow = func() time.Time {
+		return time.Date(2026, time.March, 13, 20, 50, 0, 0, time.UTC)
+	}
+	defer func() {
+		TimeNow = originalNow
+	}()
 
 	ratingDate := time.Date(2026, time.March, 13, 20, 50, 0, 0, time.UTC)
 	participants := []*store.User{
@@ -399,7 +415,15 @@ func TestHandleDailyRatingsInteractive_InvalidCount(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	h := NewWithAdminID(mockStore, nil, 0, 123, nil)
 
-	ratingDate := time.Date(2026, time.March, 13, 0, 0, 0, 0, time.UTC)
+	originalNow := TimeNow
+	TimeNow = func() time.Time {
+		return time.Date(2026, time.March, 13, 20, 50, 0, 0, time.UTC)
+	}
+	defer func() {
+		TimeNow = originalNow
+	}()
+
+	ratingDate := time.Date(2026, time.March, 13, 20, 50, 0, 0, time.UTC)
 	participants := []*store.User{
 		{ID: 10, FirstName: "Alice"},
 		{ID: 11, FirstName: "Bob"},
@@ -431,6 +455,14 @@ func TestHandleDailyRatingsInteractive_InvalidCount(t *testing.T) {
 func TestHandleDailyRatingsInteractive_InvalidRange(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	h := NewWithAdminID(mockStore, nil, 0, 123, nil)
+
+	originalNow := TimeNow
+	TimeNow = func() time.Time {
+		return time.Date(2026, time.March, 13, 20, 50, 0, 0, time.UTC)
+	}
+	defer func() {
+		TimeNow = originalNow
+	}()
 
 	ratingDate := time.Date(2026, time.March, 13, 0, 0, 0, 0, time.UTC)
 	participants := []*store.User{
@@ -508,6 +540,14 @@ func TestHandleDailyRatingsInteractive_UnauthorizedSenderIgnored(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	h := NewWithAdminID(mockStore, nil, 0, 123, nil)
 
+	originalNow := TimeNow
+	TimeNow = func() time.Time {
+		return time.Date(2026, time.March, 13, 20, 50, 0, 0, time.UTC)
+	}
+	defer func() {
+		TimeNow = originalNow
+	}()
+
 	ratingDate := time.Date(2026, time.March, 13, 0, 0, 0, 0, time.UTC)
 	participants := []*store.User{
 		{ID: 10, FirstName: "Alice"},
@@ -540,7 +580,15 @@ func TestHandleDailyRatingsInteractive_OverwriteCorrection(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	h := NewWithAdminID(mockStore, nil, 0, 123, nil)
 
-	ratingDate := time.Date(2026, time.March, 13, 0, 0, 0, 0, time.UTC)
+	originalNow := TimeNow
+	TimeNow = func() time.Time {
+		return time.Date(2026, time.March, 13, 12, 0, 0, 0, time.UTC)
+	}
+	defer func() {
+		TimeNow = originalNow
+	}()
+
+	ratingDate := time.Date(2026, time.March, 13, 20, 50, 0, 0, time.UTC)
 	participants := []*store.User{
 		{ID: 10, FirstName: "Alice"},
 		{ID: 11, FirstName: "Bob"},
@@ -567,7 +615,10 @@ func TestHandleDailyRatingsInteractive_OverwriteCorrection(t *testing.T) {
 		Text: "5 4",
 	})
 	assert.NoError(t, err)
-	assert.Contains(t, firstMsg.(tgbotapi.MessageConfig).Text, "Saved ratings for 2026-03-13")
+	assert.NotNil(t, firstMsg)
+	if firstMsg != nil {
+		assert.Contains(t, firstMsg.(tgbotapi.MessageConfig).Text, "Saved ratings for 2026-03-13")
+	}
 
 	secondMsg, err := h.HandleDailyRatingsInteractive(&tgbotapi.Message{
 		Chat: &tgbotapi.Chat{ID: 704},
@@ -575,7 +626,10 @@ func TestHandleDailyRatingsInteractive_OverwriteCorrection(t *testing.T) {
 		Text: "2 1",
 	})
 	assert.NoError(t, err)
-	assert.Contains(t, secondMsg.(tgbotapi.MessageConfig).Text, "overwrite today's ratings")
+	assert.NotNil(t, secondMsg)
+	if secondMsg != nil {
+		assert.Contains(t, secondMsg.(tgbotapi.MessageConfig).Text, "overwrite today's ratings")
+	}
 
 	mockStore.AssertExpectations(t)
 }
@@ -584,7 +638,15 @@ func TestHandleDailyRatingsInteractive_SaveFailureReturnsGenericError(t *testing
 	mockStore := new(mocks.MockStore)
 	h := NewWithAdminID(mockStore, nil, 0, 123, nil)
 
-	ratingDate := time.Date(2026, time.March, 13, 0, 0, 0, 0, time.UTC)
+	originalNow := TimeNow
+	TimeNow = func() time.Time {
+		return time.Date(2026, time.March, 13, 20, 50, 0, 0, time.UTC)
+	}
+	defer func() {
+		TimeNow = originalNow
+	}()
+
+	ratingDate := time.Date(2026, time.March, 13, 20, 50, 0, 0, time.UTC)
 	participants := []*store.User{
 		{ID: 10, FirstName: "Alice"},
 		{ID: 11, FirstName: "Bob"},
@@ -606,7 +668,10 @@ func TestHandleDailyRatingsInteractive_SaveFailureReturnsGenericError(t *testing
 		Text: "5 4",
 	})
 	assert.NoError(t, err)
-	assert.Equal(t, genericErrorMessage, msg.(tgbotapi.MessageConfig).Text)
+	assert.NotNil(t, msg)
+	if msg != nil {
+		assert.Equal(t, genericErrorMessage, msg.(tgbotapi.MessageConfig).Text)
+	}
 
 	_, exists := h.SessionManager.GetSession(707)
 	assert.True(t, exists)

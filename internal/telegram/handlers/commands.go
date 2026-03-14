@@ -19,15 +19,16 @@ const (
 		"Use /volunteer to sign up for a duty.\n" +
 		"Use /help to see all available commands."
 
-	helpMessage = "Here are the available commands:\n\n" +
+	userHelpMessage = "Here are the available commands:\n\n" +
 		"/start - Show the welcome message and register you.\n" +
 		"/help - Show this help message.\n" +
 		"/status - Show your current duty statistics.\n" +
 		"/schedule - View the duty schedule for the current month.\n" +
 		"/volunteer <days> - Add days to your volunteer queue.\n" +
 		"/explain - Explain how the last assignment was made.\n" +
-		"/chore - View your currently assigned chores.\n\n" +
-		"*Admin Commands:*\n" +
+		"/chore - View your currently assigned chores."
+
+	adminHelpMessageSection = "\n\n*Admin Commands:*\n" +
 		"/chore - Manage and assign chores interactively.\n" +
 		"/list - View all active periodic chores or regular tasks.\n" +
 		"/cancel - Cancel a duty, active chore, or recurring chore.\n" +
@@ -113,7 +114,22 @@ func (h *Handlers) HandleStart(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 
 // HandleHelp provides a list of available commands.
 func (h *Handlers) HandleHelp(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
-	msg := tgbotapi.NewMessage(m.Chat.ID, helpMessage)
+	isAdmin := false
+	if m.From != nil {
+		var err error
+		isAdmin, err = h.checkAdmin(m.From.ID)
+		if err != nil {
+			log.Printf("[HandleHelp] Error checking admin status for user %d: %v", m.From.ID, err)
+			isAdmin = false
+		}
+	}
+
+	text := userHelpMessage
+	if isAdmin {
+		text += adminHelpMessageSection
+	}
+
+	msg := tgbotapi.NewMessage(m.Chat.ID, text)
 	msg.ParseMode = tgbotapi.ModeMarkdown
 	return msg, nil
 }

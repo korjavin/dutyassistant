@@ -185,7 +185,17 @@ func TestHandleMessage_DailyRatingsSession(t *testing.T) {
 	h := handlers.NewWithAdminID(mockStore, nil, 0, 123, nil)
 	bot := &Bot{handlers: h}
 
+	originalNow := handlers.TimeNow
+	handlers.TimeNow = func() time.Time {
+		return time.Date(2026, time.March, 13, 20, 50, 0, 0, time.UTC)
+	}
+	defer func() {
+		handlers.TimeNow = originalNow
+	}()
+
 	ratingDate := time.Date(2026, time.March, 13, 20, 50, 0, 0, time.UTC)
+	// normalizeRatingDate uses Europe/Berlin, so 20:50 UTC is 21:50 CET
+	// That makes the normalized date March 13.
 	normalizedDate := time.Date(2026, time.March, 13, 0, 0, 0, 0, time.UTC)
 	participants := []*store.User{
 		{ID: 10, FirstName: "Alice"},
