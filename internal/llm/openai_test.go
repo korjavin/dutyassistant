@@ -109,7 +109,7 @@ func TestTranslateToEnglish(t *testing.T) {
 	defer server.Close()
 
 	// Test 2: Successful response
-	c := NewClient("test-key", server.URL, 10)
+	c := NewClient("test-key", server.URL, 10, "", nil)
 	res, err = c.TranslateToEnglish(ctx, text)
 	if err != nil {
 		t.Errorf("Expected nil error, got: %v", err)
@@ -131,7 +131,7 @@ func TestTranslateToEnglish_ErrorCases(t *testing.T) {
 	}))
 	defer errorServer.Close()
 
-	c := NewClient("test-key", errorServer.URL, 10)
+	c := NewClient("test-key", errorServer.URL, 10, "", nil)
 	res, err := c.TranslateToEnglish(ctx, text)
 	if err == nil {
 		t.Errorf("Expected error on 500 error, got nil")
@@ -147,7 +147,7 @@ func TestTranslateToEnglish_ErrorCases(t *testing.T) {
 	}))
 	defer timeoutServer.Close()
 
-	cTimeout := NewClient("test-key", timeoutServer.URL, 1)
+	cTimeout := NewClient("test-key", timeoutServer.URL, 1, "", nil)
 	res, err = cTimeout.TranslateToEnglish(ctx, text)
 	if err == nil {
 		t.Errorf("Expected error on timeout, got nil")
