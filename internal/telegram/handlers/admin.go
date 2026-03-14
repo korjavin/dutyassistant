@@ -32,7 +32,7 @@ func (h *Handlers) checkAdmin(telegramUserID int64) (bool, error) {
 		// Fallback to database flag if AdminID is not configured
 		user, err := h.Store.GetUserByTelegramID(context.Background(), telegramUserID)
 		if err != nil || user == nil {
-			slog.Error(fmt.Sprintf("[checkAdmin] User %d not found in database or error: %v", telegramUserID, err))
+			slog.Warn(fmt.Sprintf("[checkAdmin] User %d not found in database or error: %v", telegramUserID, err))
 			return false, err
 		}
 		slog.Info(fmt.Sprintf("[checkAdmin] User %d IsAdmin flag from database: %v", telegramUserID, user.IsAdmin))
@@ -297,7 +297,7 @@ func (h *Handlers) HandleUsers(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 	// Check vacation mode status
 	isVacation, err := h.Scheduler.IsVacationMode(context.Background())
 	if err != nil {
-		slog.Error(fmt.Sprintf("Warning: could not check vacation mode: %v", err))
+		slog.Warn(fmt.Sprintf("Warning: could not check vacation mode: %v", err))
 	}
 
 	var builder strings.Builder

@@ -209,7 +209,7 @@ func (h *Handlers) assignRecurringChore(ctx context.Context, chore *store.Recurr
 	}
 
 	if err := h.ChoreReminderManager.SendInitialDM(assignment); err != nil {
-		slog.Error(fmt.Sprintf("Warning: failed to send initial DM to user %s: %v", selectedUser.FirstName, err))
+		slog.Warn(fmt.Sprintf("Warning: failed to send initial DM to user %s: %v", selectedUser.FirstName, err))
 		// We still consider the assignment successful even if the DM fails
 	}
 
