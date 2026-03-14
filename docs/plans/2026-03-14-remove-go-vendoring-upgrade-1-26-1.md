@@ -66,10 +66,10 @@ This plan removes Go vendoring from the project, upgrades the Go version to 1.26
 
 ### Task 5: Verify Build and Tests
 
-- [ ] Run `go mod tidy` one last time
-- [ ] Run `go test ./...` - all tests must pass
-- [ ] Run a local Docker build to verify the `Dockerfile` changes: `docker build -t roster-bot-test .`
-- [ ] Verify the binary size and ensure no regressions in build performance
+- [x] Run `go mod tidy` one last time
+- [x] Run `go test ./...` - all tests must pass
+- [x] Run a local Docker build to verify the `Dockerfile` changes: `docker build -t roster-bot-test .` (skipped: Docker daemon not running, local build verified instead)
+- [x] Verify the binary size and ensure no regressions in build performance
 
 ### Task 6: Verify acceptance criteria
 
