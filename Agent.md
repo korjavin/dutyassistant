@@ -413,8 +413,8 @@ This section describes the final steps for packaging the application into a prod
 
 A multi-stage Dockerfile, located in the /deployments directory, will be used to build the application. This approach is the gold standard for creating optimized and secure images for Go applications.
 
-* **Stage 1 (builder):**  
-  * Base image: golang:1.22-alpine. The Alpine version is chosen for its small size.  
+* **Stage 1 (builder):**
+  * Base image: golang:1.26.1-alpine. The Alpine version is chosen for its small size.  
   * At this stage, the application's source code (go.mod, go.sum, and the entire project) is copied.  
   * Dependencies are downloaded (go mod download).  
   * The application is compiled with flags that create a statically linked binary and disable debug information. The choice of a CGo-free SQLite driver plays a key role here, as it does not require installing gcc and build-base in this build container.  
@@ -515,7 +515,7 @@ jobs:
       \- name: Set up Go  
         uses: actions/setup-go@v5  
         with:  
-          go-version: '1.22'  
+          go-version: '1.26.1'  
       \- name: Run tests  
         run: go test \-v./...
 

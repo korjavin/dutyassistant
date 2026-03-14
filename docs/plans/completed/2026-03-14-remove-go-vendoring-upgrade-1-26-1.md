@@ -80,6 +80,6 @@ This plan removes Go vendoring from the project, upgrades the Go version to 1.26
 
 ### Task 7: Update documentation
 
-- [ ] update README.md if user-facing changes (Go version requirements)
-- [ ] update CLAUDE.md if internal patterns changed
-- [ ] move this plan to `docs/plans/completed/`
+- [x] update README.md if user-facing changes (Go version requirements) - Already had Go 1.26.1, no changes needed
+- [x] update CLAUDE.md if internal patterns changed - CLAUDE.md does not exist, no action needed
+- [x] move this plan to `docs/plans/completed/` - Moved to completed directory
