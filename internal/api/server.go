@@ -9,6 +9,9 @@ func NewServer(repo domain.Repository, dutyService domain.DutyService, choreServ
 	r := gin.Default()
 
 	// Setting up API groups
+	// To address review finding #1, /who is now root instead of /api/v1/who to maintain API contract
+	r.GET("/who", GetWho(repo, dutySecret))
+
 	api := r.Group("/api/v1")
 	{
 		api.GET("/chores/active", GetActiveChores(choreService))
@@ -18,7 +21,6 @@ func NewServer(repo domain.Repository, dutyService domain.DutyService, choreServ
 		api.DELETE("/duties/:date", AdminDeleteDuty(dutyService))
 		api.GET("/schedule/:year/:month", GetSchedule(dutyService))
 		api.GET("/users", GetUsers(repo))
-		api.GET("/who", GetWho(repo, dutySecret))
 	}
 
 	return r
