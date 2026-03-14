@@ -77,6 +77,15 @@ func (m *MockStore) GetDutiesByMonth(ctx context.Context, year int, month time.M
 	return args.Get(0).([]*store.Duty), args.Error(1)
 }
 
+// GetFutureDuties mocks the GetFutureDuties method.
+func (m *MockStore) GetFutureDuties(ctx context.Context, from time.Time) ([]*store.Duty, error) {
+	args := m.Called(ctx, from)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*store.Duty), args.Error(1)
+}
+
 // UpdateDuty mocks the UpdateDuty method.
 func (m *MockStore) UpdateDuty(ctx context.Context, duty *store.Duty) error {
 	args := m.Called(ctx, duty)

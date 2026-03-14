@@ -140,6 +140,16 @@ func (m *mockStore) GetDutiesByMonth(ctx context.Context, year int, month time.M
 	return result, nil
 }
 
+func (m *mockStore) GetFutureDuties(ctx context.Context, from time.Time) ([]*store.Duty, error) {
+	var result []*store.Duty
+	for _, d := range m.duties {
+		if !d.DutyDate.Before(from) && d.CompletedAt == nil {
+			result = append(result, d)
+		}
+	}
+	return result, nil
+}
+
 // Stub implementations for new queue and off-duty methods
 func (m *mockStore) CompleteDuty(ctx context.Context, date time.Time) error {
 	key := date.Format("2006-01-02")

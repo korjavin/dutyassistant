@@ -513,6 +513,84 @@ func (s *SQLiteStore) GetDutiesByMonth(ctx context.Context, year int, month time
 	return duties, nil
 }
 
+// GetFutureDuties retrieves upcoming duties.
+func (s *SQLiteStore) GetFutureDuties(ctx context.Context, from time.Time) ([]*store.Duty, error) {
+	query := `
+		SELECT d.id, d.user_id, d.duty_date, d.assignment_type, d.created_at, d.completed_at,
+		       u.id, u.telegram_user_id, u.first_name, u.is_admin, u.is_active,
+		       u.volunteer_queue_days, u.admin_queue_days, u.off_duty_start, u.off_duty_end
+		FROM duties d
+		LEFT JOIN users u ON d.user_id = u.id
+		WHERE d.duty_date >= ? AND d.completed_at IS NULL
+		ORDER BY d.duty_date ASC
+	`
+	rows, err := s.db.QueryContext(ctx, query, from.Format("2006-01-02"))
+	if err != nil {
+		return nil, fmt.Errorf("could not query future duties: %w", err)
+	}
+	defer rows.Close()
+
+	var duties []*store.Duty
+	for rows.Next() {
+		duty := &store.Duty{}
+		var dutyDateStr, assignmentTypeStr, createdAtStr string
+		var completedAtStr, offDutyStart, offDutyEnd sql.NullString
+		var userID sql.NullInt64
+		var telegramUserID sql.NullInt64
+		var firstName sql.NullString
+		var isAdmin sql.NullBool
+		var isActive sql.NullBool
+		var volunteerQueueDays sql.NullInt64
+		var adminQueueDays sql.NullInt64
+		err := rows.Scan(
+			&duty.ID, &duty.UserID, &dutyDateStr, &assignmentTypeStr, &createdAtStr, &completedAtStr,
+			&userID, &telegramUserID, &firstName, &isAdmin, &isActive,
+			&volunteerQueueDays, &adminQueueDays, &offDutyStart, &offDutyEnd,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("could not scan duty row: %w", err)
+		}
+		duty.DutyDate, err = time.Parse("2006-01-02", dutyDateStr)
+		if err != nil {
+			return nil, fmt.Errorf("could not parse duty date: %w", err)
+		}
+		duty.CreatedAt, err = time.Parse(time.RFC3339, createdAtStr)
+		if err != nil {
+			return nil, fmt.Errorf("could not parse created at: %w", err)
+		}
+		if completedAtStr.Valid {
+			t, err := time.Parse(time.RFC3339, completedAtStr.String)
+			if err != nil {
+				return nil, fmt.Errorf("could not parse completed at: %w", err)
+			}
+			duty.CompletedAt = &t
+		}
+
+		if userID.Valid {
+			duty.User = &store.User{
+				ID:                 userID.Int64,
+				TelegramUserID:     telegramUserID.Int64,
+				FirstName:          firstName.String,
+				IsAdmin:            isAdmin.Valid && isAdmin.Bool,
+				IsActive:           isActive.Valid && isActive.Bool,
+				VolunteerQueueDays: int(volunteerQueueDays.Int64),
+				AdminQueueDays:     int(adminQueueDays.Int64),
+			}
+			if offDutyStart.Valid {
+				t, _ := time.Parse("2006-01-02", offDutyStart.String)
+				duty.User.OffDutyStart = &t
+			}
+			if offDutyEnd.Valid {
+				t, _ := time.Parse("2006-01-02", offDutyEnd.String)
+				duty.User.OffDutyEnd = &t
+			}
+		}
+		duty.AssignmentType = store.AssignmentType(assignmentTypeStr)
+		duties = append(duties, duty)
+	}
+	return duties, nil
+}
+
 // AddToVolunteerQueue adds days to a user's volunteer queue.
 func (s *SQLiteStore) AddToVolunteerQueue(ctx context.Context, userID int64, days int) error {
 	query := `UPDATE users SET volunteer_queue_days = volunteer_queue_days + ? WHERE id = ?`
