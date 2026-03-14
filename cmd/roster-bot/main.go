@@ -215,7 +215,7 @@ func main() {
 		slog.Info(fmt.Sprint("Running daily duty completion (21:00 PM Berlin)"), slog.String("component", "cron"))
 		err := sched.CompleteTodaysDuty(context.Background())
 		if err != nil {
-			slog.Info(fmt.Sprintf("Error completing today's duty: %v", err), slog.String("component", "cron"))
+			slog.Error(fmt.Sprintf("Error completing today's duty: %v", err), slog.String("component", "cron"))
 		} else {
 			slog.Info(fmt.Sprintf("Successfully marked today's duty as completed"), slog.String("component", "cron"))
 		}
@@ -294,7 +294,7 @@ func main() {
 		slog.Info(fmt.Sprintf("Running daily chore summary (16:00 %s)", tz), slog.String("component", "cron"))
 		err := notification.SendDailyChoreSummary(context.Background(), bot.API(), store, dishGroupID, true, getEnv("CHORE_TIMEZONE", "Europe/Berlin"))
 		if err != nil {
-			slog.Info(fmt.Sprintf("Error sending daily chore summary: %v", err), slog.String("component", "cron"))
+			slog.Error(fmt.Sprintf("Error sending daily chore summary: %v", err), slog.String("component", "cron"))
 		} else {
 			slog.Info(fmt.Sprintf("Successfully sent daily chore summary"), slog.String("component", "cron"))
 		}
@@ -309,7 +309,7 @@ func main() {
 		slog.Info(fmt.Sprint("Running weekly stats (Sunday 21:10 PM Berlin)"), slog.String("component", "cron"))
 		err := notification.SendWeeklyChoreStats(context.Background(), bot.API(), store, dishGroupID)
 		if err != nil {
-			slog.Info(fmt.Sprintf("Error sending weekly chore stats: %v", err), slog.String("component", "cron"))
+			slog.Error(fmt.Sprintf("Error sending weekly chore stats: %v", err), slog.String("component", "cron"))
 		} else {
 			slog.Info(fmt.Sprintf("Successfully sent weekly chore stats"), slog.String("component", "cron"))
 		}
