@@ -78,9 +78,21 @@ func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 		return msg, nil
 	}
 
-	// 3. Check for translate subcommand
-	if strings.HasPrefix(strings.ToLower(args), "translate") {
-		return h.HandleChoreTranslate(m)
+	// 3. Check for translate subcommand: /chore translate <id>
+	// Be specific to avoid blocking chore descriptions starting with "translate"
+	lowerArgs := strings.ToLower(args)
+	if strings.HasPrefix(lowerArgs, "translate ") {
+		// Try to parse the ID after "translate "
+		parts := strings.SplitN(args, " ", 2)
+		if len(parts) == 2 {
+			_, err := strconv.ParseInt(parts[1], 10, 64)
+			if err == nil {
+				// Valid ID found - route to translate handler
+				return h.HandleChoreTranslate(m)
+			}
+		}
+		// If we get here, it's "translate" but not followed by a valid ID
+		// Could be "translate the document" - treat as regular chore creation
 	}
 
 	// 4. Parse for recurring chore suffix /<N>d
@@ -137,10 +149,10 @@ func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 		}
 
 		chore := &store.RecurringChore{
-			Description:	description,
-			Interval:	intervalDays,
-			NextRunAt:	nextRun,
-			CreatedAt:	now,
+			Description: description,
+			Interval:    intervalDays,
+			NextRunAt:   nextRun,
+			CreatedAt:   now,
 		}
 
 		if err := h.Store.CreateRecurringChore(context.Background(), chore); err != nil {
@@ -267,8 +279,8 @@ func (h *Handlers) assignChore(chatID int64, fromUserID int64, description strin
 	// Additional +2% chance for every pending admin assigned day
 
 	type weightedUser struct {
-		user	*store.User
-		weight	float64
+		user   *store.User
+		weight float64
 	}
 
 	var weightedCandidates []weightedUser
@@ -387,11 +399,11 @@ func (h *Handlers) assignChore(chatID int64, fromUserID int64, description strin
 	reminderID := GenerateReminderID(selectedUser.TelegramUserID, time.Now())
 
 	chore := &store.Chore{
-		UserID:		selectedUser.ID,
-		Description:	description,
-		AssignedAt:	time.Now(),
-		DeadlineAt:	deadline,
-		ReminderID:	reminderID,
+		UserID:      selectedUser.ID,
+		Description: description,
+		AssignedAt:  time.Now(),
+		DeadlineAt:  deadline,
+		ReminderID:  reminderID,
 	}
 	if err := h.Store.CreateChore(context.Background(), chore); err != nil {
 		slog.Error(fmt.Sprintf("Failed to create chore in database: %v", err))
@@ -399,12 +411,12 @@ func (h *Handlers) assignChore(chatID int64, fromUserID int64, description strin
 		return responseMsg, nil
 	}
 	assignment := &ChoreAssignment{
-		UserID:		selectedUser.TelegramUserID,
-		UserName:	selectedUser.FirstName,
-		Description:	description,	// Store unescaped
-		AssignedAt:	time.Now(),
-		GroupID:	h.GroupID,
-		ReminderID:	reminderID,
+		UserID:      selectedUser.TelegramUserID,
+		UserName:    selectedUser.FirstName,
+		Description: description, // Store unescaped
+		AssignedAt:  time.Now(),
+		GroupID:     h.GroupID,
+		ReminderID:  reminderID,
 	}
 
 	// SendInitialDM now handles storage internally only on success

@@ -307,3 +307,39 @@ func TestHandleChoreTranslate_UpdateFails(t *testing.T) {
 
 	mockStore.AssertExpectations(t)
 }
+
+func TestHandleChore_DescriptionStartingWithTranslate(t *testing.T) {
+	// Test that chore descriptions starting with "translate" are treated as
+	// regular chore creation, not as translate commands
+	ctx := context.Background()
+
+	llmClient := llm.NewClient("test-key", "http://example.com", 10, "", nil)
+	mockStore := new(mocks.MockStore)
+	adminID := int64(123)
+	h := NewWithAdminID(mockStore, nil, 0, adminID, llmClient)
+
+	// Mock ListActiveUsers to return a user
+	user := &store.User{ID: 1, TelegramUserID: 999, FirstName: "Test User"}
+	mockStore.On("ListActiveUsers", ctx).Return([]*store.User{user}, nil)
+	mockStore.On("GetOffDutyUsers", mock.Anything, mock.Anything).Return(nil, nil)
+	mockStore.On("CreateChore", ctx, mock.AnythingOfType("*store.Chore")).Return(nil)
+
+	// Test case: "Translate the document" should create a chore
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 789},
+		From: &tgbotapi.User{ID: adminID},
+		Text: "/chore Translate the document",
+		Entities: []tgbotapi.MessageEntity{
+			{Type: "bot_command", Offset: 0, Length: 6},
+		},
+	}
+
+	response, err := h.HandleChore(message)
+	assert.NoError(t, err)
+
+	// Should NOT return a translate command error
+	assert.NotContains(t, response.Text, "Invalid translate command format")
+	assert.NotContains(t, response.Text, "Invalid chore ID")
+	// Should contain typical chore creation response elements
+	assert.Contains(t, response.Text, "Test User")
+}
