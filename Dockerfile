@@ -11,7 +11,7 @@ COPY go.mod go.sum ./
 # Download dependencies for better layer caching
 RUN go mod download
 
-# Copy all source code and vendor dependencies in one layer
+# Copy all source code in one layer
 COPY . .
 
 # Add cache busting to HTML
