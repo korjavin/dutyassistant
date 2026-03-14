@@ -45,7 +45,7 @@ func TestHandleChoreTranslate_Success(t *testing.T) {
 	// When AdminID is configured and matches, checkAdmin doesn't call the database
 
 	// Mock GetRecurringChore to return a chore with non-Latin description
-	chore := &store.RecurringChore{ID: 42, Description: "Убрать кухню"}
+	chore := &store.RecurringChore{ID: 42, Description: "Убрать кухню", IsActive: true}
 	mockStore.On("GetRecurringChore", ctx, int64(42)).Return(chore, nil)
 
 	// Mock UpdateRecurringChoreDescription
@@ -83,7 +83,7 @@ func TestHandleChoreTranslate_AlreadyLatin(t *testing.T) {
 	// When AdminID is configured and matches, checkAdmin doesn't call the database
 
 	// Mock GetRecurringChore to return a chore with Latin (English) description
-	chore := &store.RecurringChore{ID: 42, Description: "Clean the kitchen"}
+	chore := &store.RecurringChore{ID: 42, Description: "Clean the kitchen", IsActive: true}
 	mockStore.On("GetRecurringChore", ctx, int64(42)).Return(chore, nil)
 
 	// UpdateRecurringChoreDescription should NOT be called since description is already Latin
@@ -202,7 +202,7 @@ func TestHandleChoreTranslate_LLMErrorFallback(t *testing.T) {
 	// When AdminID is configured and matches, checkAdmin doesn't call the database
 
 	// Mock GetRecurringChore to return a chore with non-Latin description
-	chore := &store.RecurringChore{ID: 42, Description: "Убрать кухню"}
+	chore := &store.RecurringChore{ID: 42, Description: "Убрать кухню", IsActive: true}
 	mockStore.On("GetRecurringChore", ctx, int64(42)).Return(chore, nil)
 
 	// When LLM fails, should return original description, so UpdateRecurringChoreDescription
@@ -234,7 +234,7 @@ func TestHandleChoreTranslate_NoLLMClient(t *testing.T) {
 	// When AdminID is configured and matches, checkAdmin doesn't call the database
 
 	// Mock GetRecurringChore to return a chore with non-Latin description
-	chore := &store.RecurringChore{ID: 42, Description: "Убрать кухню"}
+	chore := &store.RecurringChore{ID: 42, Description: "Убрать кухню", IsActive: true}
 	mockStore.On("GetRecurringChore", ctx, int64(42)).Return(chore, nil)
 
 	// Without LLM client, should return original description
@@ -286,7 +286,7 @@ func TestHandleChoreTranslate_UpdateFails(t *testing.T) {
 	// When AdminID is configured and matches, checkAdmin doesn't call the database
 
 	// Mock GetRecurringChore to return a chore with non-Latin description
-	chore := &store.RecurringChore{ID: 42, Description: "Убрать кухню"}
+	chore := &store.RecurringChore{ID: 42, Description: "Убрать кухню", IsActive: true}
 	mockStore.On("GetRecurringChore", ctx, int64(42)).Return(chore, nil)
 
 	// Mock UpdateRecurringChoreDescription to fail
@@ -306,6 +306,37 @@ func TestHandleChoreTranslate_UpdateFails(t *testing.T) {
 	assert.Contains(t, response.Text, "❌ Failed to update chore description")
 
 	mockStore.AssertExpectations(t)
+}
+
+func TestHandleChoreTranslate_InactiveChore(t *testing.T) {
+	ctx := context.Background()
+
+	mockStore := new(mocks.MockStore)
+	adminID := int64(123)
+	h := NewWithAdminID(mockStore, nil, 0, adminID, nil)
+
+	// When AdminID is configured and matches, checkAdmin doesn't call the database
+
+	// Mock GetRecurringChore to return an INACTIVE chore
+	chore := &store.RecurringChore{ID: 42, Description: "Убрать кухню", IsActive: false}
+	mockStore.On("GetRecurringChore", ctx, int64(42)).Return(chore, nil)
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 789},
+		From: &tgbotapi.User{ID: adminID},
+		Text: "/chore translate 42",
+		Entities: []tgbotapi.MessageEntity{
+			{Type: "bot_command", Offset: 0, Length: 6},
+		},
+	}
+
+	response, err := h.HandleChoreTranslate(message)
+	assert.NoError(t, err)
+	assert.Contains(t, response.Text, "❌ Recurring chore not found or is inactive")
+
+	// UpdateRecurringChoreDescription should NOT be called for inactive chore
+	mockStore.AssertExpectations(t)
+	mockStore.AssertNotCalled(t, "UpdateRecurringChoreDescription")
 }
 
 func TestHandleChore_DescriptionStartingWithTranslate(t *testing.T) {

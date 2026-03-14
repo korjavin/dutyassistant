@@ -476,6 +476,10 @@ func (h *Handlers) HandleChoreTranslate(m *tgbotapi.Message) (tgbotapi.MessageCo
 		msg := tgbotapi.NewMessage(m.Chat.ID, "❌ Chore not found.")
 		return msg, nil
 	}
+	if !chore.IsActive {
+		msg := tgbotapi.NewMessage(m.Chat.ID, "❌ Recurring chore not found or is inactive.")
+		return msg, nil
+	}
 
 	// 4. Translate if non-Latin
 	translatedDesc := h.translateIfNonLatin(ctx, chore.Description)
