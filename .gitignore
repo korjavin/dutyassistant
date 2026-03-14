@@ -8,8 +8,8 @@
 /roster-bot
 
 # Dependency directories
-# vendor/ is now committed to the repository for reproducible builds
 node_modules/
+vendor/
 
 # IDE and editor files
 .idea/

@@ -47,7 +47,7 @@ The recommended way to run the Duty Assistant Bot is with Docker and Docker Comp
 
 You can also build the bot from source.
 
-1.  **Install Go**: Make sure you have Go 1.23 or higher installed.
+1.  **Install Go**: Make sure you have Go 1.26.1 or higher installed.
 2.  **Install Node.js and npm**: These are required to build the frontend.
 3.  **Build the frontend**:
 
@@ -61,7 +61,7 @@ You can also build the bot from source.
 4.  **Build the backend**:
 
     ```bash
-    go build -mod=vendor -o roster-bot ./cmd/roster-bot/
+    go build -o roster-bot ./cmd/roster-bot/
     ```
 
 5.  **Run the bot**:
