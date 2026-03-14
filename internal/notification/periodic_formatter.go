@@ -2,6 +2,7 @@ package notification
 
 import (
 	"fmt"
+	"html"
 	"strings"
 
 	"github.com/korjavin/dutyassistant/internal/store"
@@ -22,7 +23,7 @@ func FormatPeriodicChoreReminder(chores []*store.Chore) string {
 			deadlineStr = chore.DeadlineAt.Format("Jan 02, 15:04")
 		}
 
-		sb.WriteString(fmt.Sprintf("%d. <b>%s</b> (Due: %s)\n", i+1, chore.Description, deadlineStr))
+		sb.WriteString(fmt.Sprintf("%d. <b>%s</b> (Due: %s)\n", i+1, html.EscapeString(chore.Description), deadlineStr))
 	}
 
 	sb.WriteString("\nYou can complete them using the /chore menu. Thank you! 🌟")
