@@ -84,7 +84,8 @@ func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 		// Try to parse the ID after "translate "
 		parts := strings.SplitN(args, " ", 2)
 		if len(parts) == 2 {
-			_, err := strconv.ParseInt(parts[1], 10, 64)
+			trimmedID := strings.TrimSpace(parts[1])
+			_, err := strconv.ParseInt(trimmedID, 10, 64)
 			if err == nil {
 				// Valid ID found - route to translate handler
 				return h.HandleChoreTranslate(m)
