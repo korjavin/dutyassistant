@@ -37,20 +37,20 @@ The `TranslateToEnglish` method in `internal/llm/openai.go` uses a hardcoded mod
 - Modify: `internal/telegram/handlers/chore.go`
 - Create: `internal/telegram/handlers/chore_translate_test.go`
 
-- [ ] Add subcommand parsing in HandleChore: check if args starts with "translate" followed by an ID
-- [ ] Implement HandleChoreTranslate(m *tgbotapi.Message) handler function:
-  - [ ] Parse the chore ID from arguments (format: `/chore translate <id>`)
-  - [ ] Admin check (only admins can translate existing chores)
-  - [ ] Fetch recurring chore via `h.Store.GetRecurringChore(id)`
-  - [ ] Use existing `h.translateIfNonLatin(ctx, description)` to translate if non-Latin
-  - [ ] Update description via `h.Store.UpdateRecurringChoreDescription(id, translated)`
-  - [ ] Return success/error message to user
-- [ ] Add integration tests in chore_translate_test.go:
-  - [ ] Test successful translation of non-Latin description
-  - [ ] Test no-op when description is already Latin
-  - [ ] Test error handling for invalid chore ID
-  - [ ] Test admin access control
-- [ ] Run `go test ./internal/telegram/handlers/...`
+- [x] Add subcommand parsing in HandleChore: check if args starts with "translate" followed by an ID
+- [x] Implement HandleChoreTranslate(m *tgbotapi.Message) handler function:
+  - [x] Parse the chore ID from arguments (format: `/chore translate <id>`)
+  - [x] Admin check (only admins can translate existing chores)
+  - [x] Fetch recurring chore via `h.Store.GetRecurringChore(id)`
+  - [x] Use existing `h.translateIfNonLatin(ctx, description)` to translate if non-Latin
+  - [x] Update description via `h.Store.UpdateRecurringChoreDescription(id, translated)`
+  - [x] Return success/error message to user
+- [x] Add integration tests in chore_translate_test.go:
+  - [x] Test successful translation of non-Latin description
+  - [x] Test no-op when description is already Latin
+  - [x] Test error handling for invalid chore ID
+  - [x] Test admin access control
+- [x] Run `go test ./internal/telegram/handlers/...`
 
 ### Task 3: Verify and Test End-to-End
 
