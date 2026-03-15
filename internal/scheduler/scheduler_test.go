@@ -554,3 +554,11 @@ func (m *mockStore) ListActiveChores(ctx context.Context) ([]*store.Chore, error
 func (m *mockStore) SetLastChoreDigestDate(ctx context.Context, date string) error {
 	return nil
 }
+
+func (m *mockStore) GetChoreByID(ctx context.Context, id int64) (*store.Chore, error) {
+	return nil, nil
+}
+
+func (m *mockStore) UpdateChoreUserID(ctx context.Context, choreID int64, newUserID int64) error {
+	return nil
+}

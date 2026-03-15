@@ -384,6 +384,14 @@ func (m *MockStore) UpdateRecurringChoreDescription(ctx context.Context, id int6
 	return args.Error(0)
 }
 
+func (m *MockStore) GetChoreByID(ctx context.Context, id int64) (*store.Chore, error) {
+	return nil, nil
+}
+
+func (m *MockStore) UpdateChoreUserID(ctx context.Context, choreID int64, newUserID int64) error {
+	return nil
+}
+
 func TestSendDailyChoreSummary_NoOverdue(t *testing.T) {
 	mockStore := new(MockStore)
 	var sentText string

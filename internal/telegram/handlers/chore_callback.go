@@ -46,6 +46,16 @@ func (h *Handlers) HandleChoreDoneCallback(q *tgbotapi.CallbackQuery) (tgbotapi.
 		return edit, nil
 	}
 
+	// Only the current assignee may mark the chore done.
+	if q.From.ID != assignment.UserID {
+		edit := tgbotapi.NewEditMessageText(
+			q.Message.Chat.ID,
+			q.Message.MessageID,
+			"⚠️ This chore is no longer assigned to you and cannot be completed from this message.",
+		)
+		return edit, nil
+	}
+
 	// Send completion message to group
 	if err := h.ChoreReminderManager.SendCompletionToGroup(assignment); err != nil {
 		slog.Error(fmt.Sprintf("Failed to send completion message to group: %v", err))
@@ -104,6 +114,16 @@ func (h *Handlers) HandleChoreRemindCallback(q *tgbotapi.CallbackQuery) (tgbotap
 			q.Message.Chat.ID,
 			q.Message.MessageID,
 			"❌ This chore assignment was not found, cancelled, or has expired.",
+		)
+		return edit, nil
+	}
+
+	// Only the current assignee may snooze their reminder.
+	if q.From.ID != assignment.UserID {
+		edit := tgbotapi.NewEditMessageText(
+			q.Message.Chat.ID,
+			q.Message.MessageID,
+			"⚠️ This chore is no longer assigned to you.",
 		)
 		return edit, nil
 	}

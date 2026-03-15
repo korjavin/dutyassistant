@@ -203,6 +203,8 @@ func (b *Bot) handleCommand(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 		return b.handlers.HandleSchedule(m)
 	case "volunteer":
 		return b.handlers.HandleVolunteer(m)
+	case "takechore":
+		return b.handlers.HandleVolunteerChore(m)
 	case "explain":
 		return b.handlers.HandleExplain(m)
 	case "chore":
@@ -276,6 +278,12 @@ func (b *Bot) handleCallbackQuery(q *tgbotapi.CallbackQuery) (tgbotapi.Chattable
 		return b.handlers.HandleVolunteerDaysCallback(q)
 	case "volunteer_custom":
 		return b.handlers.HandleVolunteerCustomCallback(q)
+	case "vc_select":
+		return b.handlers.HandleVolunteerChoreSelectCallback(q)
+	case "vc_confirm":
+		return b.handlers.HandleVolunteerChoreConfirmCallback(q)
+	case "vc_cancel":
+		return b.handlers.HandleVolunteerChoreCancelCallback(q)
 	case "modify_date":
 		return b.handlers.HandleModifyDateCallback(q)
 	case "modify_user":

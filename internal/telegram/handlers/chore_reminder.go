@@ -164,6 +164,20 @@ func (crm *ChoreReminderManager) CompleteChore(reminderID string) {
 	slog.Info(fmt.Sprintf("Marked chore %s as completed", reminderID))
 }
 
+// ReassignChore updates the in-memory assignment to point at a new user.
+// Must be called after the database row has been updated so that future
+// reminder DMs and completion callbacks reach the new assignee.
+func (crm *ChoreReminderManager) ReassignChore(reminderID string, newUserID int64, newUserName string) {
+	crm.mu.Lock()
+	defer crm.mu.Unlock()
+
+	if assignment, exists := crm.activeChores[reminderID]; exists {
+		assignment.UserID = newUserID
+		assignment.UserName = newUserName
+		slog.Info(fmt.Sprintf("Reassigned in-memory chore %s to user %s (%d)", reminderID, newUserName, newUserID))
+	}
+}
+
 // CancelChore removes a cancelled chore from active tracking
 func (crm *ChoreReminderManager) CancelChore(reminderID string) {
 	crm.mu.Lock()

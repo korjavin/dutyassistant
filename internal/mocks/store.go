@@ -241,6 +241,19 @@ func (m *MockStore) GetChoreByReminderID(ctx context.Context, reminderID string)
 	return args.Get(0).(*store.Chore), args.Error(1)
 }
 
+func (m *MockStore) GetChoreByID(ctx context.Context, id int64) (*store.Chore, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*store.Chore), args.Error(1)
+}
+
+func (m *MockStore) UpdateChoreUserID(ctx context.Context, choreID int64, newUserID int64) error {
+	args := m.Called(ctx, choreID, newUserID)
+	return args.Error(0)
+}
+
 func (m *MockStore) GetActiveChores(ctx context.Context) ([]*store.Chore, error) {
 	args := m.Called(ctx)
 	if args.Get(0) == nil {
