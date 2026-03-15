@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -76,7 +77,10 @@ func (h *Handlers) HandleVolunteerDaysCallback(q *tgbotapi.CallbackQuery) (tgbot
 	}
 
 	var days int
-	fmt.Sscanf(parts[1], "%d", &days)
+	if _, err := fmt.Sscanf(parts[1], "%d", &days); err != nil {
+		slog.Error("Failed to parse days in volunteer callback", "error", err)
+		return tgbotapi.EditMessageTextConfig{}, err
+	}
 
 	user, err := h.Store.GetUserByTelegramID(context.Background(), q.From.ID)
 	if err != nil || user == nil {

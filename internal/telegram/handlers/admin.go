@@ -819,7 +819,10 @@ func (h *Handlers) HandleModifyUserCallback(q *tgbotapi.CallbackQuery) (tgbotapi
 
 	dateStr := parts[1]
 	var userID int64
-	fmt.Sscanf(parts[2], "%d", &userID)
+	if _, err := fmt.Sscanf(parts[2], "%d", &userID); err != nil {
+		slog.Error("Failed to parse userID", "error", err)
+		return tgbotapi.EditMessageTextConfig{}, err
+	}
 
 	dutyDate, err := time.Parse("2006-01-02", dateStr)
 	if err != nil {
@@ -871,7 +874,10 @@ func (h *Handlers) HandleToggleUserCallback(q *tgbotapi.CallbackQuery) (tgbotapi
 	}
 
 	var userID int64
-	fmt.Sscanf(parts[1], "%d", &userID)
+	if _, err := fmt.Sscanf(parts[1], "%d", &userID); err != nil {
+		slog.Error("Failed to parse userID", "error", err)
+		return tgbotapi.EditMessageTextConfig{}, err
+	}
 
 	users, _ := h.Store.ListAllUsers(context.Background())
 	var user *store.User
