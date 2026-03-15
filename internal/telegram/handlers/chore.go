@@ -2,10 +2,11 @@ package handlers
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"html"
 	"log/slog"
-	"math/rand"
+	"math/big"
 	"os"
 	"regexp"
 	"strconv"
@@ -306,8 +307,10 @@ func (h *Handlers) assignChore(chatID int64, fromUserID int64, description strin
 	slog.Info(fmt.Sprintf("[CHORE] Total weight: %.3f", totalWeight))
 
 	// Select user
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	target := r.Float64() * totalWeight
+	// Generate random float between 0 and 1
+	bg, _ := rand.Int(rand.Reader, big.NewInt(1<<53))
+	rFloat := float64(bg.Int64()) / (1 << 53)
+	target := rFloat * totalWeight
 	slog.Info(fmt.Sprintf("[CHORE] Random target value: %.3f (0 to %.3f)", target, totalWeight))
 
 	var selectedUser *store.User
@@ -324,9 +327,10 @@ func (h *Handlers) assignChore(chatID int64, fromUserID int64, description strin
 	}
 	// Fallback (should not happen mathematically if totalWeight > 0)
 	if selectedUser == nil && len(candidates) > 0 {
-		slog.Warn(fmt.Sprintf("[CHORE] WARNING: Fallback selection triggered (this should not happen)"))
+		slog.Warn("[CHORE] WARNING: Fallback selection triggered (this should not happen)")
 		// Just pick randomly
-		selectedUser = candidates[r.Intn(len(candidates))]
+		bg, _ := rand.Int(rand.Reader, big.NewInt(int64(len(candidates))))
+		selectedUser = candidates[bg.Int64()]
 		slog.Info(fmt.Sprintf("[CHORE] Fallback selected: %s (ID: %d)", selectedUser.FirstName, selectedUser.ID))
 	}
 

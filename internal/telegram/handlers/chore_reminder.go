@@ -2,10 +2,11 @@ package handlers
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"html"
 	"log/slog"
-	"math/rand"
+	"math/big"
 	"sync"
 	"time"
 
@@ -49,7 +50,8 @@ func NewChoreReminderManager(bot *tgbotapi.BotAPI, db store.Store, groupID int64
 // Uses nanosecond precision + random component to prevent collisions
 func GenerateReminderID(userID int64, timestamp time.Time) string {
 	// Add random 6-digit suffix to prevent collisions even if called at exact same nanosecond
-	randomSuffix := rand.Intn(1000000)
+	bg, _ := rand.Int(rand.Reader, big.NewInt(1000000))
+	randomSuffix := bg.Int64()
 	return fmt.Sprintf("%d_%d_%06d", userID, timestamp.UnixNano(), randomSuffix)
 }
 
