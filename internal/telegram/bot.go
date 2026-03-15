@@ -304,6 +304,8 @@ func (b *Bot) handleCallbackQuery(q *tgbotapi.CallbackQuery) (tgbotapi.Chattable
 		return b.handlers.HandleCancelAssignmentCallback(q)
 	case "cancel_assignment_confirm":
 		return b.handlers.HandleCancelAssignmentConfirmCallback(q)
+	case "cancel_interactive":
+		return b.handlers.HandleCancelInteractiveCallback(q)
 	case "list":
 		return b.handlers.HandleListCallback(q)
 	case "cancel_flow":

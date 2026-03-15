@@ -192,10 +192,10 @@ func (h *Handlers) HandleCancelIDSelection(m *tgbotapi.Message, id string) (tgbo
 		tgbotapi.NewInlineKeyboardButtonData(fmt.Sprintf("Cancel regular task %s", id), fmt.Sprintf("cancel_assignment:A%s", id)),
 	))
 	keyboard = append(keyboard, tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("Show all items", "cancel_flow"),
+		tgbotapi.NewInlineKeyboardButtonData("Show all items", "cancel_interactive"),
 	))
 	keyboard = append(keyboard, tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("❌ Cancel operation", "cancel_flow_abort"),
+		tgbotapi.NewInlineKeyboardButtonData("❌ Cancel operation", "cancel_flow"),
 	))
 
 	markup := tgbotapi.NewInlineKeyboardMarkup(keyboard...)
