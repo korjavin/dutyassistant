@@ -48,6 +48,36 @@ func (s *SQLiteStore) GetChoreByReminderID(ctx context.Context, reminderID strin
 	return scanChoreWithUser(row)
 }
 
+// GetChoreByID retrieves a chore by its ID.
+func (s *SQLiteStore) GetChoreByID(ctx context.Context, id int64) (*store.Chore, error) {
+	query := `
+		SELECT c.id, c.user_id, c.description, c.assigned_at, c.deadline_at, c.completed_at, c.cancelled_at, c.reminder_id,
+		       u.id, u.telegram_user_id, u.first_name, u.is_admin, u.is_active
+		FROM chores c
+		JOIN users u ON c.user_id = u.id
+		WHERE c.id = ?
+	`
+	row := s.db.QueryRowContext(ctx, query, id)
+	return scanChoreWithUser(row)
+}
+
+// UpdateChoreUserID reassigns a chore to a different user.
+func (s *SQLiteStore) UpdateChoreUserID(ctx context.Context, choreID int64, newUserID int64) error {
+	query := `UPDATE chores SET user_id = ? WHERE id = ? AND completed_at IS NULL AND cancelled_at IS NULL`
+	res, err := s.db.ExecContext(ctx, query, newUserID, choreID)
+	if err != nil {
+		return fmt.Errorf("could not update chore user: %w", err)
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("could not check affected rows: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("chore not found or already completed/cancelled")
+	}
+	return nil
+}
+
 // GetActiveChores retrieves all chores that are not completed and not cancelled.
 func (s *SQLiteStore) GetActiveChores(ctx context.Context) ([]*store.Chore, error) {
 	query := `

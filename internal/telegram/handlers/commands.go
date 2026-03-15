@@ -26,7 +26,8 @@ const (
 		"/schedule - View the duty schedule for the current month.\n" +
 		"/volunteer <days> - Add days to your volunteer queue.\n" +
 		"/explain - Explain how the last assignment was made.\n" +
-		"/chore - View your currently assigned chores."
+		"/chore - View your currently assigned chores.\n" +
+		"/takechore - Volunteer to take an available chore assigned to someone else."
 
 	adminHelpMessageSection = "\n\n*Admin Commands:*\n" +
 		"/chore - Manage and assign chores interactively.\n" +
