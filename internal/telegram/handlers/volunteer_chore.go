@@ -189,6 +189,20 @@ func (h *Handlers) HandleVolunteerChoreConfirmCallback(q *tgbotapi.CallbackQuery
 	// completion callbacks reach the new assignee, not the old one.
 	if h.ChoreReminderManager != nil {
 		h.ChoreReminderManager.ReassignChore(chore.ReminderID, user.TelegramUserID, user.FirstName)
+
+		// Send the new assignee a DM with the action buttons so they can mark
+		// the chore done or snooze the reminder, just like the original assignee got.
+		assignment := &ChoreAssignment{
+			UserID:      user.TelegramUserID,
+			UserName:    user.FirstName,
+			Description: chore.Description,
+			AssignedAt:  chore.AssignedAt,
+			GroupID:     h.GroupID,
+			ReminderID:  chore.ReminderID,
+		}
+		if err := h.ChoreReminderManager.SendInitialDM(assignment); err != nil {
+			slog.Error(fmt.Sprintf("[HandleVolunteerChoreConfirmCallback] Failed to send DM to new assignee %d: %v", user.TelegramUserID, err))
+		}
 	}
 
 	slog.Info(fmt.Sprintf("[HandleVolunteerChoreConfirmCallback] User %d (%s) took chore %d from %s", user.ID, user.FirstName, choreID, previousAssignee))
@@ -197,7 +211,7 @@ func (h *Handlers) HandleVolunteerChoreConfirmCallback(q *tgbotapi.CallbackQuery
 		"✅ <b>Chore assigned to you!</b>\n\n"+
 			"<i>%s</i>\n\n"+
 			"You have successfully taken this chore from <b>%s</b>.\n"+
-			"Good luck! 💪",
+			"Check your DMs for the action buttons. Good luck! 💪",
 		html.EscapeString(chore.Description),
 		html.EscapeString(previousAssignee),
 	)
