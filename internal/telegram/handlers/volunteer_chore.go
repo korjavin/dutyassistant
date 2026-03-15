@@ -185,6 +185,12 @@ func (h *Handlers) HandleVolunteerChoreConfirmCallback(q *tgbotapi.CallbackQuery
 		return edit, nil
 	}
 
+	// Keep the in-memory reminder state consistent so future DMs and
+	// completion callbacks reach the new assignee, not the old one.
+	if h.ChoreReminderManager != nil {
+		h.ChoreReminderManager.ReassignChore(chore.ReminderID, user.TelegramUserID, user.FirstName)
+	}
+
 	slog.Info(fmt.Sprintf("[HandleVolunteerChoreConfirmCallback] User %d (%s) took chore %d from %s", user.ID, user.FirstName, choreID, previousAssignee))
 
 	text := fmt.Sprintf(
