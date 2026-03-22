@@ -12,7 +12,7 @@ import (
 //
 // dutySecret is the shared HMAC secret for the /who endpoint used by EchoBridge.
 // If empty, the /who endpoint will respond with 503 Service Unavailable.
-func NewServer(s store.Store, botToken string, dutySecret string) *gin.Engine {
+func NewServer(s store.Store, botToken, dutySecret string) *gin.Engine {
 	// Set Gin to release mode for production.
 	gin.SetMode(gin.ReleaseMode)
 
