@@ -2,10 +2,11 @@ package handlers
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"html"
 	"log/slog"
-	"math/rand"
+	"math/big"
 	"os"
 	"regexp"
 	"strconv"
@@ -317,9 +318,22 @@ func (h *Handlers) assignChore(chatID int64, fromUserID int64, description strin
 
 	slog.Info(fmt.Sprintf("[CHORE] Total weight: %.3f", totalWeight))
 
-	// Select user
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	target := r.Float64() * totalWeight
+	// Select user using crypto/rand
+	// Convert total weight to int for big.Int (multiply by 1000 for precision)
+	maxWeightInt := int64(totalWeight * 1000)
+	if maxWeightInt <= 0 {
+		maxWeightInt = 1
+	}
+
+	randomBigInt, err := rand.Int(rand.Reader, big.NewInt(maxWeightInt))
+	var target float64
+	if err != nil {
+		slog.Error(fmt.Sprintf("[CHORE] Error generating random number: %v", err))
+		target = 0
+	} else {
+		target = float64(randomBigInt.Int64()) / 1000.0
+	}
+
 	slog.Info(fmt.Sprintf("[CHORE] Random target value: %.3f (0 to %.3f)", target, totalWeight))
 
 	var selectedUser *store.User
@@ -336,9 +350,14 @@ func (h *Handlers) assignChore(chatID int64, fromUserID int64, description strin
 	}
 	// Fallback (should not happen mathematically if totalWeight > 0)
 	if selectedUser == nil && len(candidates) > 0 {
-		slog.Warn(fmt.Sprintf("[CHORE] WARNING: Fallback selection triggered (this should not happen)"))
+		slog.Warn("[CHORE] WARNING: Fallback selection triggered (this should not happen)")
 		// Just pick randomly
-		selectedUser = candidates[r.Intn(len(candidates))]
+		idx, err := rand.Int(rand.Reader, big.NewInt(int64(len(candidates))))
+		if err != nil {
+			selectedUser = candidates[0]
+		} else {
+			selectedUser = candidates[idx.Int64()]
+		}
 		slog.Info(fmt.Sprintf("[CHORE] Fallback selected: %s (ID: %d)", selectedUser.FirstName, selectedUser.ID))
 	}
 
