@@ -347,35 +347,13 @@ func SendWeeklyChoreStats(ctx context.Context, bot *tgbotapi.BotAPI, db store.St
 	if len(weeklyStats) == 0 {
 		sb.WriteString("No completed chores recorded this week.\n")
 	} else {
-		maxCount := 0.0
-		for _, stat := range weeklyStats {
-			if float64(stat.CompletedCount) > maxCount {
-				maxCount = float64(stat.CompletedCount)
-			}
-		}
-
 		for i, stat := range weeklyStats {
-			bar := renderBarChart(float64(stat.CompletedCount), maxCount, 10)
-
-			lateIndicator := "✅ on time"
-			if stat.AvgLateSeconds > 0 {
-				lateIndicator = fmt.Sprintf("⚠️ late (%s avg)", formatDuration(stat.AvgLateSeconds))
-			}
-
-			sb.WriteString(fmt.Sprintf("%d. <b>%s</b>\n", i+1, html.EscapeString(stat.Name)))
-			sb.WriteString(fmt.Sprintf("   %s %d completed\n", bar, stat.CompletedCount))
-			sb.WriteString(fmt.Sprintf("   ⏱ %s avg execution\n", formatDuration(stat.AvgExecSeconds)))
-			sb.WriteString(fmt.Sprintf("   %s\n\n", lateIndicator))
+			sb.WriteString(fmt.Sprintf("%d. %s — %d done\n", i+1, html.EscapeString(stat.Name), stat.CompletedCount))
 		}
 
 		winner := determineWinner(weeklyStats)
 		if winner != nil {
-			sb.WriteString(fmt.Sprintf("🥇 <b>Winner of the week: %s</b>\n", html.EscapeString(winner.Name)))
-			if winner.AvgLateSeconds == 0 {
-				sb.WriteString("<i>Most chores completed, on time!</i>\n")
-			} else {
-				sb.WriteString(fmt.Sprintf("<i>Most chores completed! (%s avg late)</i>\n", formatDuration(winner.AvgLateSeconds)))
-			}
+			sb.WriteString(fmt.Sprintf("🥇 Winner: %s\n", html.EscapeString(winner.Name)))
 		}
 	}
 

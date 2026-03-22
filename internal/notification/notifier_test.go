@@ -500,10 +500,11 @@ func TestSendWeeklyChoreStats(t *testing.T) {
 	assert.Contains(t, sentText, "Top Performers this week:")
 	assert.Contains(t, sentText, "Alice")
 	assert.Contains(t, sentText, "Bob")
-	assert.Contains(t, sentText, "2h00m")                              // Alice avg exec
-	assert.Contains(t, sentText, "✅ on time")                          // Alice on time
-	assert.Contains(t, sentText, "⚠️ late (30m avg)")                  // Bob late
-	assert.Contains(t, sentText, "🥇 <b>Winner of the week: Alice</b>") // Winner
+	// Verify simplified one-line format per user
+	assert.Contains(t, sentText, "1. Alice — 5 done")
+	assert.Contains(t, sentText, "2. Bob — 2 done")
+	// Verify shortened winner line
+	assert.Contains(t, sentText, "🥇 Winner: Alice")
 }
 
 func TestSendDailyChoreSummary_WithOverdue(t *testing.T) {

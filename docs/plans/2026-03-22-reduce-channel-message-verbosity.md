@@ -47,12 +47,12 @@ Trim all channel-facing bot messages to be brief one-liners or compact summaries
 **Files:**
 - Modify: `internal/notification/notifier.go`
 
-- [ ] Remove bar chart rendering from per-user stats (remove renderBarChart call in SendWeeklyChoreStats)
-- [ ] Remove avg execution time line per user
-- [ ] Remove on-time/late indicator per user
-- [ ] Each user becomes one line: `N. Name — X done`
-- [ ] Keep winner line but shorten: `🥇 Winner: Name`
-- [ ] Run tests: `go test ./internal/notification/...`
+- [x] Remove bar chart rendering from per-user stats (remove renderBarChart call in SendWeeklyChoreStats)
+- [x] Remove avg execution time line per user
+- [x] Remove on-time/late indicator per user
+- [x] Each user becomes one line: `N. Name — X done`
+- [x] Keep winner line but shorten: `🥇 Winner: Name`
+- [x] Run tests: `go test ./internal/notification/...`
 
 ### Task 4: Verify acceptance criteria
 
