@@ -56,7 +56,7 @@ Trim all channel-facing bot messages to be brief one-liners or compact summaries
 
 ### Task 4: Verify acceptance criteria
 
-- [ ] Manual review: confirm each modified message template looks correct
-- [ ] Run full test suite: `go test ./...`
-- [ ] Run linter: `go vet ./...`
-- [ ] Move this plan to `docs/plans/completed/`
+- [x] Manual review: confirm each modified message template looks correct
+- [x] Run full test suite: `go test ./...`
+- [x] Run linter: `go vet ./...`
+- [x] Move this plan to `docs/plans/completed/`
