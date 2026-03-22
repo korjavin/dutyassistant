@@ -2,10 +2,11 @@ package handlers
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"html"
 	"log/slog"
-	"math/rand"
+	"math/big"
 	"os"
 	"time"
 
@@ -16,7 +17,7 @@ import (
 // ProcessRecurringChores fetches all due recurring chores and assigns them.
 // It should be called periodically by the cron scheduler.
 func (h *Handlers) ProcessRecurringChores(ctx context.Context) error {
-	slog.Info(fmt.Sprintf("[CRON] Starting ProcessRecurringChores"))
+	slog.Info("[CRON] Starting ProcessRecurringChores")
 
 	berlinLoc, err := time.LoadLocation("Europe/Berlin")
 	if err != nil {
@@ -30,7 +31,7 @@ func (h *Handlers) ProcessRecurringChores(ctx context.Context) error {
 	}
 
 	if len(dueChores) == 0 {
-		slog.Info(fmt.Sprintf("[CRON] No recurring chores are due."))
+		slog.Info("[CRON] No recurring chores are due.")
 		return nil
 	}
 
@@ -120,8 +121,13 @@ func (h *Handlers) assignRecurringChore(ctx context.Context, chore *store.Recurr
 	}
 
 	// Select user
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	target := r.Float64() * totalWeight
+	maxInt := big.NewInt(1000000000)
+	randInt, err := rand.Int(rand.Reader, maxInt)
+	var randomFraction float64 = 0
+	if err == nil {
+		randomFraction = float64(randInt.Int64()) / float64(maxInt.Int64())
+	}
+	target := randomFraction * totalWeight
 
 	var selectedUser *store.User
 	currentWeight := 0.0
@@ -134,7 +140,12 @@ func (h *Handlers) assignRecurringChore(ctx context.Context, chore *store.Recurr
 	}
 
 	if selectedUser == nil && len(candidates) > 0 {
-		selectedUser = candidates[r.Intn(len(candidates))]
+		idx, err := rand.Int(rand.Reader, big.NewInt(int64(len(candidates))))
+		if err != nil {
+			selectedUser = candidates[0]
+		} else {
+			selectedUser = candidates[idx.Int64()]
+		}
 	}
 
 	if selectedUser == nil {
