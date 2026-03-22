@@ -670,6 +670,52 @@ func TestSendInitialDM_IncludesDescriptionAndButtons(t *testing.T) {
 	assert.Contains(t, sendMessageForm.Get("reply_markup"), "chore_remind:reminder_123")
 }
 
+func TestSendInitialDM_NilBot(t *testing.T) {
+	crm := handlers.NewChoreReminderManager(nil, nil, 0, nil)
+	assignment := &handlers.ChoreAssignment{
+		UserID:     777,
+		ReminderID: "test_123",
+	}
+	err := crm.SendInitialDM(assignment)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "bot not configured")
+	// Verify assignment was NOT stored
+	_, exists := crm.GetAssignment("test_123")
+	assert.False(t, exists)
+}
+
+func TestSendInitialDM_SendFailurePreventsStorage(t *testing.T) {
+	client := NewTestClient(func(req *http.Request) *http.Response {
+		if strings.Contains(req.URL.String(), "getMe") {
+			return &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(bytes.NewBufferString(`{"ok":true, "result": {"id": 123456, "is_bot": true, "first_name": "TestBot"}}`)),
+				Header:     make(http.Header),
+			}
+		}
+		// Return 403 Forbidden for sendMessage
+		return &http.Response{
+			StatusCode: 403,
+			Body:       io.NopCloser(bytes.NewBufferString(`{"ok":false, "description": "Forbidden: bot was blocked by the user"}`)),
+			Header:     make(http.Header),
+		}
+	})
+	bot, err := tgbotapi.NewBotAPIWithClient("TOKEN", tgbotapi.APIEndpoint, client)
+	assert.NoError(t, err)
+
+	crm := handlers.NewChoreReminderManager(bot, nil, 0, nil)
+	assignment := &handlers.ChoreAssignment{
+		UserID:      777,
+		ReminderID:  "test_123",
+		Description: "Test chore",
+	}
+	err = crm.SendInitialDM(assignment)
+	assert.Error(t, err)
+	// Critical: Verify assignment was NOT stored when DM failed
+	_, exists := crm.GetAssignment("test_123")
+	assert.False(t, exists, "Assignment should not be stored after failed DM")
+}
+
 func TestHandleChore_WeightedSelection(t *testing.T) {
 	// This test verifies that the weighted selection works correctly
 	// by running multiple iterations and checking distribution
@@ -799,6 +845,62 @@ func TestSendCompletionToGroup_OneLinerFormat(t *testing.T) {
 	// Ensure multi-line format is NOT present
 	assert.NotContains(t, messageText, "Chore Completed!")
 	assert.NotContains(t, messageText, "finished chore:")
+}
+
+func TestSendCompletionToGroup_NilBot(t *testing.T) {
+	crm := handlers.NewChoreReminderManager(nil, nil, 0, nil)
+	assignment := &handlers.ChoreAssignment{
+		GroupID: -1001234567890,
+	}
+	err := crm.SendCompletionToGroup(assignment)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "bot not configured")
+}
+
+func TestSendCompletionToGroup_ZeroGroupID(t *testing.T) {
+	client := NewTestClient(func(req *http.Request) *http.Response {
+		return &http.Response{
+			StatusCode: 200,
+			Body:       io.NopCloser(bytes.NewBufferString(`{"ok":true, "result": {"id": 123456, "is_bot": true, "first_name": "TestBot"}}`)),
+			Header:     make(http.Header),
+		}
+	})
+	bot, err := tgbotapi.NewBotAPIWithClient("TOKEN", tgbotapi.APIEndpoint, client)
+	assert.NoError(t, err)
+
+	crm := handlers.NewChoreReminderManager(bot, nil, 0, nil)
+	assignment := &handlers.ChoreAssignment{GroupID: 0}
+	err = crm.SendCompletionToGroup(assignment)
+	assert.NoError(t, err) // Should return nil, not error when group ID is 0
+}
+
+func TestSendCompletionToGroup_BotSendFailure(t *testing.T) {
+	client := NewTestClient(func(req *http.Request) *http.Response {
+		if strings.Contains(req.URL.String(), "getMe") {
+			return &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(bytes.NewBufferString(`{"ok":true, "result": {"id": 123456, "is_bot": true, "first_name": "TestBot"}}`)),
+				Header:     make(http.Header),
+			}
+		}
+		// Return 500 error for sendMessage
+		return &http.Response{
+			StatusCode: 500,
+			Body:       io.NopCloser(bytes.NewBufferString(`{"ok":false, "description": "Internal server error"}`)),
+			Header:     make(http.Header),
+		}
+	})
+	bot, err := tgbotapi.NewBotAPIWithClient("TOKEN", tgbotapi.APIEndpoint, client)
+	assert.NoError(t, err)
+
+	crm := handlers.NewChoreReminderManager(bot, nil, 0, nil)
+	assignment := &handlers.ChoreAssignment{
+		GroupID:     -1001234567890,
+		UserName:    "Alice",
+		Description: "Test",
+	}
+	err = crm.SendCompletionToGroup(assignment)
+	assert.Error(t, err)
 }
 
 func TestAssignChore_GroupAnnouncementOneLinerFormat(t *testing.T) {

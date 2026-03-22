@@ -81,6 +81,17 @@ The project uses GitHub Actions for automated builds and deployments. On push to
 3. Triggers Portainer webhook to deploy on production server
 ## Bot Commands
 
+### Channel Message Formats
+
+Channel announcements use concise one-liner formats to reduce noise:
+
+- Chore assignments: `🎯 <b>User</b>: <i>Description</i>`
+- Chore completions: `✅ <b>User</b> completed: <i>Description</i>`
+- Daily summaries: `⚠️ Overdue chores:` with compact category headers
+- Weekly stats: `N. Name — X done` (one line per user)
+
+DM messages remain verbose and friendly with full sentences.
+
 ### User Commands
 - `/start` - Register with the bot
 - `/help` - Show available commands
