@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html"
 	"log/slog"
+	"strconv"
 	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -76,6 +77,105 @@ func (h *Handlers) HandleChoreDoneCallback(q *tgbotapi.CallbackQuery) (tgbotapi.
 		q.Message.MessageID,
 		fmt.Sprintf("✅ <b>Great job!</b>\n\nYou marked the chore as completed:\n\n<i>%s</i>\n\n"+
 			"The group has been notified!", escapedDesc),
+	)
+	edit.ParseMode = tgbotapi.ModeHTML
+
+	return edit, nil
+}
+
+// HandleChoreListDoneCallback handles the "Mark as Done" button callback on the chore list
+func (h *Handlers) HandleChoreListDoneCallback(q *tgbotapi.CallbackQuery) (tgbotapi.EditMessageTextConfig, error) {
+	// Extract choreID from callback data: "chore_list_done:choreID"
+	parts := strings.Split(q.Data, ":")
+	if len(parts) != 2 {
+		slog.Info(fmt.Sprintf("Invalid callback data format: %s", q.Data))
+		edit := tgbotapi.NewEditMessageText(
+			q.Message.Chat.ID,
+			q.Message.MessageID,
+			"❌ Error: Invalid callback data.",
+		)
+		return edit, nil
+	}
+
+	choreIDStr := parts[1]
+
+	// Convert choreIDStr to int64
+	choreID, err := strconv.ParseInt(choreIDStr, 10, 64)
+	if err != nil {
+		edit := tgbotapi.NewEditMessageText(
+			q.Message.Chat.ID,
+			q.Message.MessageID,
+			"❌ Error: Invalid chore ID format.",
+		)
+		return edit, nil
+	}
+
+	ctx := context.Background()
+
+	// Get chore from DB
+	chore, err := h.Store.GetChoreByID(ctx, choreID)
+	if err != nil || chore == nil {
+		edit := tgbotapi.NewEditMessageText(
+			q.Message.Chat.ID,
+			q.Message.MessageID,
+			"❌ This chore was not found, cancelled, or has already been completed.",
+		)
+		return edit, nil
+	}
+
+	// Verify user is assigned to this chore
+	callerUser, err := h.Store.GetUserByTelegramID(ctx, q.From.ID)
+	if err != nil || callerUser == nil {
+		edit := tgbotapi.NewEditMessageText(
+			q.Message.Chat.ID,
+			q.Message.MessageID,
+			"❌ Could not find your user profile.",
+		)
+		return edit, nil
+	}
+
+	if callerUser.ID != chore.UserID {
+		edit := tgbotapi.NewEditMessageText(
+			q.Message.Chat.ID,
+			q.Message.MessageID,
+			"⚠️ This chore is not assigned to you.",
+		)
+		return edit, nil
+	}
+
+	// Send completion message to group via ChoreReminderManager
+	if h.ChoreReminderManager != nil {
+		assignment := &ChoreAssignment{
+			UserID:      q.From.ID,
+			UserName:    q.From.FirstName,
+			Description: chore.Description,
+			GroupID:     h.GroupID,
+		}
+		if err := h.ChoreReminderManager.SendCompletionToGroup(assignment); err != nil {
+			slog.Error(fmt.Sprintf("Failed to send completion message to group: %v", err))
+		}
+
+		// Remove from in-memory manager
+		h.ChoreReminderManager.CompleteChore(chore.ReminderID)
+	}
+
+	// Mark as completed in DB
+	if err := h.Store.CompleteChoreByReminderID(ctx, chore.ReminderID); err != nil {
+		slog.Error(fmt.Sprintf("Failed to complete chore in database: %v", err))
+		edit := tgbotapi.NewEditMessageText(
+			q.Message.Chat.ID,
+			q.Message.MessageID,
+			"❌ Failed to mark chore as complete. Please try again.",
+		)
+		return edit, nil
+	}
+
+	// Update the message to show completion
+	escapedDesc := html.EscapeString(chore.Description)
+	edit := tgbotapi.NewEditMessageText(
+		q.Message.Chat.ID,
+		q.Message.MessageID,
+		fmt.Sprintf("✅ <b>Chore marked as done:</b>\n\n<i>%s</i>", escapedDesc),
 	)
 	edit.ParseMode = tgbotapi.ModeHTML
 

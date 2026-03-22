@@ -45,9 +45,6 @@ func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 			return tgbotapi.NewMessage(m.Chat.ID, "🎉 You have no active chores right now!"), nil
 		}
 
-		var sb strings.Builder
-		sb.WriteString("📋 <b>Your Active Chores:</b>\n\n")
-
 		tz := os.Getenv("CHORE_TIMEZONE")
 		if tz == "" {
 			tz = "Europe/Berlin"
@@ -57,14 +54,45 @@ func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 			loc = time.Local
 		}
 
-		for i, chore := range chores {
-			assignedAt := chore.AssignedAt.In(loc).Format("2006-01-02 15:04")
-			sb.WriteString(fmt.Sprintf("%d. <i>%s</i> (Assigned: %s)\n", i+1, html.EscapeString(chore.Description), assignedAt))
-		}
+		// First send a header message
+		headerMsg := tgbotapi.NewMessage(m.Chat.ID, "📋 <b>Your Active Chores:</b>")
+		headerMsg.ParseMode = tgbotapi.ModeHTML
 
-		msg := tgbotapi.NewMessage(m.Chat.ID, sb.String())
-		msg.ParseMode = tgbotapi.ModeHTML
-		return msg, nil
+		if h.Bot != nil {
+			if _, err := h.Bot.Send(headerMsg); err != nil {
+				slog.Error(fmt.Sprintf("Failed to send header message: %v", err))
+			}
+
+			// Then send each chore as a separate message
+			for _, chore := range chores {
+				assignedAt := chore.AssignedAt.In(loc).Format("2006-01-02 15:04")
+
+				text := fmt.Sprintf("<i>%s</i>\n(Assigned: %s)", html.EscapeString(chore.Description), assignedAt)
+				choreMsg := tgbotapi.NewMessage(m.Chat.ID, text)
+				choreMsg.ParseMode = tgbotapi.ModeHTML
+
+				// Add the "Mark as Done" button
+				btn := tgbotapi.NewInlineKeyboardButtonData("✅ Mark as Done", fmt.Sprintf("chore_list_done:%d", chore.ID))
+				keyboard := tgbotapi.NewInlineKeyboardMarkup(tgbotapi.NewInlineKeyboardRow(btn))
+				choreMsg.ReplyMarkup = keyboard
+
+				if _, err := h.Bot.Send(choreMsg); err != nil {
+					slog.Error(fmt.Sprintf("Failed to send chore message for chore %d: %v", chore.ID, err))
+				}
+			}
+			return tgbotapi.MessageConfig{}, nil // Return empty since we already sent everything
+		} else {
+			// Fallback for tests or when Bot is nil
+			var sb strings.Builder
+			sb.WriteString("📋 <b>Your Active Chores:</b>\n\n")
+			for i, chore := range chores {
+				assignedAt := chore.AssignedAt.In(loc).Format("2006-01-02 15:04")
+				sb.WriteString(fmt.Sprintf("%d. <i>%s</i> (Assigned: %s)\n", i+1, html.EscapeString(chore.Description), assignedAt))
+			}
+			msg := tgbotapi.NewMessage(m.Chat.ID, sb.String())
+			msg.ParseMode = tgbotapi.ModeHTML
+			return msg, nil
+		}
 	}
 
 	args := strings.TrimSpace(m.CommandArguments())
