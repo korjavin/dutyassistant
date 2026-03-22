@@ -68,19 +68,19 @@ func (n *Notifier) Start() {
 
 // Stop gracefully stops the cron scheduler.
 func (n *Notifier) Stop() {
-	slog.Info(fmt.Sprint("Stopping notifier..."))
+	slog.Info("Stopping notifier...")
 	if n.cron != nil {
 		ctx := n.cron.Stop()
 		<-ctx.Done()
 	}
-	slog.Info(fmt.Sprint("Notifier stopped."))
+	slog.Info("Notifier stopped.")
 }
 
 // checkAndNotify is the core function executed by the cron job.
 // It checks for tomorrow's duty, assigns one if needed, and sends notifications.
 func (n *Notifier) checkAndNotify() {
 	ctx := context.Background()
-	slog.Info(fmt.Sprint("Cron job triggered: checking for tomorrow's duty."))
+	slog.Info("Cron job triggered: checking for tomorrow's duty.")
 
 	// Determine tomorrow's date in the service's configured timezone.
 	nowInLocation := n.now().In(n.location)
@@ -299,19 +299,6 @@ func determineWinner(stats []*store.UserWeeklyStats) *store.UserWeeklyStats {
 	}
 
 	return winner
-}
-
-func formatDuration(seconds float64) string {
-	d := time.Duration(seconds) * time.Second
-	h := int(d.Hours())
-	m := int(d.Minutes()) % 60
-	s := int(d.Seconds()) % 60
-	if h > 0 {
-		return fmt.Sprintf("%dh%02dm", h, m)
-	} else if m > 0 {
-		return fmt.Sprintf("%dm", m)
-	}
-	return fmt.Sprintf("%ds", s)
 }
 
 // SendWeeklyChoreStats sends a weekly statistics report of chores.

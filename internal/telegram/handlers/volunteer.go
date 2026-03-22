@@ -76,7 +76,9 @@ func (h *Handlers) HandleVolunteerDaysCallback(q *tgbotapi.CallbackQuery) (tgbot
 	}
 
 	var days int
-	fmt.Sscanf(parts[1], "%d", &days)
+	if _, err := fmt.Sscanf(parts[1], "%d", &days); err != nil {
+		return tgbotapi.EditMessageTextConfig{}, fmt.Errorf("invalid callback data: %v", err)
+	}
 
 	user, err := h.Store.GetUserByTelegramID(context.Background(), q.From.ID)
 	if err != nil || user == nil {

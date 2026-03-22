@@ -819,7 +819,9 @@ func (h *Handlers) HandleModifyUserCallback(q *tgbotapi.CallbackQuery) (tgbotapi
 
 	dateStr := parts[1]
 	var userID int64
-	fmt.Sscanf(parts[2], "%d", &userID)
+	if _, err := fmt.Sscanf(parts[2], "%d", &userID); err != nil {
+		return tgbotapi.EditMessageTextConfig{}, fmt.Errorf("invalid user ID: %v", err)
+	}
 
 	dutyDate, err := time.Parse("2006-01-02", dateStr)
 	if err != nil {
@@ -871,7 +873,9 @@ func (h *Handlers) HandleToggleUserCallback(q *tgbotapi.CallbackQuery) (tgbotapi
 	}
 
 	var userID int64
-	fmt.Sscanf(parts[1], "%d", &userID)
+	if _, err := fmt.Sscanf(parts[1], "%d", &userID); err != nil {
+		return tgbotapi.EditMessageTextConfig{}, fmt.Errorf("invalid user ID: %v", err)
+	}
 
 	users, _ := h.Store.ListAllUsers(context.Background())
 	var user *store.User
