@@ -296,6 +296,8 @@ func (b *Bot) handleCallbackQuery(q *tgbotapi.CallbackQuery) (tgbotapi.Chattable
 		return b.handlers.HandleVacationCallback(q)
 	case "chore_done":
 		return b.handlers.HandleChoreDoneCallback(q)
+	case "chore_list_done":
+		return b.handlers.HandleChoreListDoneCallback(q)
 	case "chore_remind":
 		return b.handlers.HandleChoreRemindCallback(q)
 	case "complete_chore":

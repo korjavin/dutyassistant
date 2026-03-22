@@ -57,12 +57,13 @@ func TestHandleChore_Recurring_DuringHours(t *testing.T) {
 	response, err := h.HandleChore(message)
 	assert.NoError(t, err)
 
-	assert.Contains(t, response.Text, "Assigned chore to")
-	assert.Contains(t, response.Text, "Admin")
-	assert.Contains(t, response.Text, "Clean the kitchen")
-	assert.Contains(t, response.Text, "Recurring chore scheduled")
-	assert.Contains(t, response.Text, "42")
-	assert.Contains(t, response.Text, "every 5 days")
+	msgText := response.(tgbotapi.MessageConfig).Text
+	assert.Contains(t, msgText, "Assigned chore to")
+	assert.Contains(t, msgText, "Admin")
+	assert.Contains(t, msgText, "Clean the kitchen")
+	assert.Contains(t, msgText, "Recurring chore scheduled")
+	assert.Contains(t, msgText, "42")
+	assert.Contains(t, msgText, "every 5 days")
 }
 
 func TestHandleChore_Recurring_OutsideHours(t *testing.T) {
@@ -101,11 +102,12 @@ func TestHandleChore_Recurring_OutsideHours(t *testing.T) {
 	response, err := h.HandleChore(message)
 	assert.NoError(t, err)
 
-	assert.NotContains(t, response.Text, "Assigned chore to")
-	assert.Contains(t, response.Text, "Clean the kitchen")
-	assert.Contains(t, response.Text, "Recurring chore scheduled")
-	assert.Contains(t, response.Text, "42")
-	assert.Contains(t, response.Text, "every 5 days")
+	msgText := response.(tgbotapi.MessageConfig).Text
+	assert.NotContains(t, msgText, "Assigned chore to")
+	assert.Contains(t, msgText, "Clean the kitchen")
+	assert.Contains(t, msgText, "Recurring chore scheduled")
+	assert.Contains(t, msgText, "42")
+	assert.Contains(t, msgText, "every 5 days")
 }
 
 func TestHandleList_Interactive(t *testing.T) {

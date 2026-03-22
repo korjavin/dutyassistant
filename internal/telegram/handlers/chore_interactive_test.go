@@ -31,7 +31,7 @@ func TestHandleChoreInteractiveNoArgs(t *testing.T) {
 	resp, err := h.HandleChore(msg)
 	assert.NoError(t, err)
 
-	msgConfig := resp
+	msgConfig := resp.(tgbotapi.MessageConfig)
 	assert.Contains(t, msgConfig.Text, "Chore Management")
 	assert.NotNil(t, msgConfig.ReplyMarkup)
 }

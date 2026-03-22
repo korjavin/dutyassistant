@@ -62,13 +62,14 @@ func TestHandleChoreTranslate_Success(t *testing.T) {
 
 	response, err := h.HandleChoreTranslate(message)
 	assert.NoError(t, err)
-	assert.Contains(t, response.Text, "✅ Chore")
-	assert.Contains(t, response.Text, "42")
-	assert.Contains(t, response.Text, "translated!")
-	assert.Contains(t, response.Text, "Old:")
-	assert.Contains(t, response.Text, "New:")
-	assert.Contains(t, response.Text, "Clean kitchen")
-	assert.Equal(t, tgbotapi.ModeHTML, response.ParseMode)
+	msg := response
+	assert.Contains(t, msg.Text, "✅ Chore")
+	assert.Contains(t, msg.Text, "42")
+	assert.Contains(t, msg.Text, "translated!")
+	assert.Contains(t, msg.Text, "Old:")
+	assert.Contains(t, msg.Text, "New:")
+	assert.Contains(t, msg.Text, "Clean kitchen")
+	assert.Equal(t, tgbotapi.ModeHTML, msg.ParseMode)
 
 	mockStore.AssertExpectations(t)
 }
@@ -99,10 +100,11 @@ func TestHandleChoreTranslate_AlreadyLatin(t *testing.T) {
 
 	response, err := h.HandleChoreTranslate(message)
 	assert.NoError(t, err)
-	assert.Contains(t, response.Text, "ℹ️ Chore")
-	assert.Contains(t, response.Text, "42")
-	assert.Contains(t, response.Text, "already in English")
-	assert.Contains(t, response.Text, "Clean the kitchen")
+	msg := response
+	assert.Contains(t, msg.Text, "ℹ️ Chore")
+	assert.Contains(t, msg.Text, "42")
+	assert.Contains(t, msg.Text, "already in English")
+	assert.Contains(t, msg.Text, "Clean the kitchen")
 
 	mockStore.AssertExpectations(t)
 	mockStore.AssertNotCalled(t, "UpdateRecurringChoreDescription")
@@ -131,7 +133,8 @@ func TestHandleChoreTranslate_InvalidChoreID(t *testing.T) {
 
 	response, err := h.HandleChoreTranslate(message)
 	assert.NoError(t, err)
-	assert.Contains(t, response.Text, "❌ Chore not found")
+	msg := response
+	assert.Contains(t, msg.Text, "❌ Chore not found")
 
 	mockStore.AssertExpectations(t)
 }
@@ -157,7 +160,8 @@ func TestHandleChoreTranslate_NonAdmin(t *testing.T) {
 
 	response, err := h.HandleChoreTranslate(message)
 	assert.NoError(t, err)
-	assert.Contains(t, response.Text, "❌ Only admins can translate")
+	msg := response
+	assert.Contains(t, msg.Text, "❌ Only admins can translate")
 
 	// Verify that GetRecurringChore was NOT called (access denied before that)
 	mockStore.AssertNotCalled(t, "GetRecurringChore")
@@ -181,7 +185,8 @@ func TestHandleChoreTranslate_InvalidIDFormat(t *testing.T) {
 
 	response, err := h.HandleChoreTranslate(message)
 	assert.NoError(t, err)
-	assert.Contains(t, response.Text, "❌ Invalid chore ID")
+	msg := response
+	assert.Contains(t, msg.Text, "❌ Invalid chore ID")
 }
 
 func TestHandleChoreTranslate_LLMErrorFallback(t *testing.T) {
@@ -218,7 +223,8 @@ func TestHandleChoreTranslate_LLMErrorFallback(t *testing.T) {
 
 	response, err := h.HandleChoreTranslate(message)
 	assert.NoError(t, err)
-	assert.Contains(t, response.Text, "❌ Translation failed")
+	msg := response
+	assert.Contains(t, msg.Text, "❌ Translation failed")
 
 	mockStore.AssertExpectations(t)
 	mockStore.AssertNotCalled(t, "UpdateRecurringChoreDescription")
@@ -249,9 +255,10 @@ func TestHandleChoreTranslate_NoLLMClient(t *testing.T) {
 
 	response, err := h.HandleChoreTranslate(message)
 	assert.NoError(t, err)
-	assert.Contains(t, response.Text, "ℹ️ Chore")
-	assert.Contains(t, response.Text, "translation is disabled")
-	assert.Contains(t, response.Text, "Убрать кухню")
+	msg := response
+	assert.Contains(t, msg.Text, "ℹ️ Chore")
+	assert.Contains(t, msg.Text, "translation is disabled")
+	assert.Contains(t, msg.Text, "Убрать кухню")
 
 	mockStore.AssertExpectations(t)
 	mockStore.AssertNotCalled(t, "UpdateRecurringChoreDescription")
@@ -303,7 +310,8 @@ func TestHandleChoreTranslate_UpdateFails(t *testing.T) {
 
 	response, err := h.HandleChoreTranslate(message)
 	assert.NoError(t, err)
-	assert.Contains(t, response.Text, "❌ Failed to update chore description")
+	msg := response
+	assert.Contains(t, msg.Text, "❌ Failed to update chore description")
 
 	mockStore.AssertExpectations(t)
 }
@@ -332,7 +340,8 @@ func TestHandleChoreTranslate_InactiveChore(t *testing.T) {
 
 	response, err := h.HandleChoreTranslate(message)
 	assert.NoError(t, err)
-	assert.Contains(t, response.Text, "❌ Recurring chore not found or is inactive")
+	msg := response
+	assert.Contains(t, msg.Text, "❌ Recurring chore not found or is inactive")
 
 	// UpdateRecurringChoreDescription should NOT be called for inactive chore
 	mockStore.AssertExpectations(t)
@@ -368,9 +377,11 @@ func TestHandleChore_DescriptionStartingWithTranslate(t *testing.T) {
 	response, err := h.HandleChore(message)
 	assert.NoError(t, err)
 
+	msg := response.(tgbotapi.MessageConfig)
+
 	// Should NOT return a translate command error
-	assert.NotContains(t, response.Text, "Invalid translate command format")
-	assert.NotContains(t, response.Text, "Invalid chore ID")
+	assert.NotContains(t, msg.Text, "Invalid translate command format")
+	assert.NotContains(t, msg.Text, "Invalid chore ID")
 	// Should contain typical chore creation response elements
-	assert.Contains(t, response.Text, "Test User")
+	assert.Contains(t, msg.Text, "Test User")
 }

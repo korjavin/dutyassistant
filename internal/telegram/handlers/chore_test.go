@@ -3,6 +3,7 @@ package handlers_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -23,6 +24,9 @@ func TestHandleChore_NonAdmin_NoChores(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	h := handlers.New(mockStore, nil, 0, nil)
 
+	// Initialize ChoreReminderManager to avoid GetActiveChores un-mocked call if it happens
+	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
+
 	// User is not admin
 	nonAdminUser := &store.User{ID: 2, TelegramUserID: 456, IsAdmin: false}
 	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return(nonAdminUser, nil)
@@ -36,7 +40,7 @@ func TestHandleChore_NonAdmin_NoChores(t *testing.T) {
 
 	msg, err := h.HandleChore(message)
 	assert.NoError(t, err)
-	assert.Contains(t, msg.Text, "You have no active chores right now!")
+	assert.Contains(t, msg.(tgbotapi.MessageConfig).Text, "You have no active chores right now!")
 }
 
 func TestHandleChore_NonAdmin_WithChores(t *testing.T) {
@@ -58,6 +62,46 @@ func TestHandleChore_NonAdmin_WithChores(t *testing.T) {
 	}
 	mockStore.On("GetActiveChoresByUserID", mock.Anything, int64(2)).Return(chores, nil)
 
+	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
+
+	var sentMessages []string
+	var sentKeyboards []tgbotapi.InlineKeyboardMarkup
+
+	client := NewTestClient(func(req *http.Request) *http.Response {
+		if strings.Contains(req.URL.String(), "getMe") {
+			return &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(bytes.NewBufferString(`{"ok":true, "result": {"id": 123456, "is_bot": true, "first_name": "TestBot"}}`)),
+				Header:     make(http.Header),
+			}
+		}
+		if strings.Contains(req.URL.String(), "sendMessage") {
+			bodyBytes, _ := io.ReadAll(req.Body)
+			form, _ := url.ParseQuery(string(bodyBytes))
+			sentMessages = append(sentMessages, form.Get("text"))
+
+			// Unmarshal reply_markup just to check button callback data
+			markup := form.Get("reply_markup")
+			if markup != "" {
+				var kb tgbotapi.InlineKeyboardMarkup
+				if err := json.Unmarshal([]byte(markup), &kb); err == nil {
+					sentKeyboards = append(sentKeyboards, kb)
+				}
+			}
+
+			return &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(bytes.NewBufferString(`{"ok":true, "result": {"message_id": 1}}`)),
+				Header:     make(http.Header),
+			}
+		}
+		return &http.Response{StatusCode: 404, Body: io.NopCloser(bytes.NewBufferString(`{}`)), Header: make(http.Header)}
+	})
+
+	bot, err := tgbotapi.NewBotAPIWithClient("TOKEN", tgbotapi.APIEndpoint, client)
+	assert.NoError(t, err)
+	h.SetBot(bot)
+
 	message := &tgbotapi.Message{
 		Chat: &tgbotapi.Chat{ID: 789},
 		From: &tgbotapi.User{ID: 456},
@@ -66,8 +110,128 @@ func TestHandleChore_NonAdmin_WithChores(t *testing.T) {
 
 	msg, err := h.HandleChore(message)
 	assert.NoError(t, err)
-	assert.Contains(t, msg.Text, "Your Active Chores")
-	assert.Contains(t, msg.Text, "Take out the trash &lt;script&gt;")
+	assert.Nil(t, msg) // Should return nil, nil
+
+	assert.Len(t, sentMessages, 1)
+	assert.Contains(t, sentMessages[0], "Active Chore")
+	assert.Contains(t, sentMessages[0], "Take out the trash &lt;script&gt;")
+
+	assert.Len(t, sentKeyboards, 1)
+	assert.Len(t, sentKeyboards[0].InlineKeyboard, 1)
+	assert.Len(t, sentKeyboards[0].InlineKeyboard[0], 1)
+	assert.Equal(t, "chore_list_done:1", *sentKeyboards[0].InlineKeyboard[0][0].CallbackData)
+}
+
+func TestHandleChoreListDoneCallback_Success(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
+	mockScheduler := new(mocks.MockScheduler)
+	groupID := int64(-1001234567890)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, groupID, 123, nil)
+
+	// Mock Bot API client
+	client := NewTestClient(func(req *http.Request) *http.Response {
+		if strings.Contains(req.URL.String(), "sendMessage") {
+			return &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(bytes.NewBufferString(`{"ok":true, "result": {"message_id": 1, "chat": {"id": -1001234567890}}}`)),
+				Header:     make(http.Header),
+			}
+		}
+		if strings.Contains(req.URL.String(), "getMe") {
+			return &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(bytes.NewBufferString(`{"ok":true, "result": {"id": 123456, "is_bot": true, "first_name": "TestBot"}}`)),
+				Header:     make(http.Header),
+			}
+		}
+		return &http.Response{StatusCode: 404, Body: io.NopCloser(bytes.NewBufferString(`{}`)), Header: make(http.Header)}
+	})
+
+	bot, err := tgbotapi.NewBotAPIWithClient("TOKEN", tgbotapi.APIEndpoint, client)
+	assert.NoError(t, err)
+	h.SetBot(bot)
+
+	chore := &store.Chore{
+		ID:          1,
+		UserID:      2,
+		Description: "Take out the trash <script>",
+		ReminderID:  "rem_1",
+	}
+	mockStore.On("GetChoreByID", mock.Anything, int64(1)).Return(chore, nil)
+
+	user := &store.User{ID: 2, TelegramUserID: 111, FirstName: "TestUser"}
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(111)).Return(user, nil)
+
+	mockStore.On("CompleteChoreByReminderID", mock.Anything, "rem_1").Return(nil)
+
+	callbackQuery := &tgbotapi.CallbackQuery{
+		ID:   "callback_list_1",
+		Data: "chore_list_done:1",
+		From: &tgbotapi.User{ID: 111, FirstName: "TestUser"},
+		Message: &tgbotapi.Message{
+			Chat:      &tgbotapi.Chat{ID: 111},
+			MessageID: 999,
+		},
+	}
+
+	edit, err := h.HandleChoreListDoneCallback(callbackQuery)
+	assert.NoError(t, err)
+	assert.Contains(t, edit.Text, "Great job!")
+	assert.Contains(t, edit.Text, "Take out the trash &lt;script&gt;")
+}
+
+func TestHandleChoreListDoneCallback_WrongUser(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
+	h := handlers.NewWithAdminID(mockStore, nil, 0, 123, nil)
+
+	chore := &store.Chore{
+		ID:          1,
+		UserID:      2,
+		Description: "Take out the trash",
+		ReminderID:  "rem_1",
+	}
+	mockStore.On("GetChoreByID", mock.Anything, int64(1)).Return(chore, nil)
+
+	user := &store.User{ID: 3, TelegramUserID: 222, FirstName: "OtherUser"}
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(222)).Return(user, nil)
+
+	callbackQuery := &tgbotapi.CallbackQuery{
+		ID:   "callback_list_2",
+		Data: "chore_list_done:1",
+		From: &tgbotapi.User{ID: 222, FirstName: "OtherUser"},
+		Message: &tgbotapi.Message{
+			Chat:      &tgbotapi.Chat{ID: 222},
+			MessageID: 999,
+		},
+	}
+
+	edit, err := h.HandleChoreListDoneCallback(callbackQuery)
+	assert.NoError(t, err)
+	assert.Contains(t, edit.Text, "no longer assigned to you")
+}
+
+func TestHandleChoreListDoneCallback_NotFound(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
+	h := handlers.NewWithAdminID(mockStore, nil, 0, 123, nil)
+
+	mockStore.On("GetChoreByID", mock.Anything, int64(1)).Return((*store.Chore)(nil), nil)
+
+	callbackQuery := &tgbotapi.CallbackQuery{
+		ID:   "callback_list_3",
+		Data: "chore_list_done:1",
+		From: &tgbotapi.User{ID: 111},
+		Message: &tgbotapi.Message{
+			Chat:      &tgbotapi.Chat{ID: 111},
+			MessageID: 999,
+		},
+	}
+
+	edit, err := h.HandleChoreListDoneCallback(callbackQuery)
+	assert.NoError(t, err)
+	assert.Contains(t, edit.Text, "not found")
 }
 
 func TestHandleChore_NonAdmin_UserNotRegistered(t *testing.T) {
@@ -85,7 +249,7 @@ func TestHandleChore_NonAdmin_UserNotRegistered(t *testing.T) {
 
 	msg, err := h.HandleChore(message)
 	assert.NoError(t, err)
-	assert.Contains(t, msg.Text, "Could not find your user profile")
+	assert.Contains(t, msg.(tgbotapi.MessageConfig).Text, "Could not find your user profile")
 }
 
 func TestHandleChore_NoArgs_ShowsMenu(t *testing.T) {
@@ -100,7 +264,7 @@ func TestHandleChore_NoArgs_ShowsMenu(t *testing.T) {
 	msg, err := h.HandleChore(message)
 	assert.NoError(t, err)
 
-	msgConfig := msg
+	msgConfig := msg.(tgbotapi.MessageConfig)
 	assert.Contains(t, msgConfig.Text, "Chore Management")
 	assert.NotNil(t, msgConfig.ReplyMarkup)
 }
@@ -135,13 +299,13 @@ func TestHandleChore_Success(t *testing.T) {
 	msg, err := h.HandleChore(message)
 	assert.NoError(t, err)
 
+	msgText := msg.(tgbotapi.MessageConfig).Text
+
 	// Message should state success and mention one of the users
-	assert.Contains(t, msg.Text, "Assigned chore to")
+	assert.Contains(t, msgText, "Assigned chore to")
 	// Should mention Alice or Bob
-	// isAlice := assert.Contains(t, msg.Text, "Alice")
-	// isBob := assert.Contains(t, msg.Text, "Bob")
 	// We check if either is present
-	assert.True(t, strings.Contains(msg.Text, "Alice") || strings.Contains(msg.Text, "Bob"))
+	assert.True(t, strings.Contains(msgText, "Alice") || strings.Contains(msgText, "Bob"))
 }
 
 func TestHandleChore_NoActiveUsers(t *testing.T) {
@@ -158,7 +322,7 @@ func TestHandleChore_NoActiveUsers(t *testing.T) {
 
 	msg, err := h.HandleChore(message)
 	assert.NoError(t, err)
-	assert.Equal(t, "No active users found to assign the chore to.", msg.Text)
+	assert.Equal(t, "No active users found to assign the chore to.", msg.(tgbotapi.MessageConfig).Text)
 }
 
 func TestHandleChore_HTMLInjection(t *testing.T) {
@@ -184,9 +348,10 @@ func TestHandleChore_HTMLInjection(t *testing.T) {
 	msg, err := h.HandleChore(message)
 	assert.NoError(t, err)
 
+	msgText := msg.(tgbotapi.MessageConfig).Text
 	// Check that HTML tags are escaped in the output
-	assert.Contains(t, msg.Text, "&lt;b&gt;EvilUser&lt;/b&gt;")
-	assert.Contains(t, msg.Text, "&lt;i&gt;malicious description&lt;/i&gt;")
+	assert.Contains(t, msgText, "&lt;b&gt;EvilUser&lt;/b&gt;")
+	assert.Contains(t, msgText, "&lt;i&gt;malicious description&lt;/i&gt;")
 }
 
 type RoundTripFunc func(req *http.Request) *http.Response
@@ -255,10 +420,12 @@ func TestHandleChore_GroupAnnouncement(t *testing.T) {
 	msg, err := h.HandleChore(message)
 	assert.NoError(t, err)
 
+	msgText := msg.(tgbotapi.MessageConfig).Text
+
 	// Check response to user
-	assert.Contains(t, msg.Text, "Assigned chore to")
-	assert.Contains(t, msg.Text, "Announced in group")
-	assert.Contains(t, msg.Text, "DM sent to user")
+	assert.Contains(t, msgText, "Assigned chore to")
+	assert.Contains(t, msgText, "Announced in group")
+	assert.Contains(t, msgText, "DM sent to user")
 }
 
 func TestHandleChore_MissingTelegramID_ShowsRegistrationHint(t *testing.T) {
@@ -302,8 +469,8 @@ func TestHandleChore_MissingTelegramID_ShowsRegistrationHint(t *testing.T) {
 
 	msg, err := h.HandleChore(message)
 	assert.NoError(t, err)
-	assert.Contains(t, msg.Text, "Couldn't send DM")
-	assert.Contains(t, msg.Text, "/start")
+	assert.Contains(t, msg.(tgbotapi.MessageConfig).Text, "Couldn't send DM")
+	assert.Contains(t, msg.(tgbotapi.MessageConfig).Text, "/start")
 }
 
 func TestHandleChoreInteractive_Success(t *testing.T) {
@@ -755,12 +922,14 @@ func TestHandleChore_WeightedSelection(t *testing.T) {
 		msg, err := h.HandleChore(message)
 		assert.NoError(t, err)
 
+		msgText := msg.(tgbotapi.MessageConfig).Text
+
 		// Count which user was selected
-		if strings.Contains(msg.Text, "Alice") {
+		if strings.Contains(msgText, "Alice") {
 			counts["Alice"]++
-		} else if strings.Contains(msg.Text, "Bob") {
+		} else if strings.Contains(msgText, "Bob") {
 			counts["Bob"]++
-		} else if strings.Contains(msg.Text, "Charlie") {
+		} else if strings.Contains(msgText, "Charlie") {
 			counts["Charlie"]++
 		}
 	}
@@ -958,7 +1127,7 @@ func TestAssignChore_GroupAnnouncementOneLinerFormat(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Check response to user
-	assert.Contains(t, msg.Text, "Assigned chore to")
+	assert.Contains(t, msg.(tgbotapi.MessageConfig).Text, "Assigned chore to")
 
 	// Verify the group announcement is the one-liner format: 🎯 <b>%s</b>: <i>%s</i>
 	groupAnnouncement := groupMessageForm.Get("text")

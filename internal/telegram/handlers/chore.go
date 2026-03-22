@@ -23,7 +23,7 @@ import (
 // It assigns a random active user to the described chore.
 // If the /<N>d suffix is provided, it sets up a recurring chore.
 // If no description is provided, it enters interactive mode.
-func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
+func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 	// 1. Admin check
 	isAdmin, err := h.checkAdmin(m.From.ID)
 
@@ -45,9 +45,6 @@ func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 			return tgbotapi.NewMessage(m.Chat.ID, "🎉 You have no active chores right now!"), nil
 		}
 
-		var sb strings.Builder
-		sb.WriteString("📋 <b>Your Active Chores:</b>\n\n")
-
 		tz := os.Getenv("CHORE_TIMEZONE")
 		if tz == "" {
 			tz = "Europe/Berlin"
@@ -57,14 +54,29 @@ func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 			loc = time.Local
 		}
 
-		for i, chore := range chores {
+		for _, chore := range chores {
 			assignedAt := chore.AssignedAt.In(loc).Format("2006-01-02 15:04")
-			sb.WriteString(fmt.Sprintf("%d. <i>%s</i> (Assigned: %s)\n", i+1, html.EscapeString(chore.Description), assignedAt))
+			text := fmt.Sprintf("📋 <b>Active Chore</b>\n\n<i>%s</i>\n\nAssigned: %s", html.EscapeString(chore.Description), assignedAt)
+
+			msg := tgbotapi.NewMessage(m.Chat.ID, text)
+			msg.ParseMode = tgbotapi.ModeHTML
+
+			// Add inline keyboard with a single "Mark as Done" button
+			keyboard := tgbotapi.NewInlineKeyboardMarkup(
+				tgbotapi.NewInlineKeyboardRow(
+					tgbotapi.NewInlineKeyboardButtonData("✅ Mark as Done", fmt.Sprintf("chore_list_done:%d", chore.ID)),
+				),
+			)
+			msg.ReplyMarkup = keyboard
+
+			if h.Bot != nil {
+				if _, err := h.Bot.Send(msg); err != nil {
+					slog.Error(fmt.Sprintf("Failed to send chore message for chore %d: %v", chore.ID, err))
+				}
+			}
 		}
 
-		msg := tgbotapi.NewMessage(m.Chat.ID, sb.String())
-		msg.ParseMode = tgbotapi.ModeHTML
-		return msg, nil
+		return nil, nil
 	}
 
 	args := strings.TrimSpace(m.CommandArguments())
