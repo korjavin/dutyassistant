@@ -43,7 +43,7 @@ func NewSessionManager() *SessionManager {
 }
 
 // StartSession creates a new session for the given chat
-func (sm *SessionManager) StartSession(chatID int64, userID int64, sessionType SessionType) {
+func (sm *SessionManager) StartSession(chatID, userID int64, sessionType SessionType) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
