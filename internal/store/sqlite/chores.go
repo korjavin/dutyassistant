@@ -62,7 +62,7 @@ func (s *SQLiteStore) GetChoreByID(ctx context.Context, id int64) (*store.Chore,
 }
 
 // UpdateChoreUserID reassigns a chore to a different user.
-func (s *SQLiteStore) UpdateChoreUserID(ctx context.Context, choreID int64, newUserID int64) error {
+func (s *SQLiteStore) UpdateChoreUserID(ctx context.Context, choreID, newUserID int64) error {
 	query := `UPDATE chores SET user_id = ? WHERE id = ? AND completed_at IS NULL AND cancelled_at IS NULL`
 	res, err := s.db.ExecContext(ctx, query, newUserID, choreID)
 	if err != nil {

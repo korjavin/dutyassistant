@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"github.com/korjavin/dutyassistant/internal/mocks"
 	"github.com/korjavin/dutyassistant/internal/store"
+	"github.com/korjavin/dutyassistant/internal/store/mocks"
 	"github.com/korjavin/dutyassistant/internal/telegram/handlers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
