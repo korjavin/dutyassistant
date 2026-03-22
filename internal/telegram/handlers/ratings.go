@@ -372,7 +372,7 @@ func isLastDayOfMonth(date time.Time) bool {
 	return normalized.AddDate(0, 0, 1).Month() != normalized.Month()
 }
 
-func ratingSubmissionWindowOpen(ratingDate time.Time, now time.Time) bool {
+func ratingSubmissionWindowOpen(ratingDate, now time.Time) bool {
 	normalizedDate := normalizeRatingDate(ratingDate)
 	if !normalizeRatingDate(now).Equal(normalizedDate) {
 		return false

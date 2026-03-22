@@ -265,7 +265,7 @@ func (h *Handlers) HandleChoreInteractive(m *tgbotapi.Message) (tgbotapi.Chattab
 }
 
 // assignChore performs the actual chore assignment logic
-func (h *Handlers) assignChore(chatID int64, fromUserID int64, description string) (tgbotapi.MessageConfig, error) {
+func (h *Handlers) assignChore(chatID, fromUserID int64, description string) (tgbotapi.MessageConfig, error) {
 	// Note: Description is stored unescaped and will be escaped at display time
 	// This prevents double-escaping when showing in multiple places
 
