@@ -345,7 +345,7 @@ func (h *Handlers) assignChore(chatID int64, fromUserID int64, description strin
 	responseMsg.ParseMode = tgbotapi.ModeHTML
 
 	// Construct group announcement
-	groupText := fmt.Sprintf("🎲 <b>Random Chore Assignment</b>\n\n🎯 <b>%s</b> has been assigned a chore:\n\n<i>%s</i>", escapedName, escapedDesc)
+	groupText := fmt.Sprintf("🎯 <b>%s</b>: <i>%s</i>", escapedName, escapedDesc)
 
 	// Handle group announcement
 	if h.GroupID != 0 {

@@ -2,6 +2,8 @@ package handlers_test
 
 import (
 	"bytes"
+	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -746,4 +748,193 @@ func TestHandleChore_WeightedSelection(t *testing.T) {
 	// Ensure total is correct
 	total := counts["Alice"] + counts["Bob"] + counts["Charlie"]
 	assert.Equal(t, iterations, total, "Total selections should equal iterations")
+}
+
+func TestSendCompletionToGroup_OneLinerFormat(t *testing.T) {
+	var sendMessageForm url.Values
+
+	client := NewTestClient(func(req *http.Request) *http.Response {
+		if strings.Contains(req.URL.String(), "getMe") {
+			return &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(bytes.NewBufferString(`{"ok":true, "result": {"id": 123456, "is_bot": true, "first_name": "TestBot"}}`)),
+				Header:     make(http.Header),
+			}
+		}
+		if strings.Contains(req.URL.String(), "sendMessage") {
+			bodyBytes, _ := io.ReadAll(req.Body)
+			form, _ := url.ParseQuery(string(bodyBytes))
+			sendMessageForm = form
+			return &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(bytes.NewBufferString(`{"ok":true, "result": {"message_id": 1}}`)),
+				Header:     make(http.Header),
+			}
+		}
+		return &http.Response{StatusCode: 404, Body: io.NopCloser(bytes.NewBufferString(`{}`)), Header: make(http.Header)}
+	})
+
+	bot, err := tgbotapi.NewBotAPIWithClient("TOKEN", tgbotapi.APIEndpoint, client)
+	assert.NoError(t, err)
+
+	crm := handlers.NewChoreReminderManager(bot, nil, 0, nil)
+	assignment := &handlers.ChoreAssignment{
+		UserID:      777,
+		UserName:    "Alice",
+		Description: "Clean coffee machine",
+		AssignedAt:  time.Now(),
+		GroupID:     -1001234567890,
+		ReminderID:  "reminder_123",
+	}
+
+	err = crm.SendCompletionToGroup(assignment)
+	assert.NoError(t, err)
+
+	// Verify the message is a one-liner format: ✅ <b>%s</b> completed: <i>%s</i>
+	messageText := sendMessageForm.Get("text")
+	assert.Contains(t, messageText, "✅")
+	assert.Contains(t, messageText, "<b>Alice</b>")
+	assert.Contains(t, messageText, "completed:")
+	assert.Contains(t, messageText, "<i>Clean coffee machine</i>")
+	// Ensure multi-line format is NOT present
+	assert.NotContains(t, messageText, "Chore Completed!")
+	assert.NotContains(t, messageText, "finished chore:")
+}
+
+func TestAssignChore_GroupAnnouncementOneLinerFormat(t *testing.T) {
+	var groupMessageForm url.Values
+	groupID := int64(-1001234567890)
+
+	client := NewTestClient(func(req *http.Request) *http.Response {
+		if strings.Contains(req.URL.String(), "getMe") {
+			return &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(bytes.NewBufferString(`{"ok":true, "result": {"id": 123456, "is_bot": true, "first_name": "TestBot"}}`)),
+				Header:     make(http.Header),
+			}
+		}
+		if strings.Contains(req.URL.String(), "sendMessage") {
+			bodyBytes, _ := io.ReadAll(req.Body)
+			form, _ := url.ParseQuery(string(bodyBytes))
+			// Only capture the message sent to the group, not the DM
+			if chatID := form.Get("chat_id"); chatID == fmt.Sprintf("%d", groupID) {
+				groupMessageForm = form
+			}
+			return &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(bytes.NewBufferString(`{"ok":true, "result": {"message_id": 1}}`)),
+				Header:     make(http.Header),
+			}
+		}
+		return &http.Response{StatusCode: 404, Body: io.NopCloser(bytes.NewBufferString(`{}`)), Header: make(http.Header)}
+	})
+
+	bot, err := tgbotapi.NewBotAPIWithClient("TOKEN", tgbotapi.APIEndpoint, client)
+	assert.NoError(t, err)
+
+	mockStore := new(mocks.MockStore)
+	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
+	mockScheduler := new(mocks.MockScheduler)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, groupID, 123, nil)
+	h.SetBot(bot)
+
+	activeUsers := []*store.User{
+		{ID: 10, TelegramUserID: 111, FirstName: "Alice", IsActive: true},
+	}
+	mockStore.On("ListActiveUsers", mock.Anything).Return(activeUsers, nil)
+	mockStore.On("GetOffDutyUsers", mock.Anything, mock.Anything).Return([]*store.User{}, nil)
+	mockStore.On("CreateChore", mock.Anything, mock.Anything).Return(nil)
+
+	message := &tgbotapi.Message{
+		Chat:     &tgbotapi.Chat{ID: 789}, // DM, not group
+		From:     &tgbotapi.User{ID: 123},
+		Text:     "/chore Clean kitchen",
+		Entities: []tgbotapi.MessageEntity{{Type: "bot_command", Offset: 0, Length: 6}},
+	}
+
+	msg, err := h.HandleChore(message)
+	assert.NoError(t, err)
+
+	// Check response to user
+	assert.Contains(t, msg.Text, "Assigned chore to")
+
+	// Verify the group announcement is the one-liner format: 🎯 <b>%s</b>: <i>%s</i>
+	groupAnnouncement := groupMessageForm.Get("text")
+	assert.Contains(t, groupAnnouncement, "🎯")
+	assert.Contains(t, groupAnnouncement, "<b>Alice</b>")
+	assert.Contains(t, groupAnnouncement, "<i>Clean kitchen</i>")
+	// Ensure multi-line format is NOT present
+	assert.NotContains(t, groupAnnouncement, "Random Chore Assignment")
+	assert.NotContains(t, groupAnnouncement, "has been assigned a chore:")
+}
+
+func TestProcessRecurringChores_GroupAnnouncementOneLinerFormat(t *testing.T) {
+	var groupMessageForm url.Values
+	groupID := int64(-1001234567890)
+
+	client := NewTestClient(func(req *http.Request) *http.Response {
+		if strings.Contains(req.URL.String(), "getMe") {
+			return &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(bytes.NewBufferString(`{"ok":true, "result": {"id": 123456, "is_bot": true, "first_name": "TestBot"}}`)),
+				Header:     make(http.Header),
+			}
+		}
+		if strings.Contains(req.URL.String(), "sendMessage") {
+			bodyBytes, _ := io.ReadAll(req.Body)
+			form, _ := url.ParseQuery(string(bodyBytes))
+			// Only capture the message sent to the group, not the DM
+			if chatID := form.Get("chat_id"); chatID == fmt.Sprintf("%d", groupID) {
+				groupMessageForm = form
+			}
+			return &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(bytes.NewBufferString(`{"ok":true, "result": {"message_id": 1}}`)),
+				Header:     make(http.Header),
+			}
+		}
+		return &http.Response{StatusCode: 404, Body: io.NopCloser(bytes.NewBufferString(`{}`)), Header: make(http.Header)}
+	})
+
+	bot, err := tgbotapi.NewBotAPIWithClient("TOKEN", tgbotapi.APIEndpoint, client)
+	assert.NoError(t, err)
+
+	mockStore := new(mocks.MockStore)
+	mockScheduler := new(mocks.MockScheduler)
+	h := handlers.NewWithAdminID(mockStore, mockScheduler, groupID, 123, nil)
+
+	// Mock GetActiveChores before SetBot (called by ChoreReminderManager)
+	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
+	h.SetBot(bot)
+
+	// Mock user lookup
+	activeUsers := []*store.User{
+		{ID: 10, TelegramUserID: 111, FirstName: "Alice", IsActive: true},
+	}
+	mockStore.On("ListActiveUsers", mock.Anything).Return(activeUsers, nil)
+	mockStore.On("GetOffDutyUsers", mock.Anything, mock.Anything).Return([]*store.User{}, nil)
+	mockStore.On("CreateChore", mock.Anything, mock.Anything).Return(nil)
+	mockStore.On("GetDueRecurringChores", mock.Anything, mock.Anything).Return([]*store.RecurringChore{
+		{
+			ID:          1,
+			Description: "Weekly cleaning",
+			Interval:    7,
+			NextRunAt:   time.Now().Add(-1 * time.Hour),
+			IsActive:    true,
+		},
+	}, nil)
+	mockStore.On("UpdateRecurringChoreNextRun", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+	// Process the recurring chores
+	err = h.ProcessRecurringChores(context.Background())
+	assert.NoError(t, err)
+
+	// Verify the group announcement is the one-liner format: 🎯 <b>%s</b>: <i>%s</i>
+	groupAnnouncement := groupMessageForm.Get("text")
+	assert.Contains(t, groupAnnouncement, "🎯")
+	assert.Contains(t, groupAnnouncement, "<b>Alice</b>")
+	assert.Contains(t, groupAnnouncement, "<i>Weekly cleaning</i>")
+	// Ensure multi-line format is NOT present
+	assert.NotContains(t, groupAnnouncement, "Periodic Chore Assignment")
+	assert.NotContains(t, groupAnnouncement, "has been assigned a chore:")
 }

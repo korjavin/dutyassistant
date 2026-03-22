@@ -27,10 +27,10 @@ Trim all channel-facing bot messages to be brief one-liners or compact summaries
 - Modify: `internal/telegram/handlers/chore.go`
 - Modify: `internal/telegram/handlers/chore_cron.go`
 
-- [ ] In SendCompletionToGroup: replace multi-line completion message with `✅ <b>%s</b> completed: <i>%s</i>` (name, desc)
-- [ ] In assignChore: replace groupText with `🎯 <b>%s</b>: <i>%s</i>` (name, desc)
-- [ ] In assignRecurringChore: replace groupText with same one-liner format
-- [ ] Run tests: `go test ./internal/telegram/handlers/...`
+- [x] In SendCompletionToGroup: replace multi-line completion message with `✅ <b>%s</b> completed: <i>%s</i>` (name, desc)
+- [x] In assignChore: replace groupText with `🎯 <b>%s</b>: <i>%s</i>` (name, desc)
+- [x] In assignRecurringChore: replace groupText with same one-liner format
+- [x] Run tests: `go test ./internal/telegram/handlers/...`
 
 ### Task 2: Slim down daily chore summary
 

@@ -202,12 +202,7 @@ func (crm *ChoreReminderManager) SendCompletionToGroup(assignment *ChoreAssignme
 	escapedName := html.EscapeString(assignment.UserName)
 	escapedDesc := html.EscapeString(assignment.Description)
 
-	completionMsg := fmt.Sprintf(
-		"✅ <b>Chore Completed!</b>\n\nUser <b>%s</b> finished chore:\n\n<i>%s</i>\n\n"+
-			"Let's check and be proud of them, or give them some admin assignment otherwise! 😊",
-		escapedName,
-		escapedDesc,
-	)
+	completionMsg := fmt.Sprintf("✅ <b>%s</b> completed: <i>%s</i>", escapedName, escapedDesc)
 
 	if crm.llmClient != nil {
 		completionMsg = crm.llmClient.RefineMessage(context.Background(), "celebrate chore completion, be proud of them", completionMsg)

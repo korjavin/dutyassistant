@@ -146,7 +146,7 @@ func (h *Handlers) assignRecurringChore(ctx context.Context, chore *store.Recurr
 	escapedDesc := html.EscapeString(chore.Description)
 
 	// Construct group announcement
-	groupText := fmt.Sprintf("🎲 <b>Periodic Chore Assignment</b>\n\n🎯 <b>%s</b> has been assigned a chore:\n\n<i>%s</i>", escapedName, escapedDesc)
+	groupText := fmt.Sprintf("🎯 <b>%s</b>: <i>%s</i>", escapedName, escapedDesc)
 
 	// Handle group announcement
 	if h.GroupID != 0 && h.Bot != nil {
