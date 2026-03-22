@@ -147,7 +147,11 @@ func (n *Notifier) checkAndNotify() {
 
 // SendDailyChoreSummary sends a daily summary of overdue chores.
 func SendDailyChoreSummary(ctx context.Context, bot *tgbotapi.BotAPI, db store.Store, groupID int64, isCron bool, timezone string) error {
-	todayStr := time.Now().UTC().Format("2006-01-02")
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		loc, _ = time.LoadLocation("Europe/Berlin")
+	}
+	todayStr := time.Now().In(loc).Format("2006-01-02")
 	if isCron {
 		lastSent, _ := db.GetLastChoreDigestDate(ctx)
 		if lastSent == todayStr {
@@ -163,8 +167,10 @@ func SendDailyChoreSummary(ctx context.Context, bot *tgbotapi.BotAPI, db store.S
 
 	if len(chores) == 0 {
 		if groupID != 0 {
-			msg := tgbotapi.NewMessage(groupID, "Просроченных chores нет ✅")
-			_, _ = bot.Send(msg)
+			msg := tgbotapi.NewMessage(groupID, "No overdue chores ✅")
+			if _, err := bot.Send(msg); err != nil {
+				return fmt.Errorf("failed to send 'no chores' message: %w", err)
+			}
 		}
 		if isCron {
 			if err := db.SetLastChoreDigestDate(ctx, todayStr); err != nil {
@@ -172,11 +178,6 @@ func SendDailyChoreSummary(ctx context.Context, bot *tgbotapi.BotAPI, db store.S
 			}
 		}
 		return nil
-	}
-
-	loc, err := time.LoadLocation(timezone)
-	if err != nil {
-		loc, _ = time.LoadLocation("Europe/Berlin")
 	}
 	now := time.Now().In(loc)
 	nowDate := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
@@ -215,7 +216,7 @@ func SendDailyChoreSummary(ctx context.Context, bot *tgbotapi.BotAPI, db store.S
 			today = append(today, choreLine)
 			// Escalation: Send personal DM reminder for chores that expired today
 			if isCron && chore.User != nil && chore.User.TelegramUserID != 0 {
-				dmText := fmt.Sprintf("⏰ <b>Напоминание о задаче</b>\n\nСрок выполнения задачи <i>%s</i> истек сегодня. Пожалуйста, завершите её как можно скорее!", html.EscapeString(chore.Description))
+				dmText := fmt.Sprintf("⏰ <b>Chore Reminder</b>\n\nThe deadline for <i>%s</i> expired today. Please complete it as soon as possible!", html.EscapeString(chore.Description))
 				msg := tgbotapi.NewMessage(chore.User.TelegramUserID, dmText)
 				msg.ParseMode = tgbotapi.ModeHTML
 				_, _ = bot.Send(msg)
