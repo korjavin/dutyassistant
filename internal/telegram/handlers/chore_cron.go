@@ -172,12 +172,12 @@ func (h *Handlers) assignRecurringChore(ctx context.Context, chore *store.Recurr
 		if _, err := h.Bot.Send(groupMsg); err != nil {
 			slog.Error(fmt.Sprintf("Failed to send recurring chore announcement to group %d: %v", h.GroupID, err))
 		} else {
-			slog.Info(fmt.Sprintf("Announced recurring chore in group."))
+			slog.Info("Announced recurring chore in group.")
 		}
 	} else if h.GroupID == 0 {
-		slog.Info(fmt.Sprintf("No group configured to announce recurring chore."))
+		slog.Info("No group configured to announce recurring chore.")
 	} else if h.Bot == nil {
-		slog.Info(fmt.Sprintf("Bot API not available for group announcement."))
+		slog.Info("Bot API not available for group announcement.")
 	}
 
 	// 6. Save chore to database to be visible in web UI and loaded on restart

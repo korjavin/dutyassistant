@@ -519,35 +519,35 @@ func TestSendDailyChoreSummary_WithOverdue(t *testing.T) {
 	// Note: SendDailyChoreSummary uses time.Now() directly, so we must use the actual current time
 	chores := []*store.Chore{
 		{
-			Description:  "Clean the kitchen",
-			DeadlineAt:   now.Add(-96 * time.Hour), // 4 days ago - critical
-			User:         &store.User{FirstName: "Alice", TelegramUserID: 111},
-			ReminderID:   "reminder1",
+			Description: "Clean the kitchen",
+			DeadlineAt:  now.Add(-96 * time.Hour), // 4 days ago - critical
+			User:        &store.User{FirstName: "Alice", TelegramUserID: 111},
+			ReminderID:  "reminder1",
 		},
 		{
-			Description:  "Take out trash",
-			DeadlineAt:   now.Add(-72 * time.Hour), // 3 days ago - critical
-			User:         &store.User{FirstName: "Bob", TelegramUserID: 222},
-			ReminderID:   "reminder2",
+			Description: "Take out trash",
+			DeadlineAt:  now.Add(-72 * time.Hour), // 3 days ago - critical
+			User:        &store.User{FirstName: "Bob", TelegramUserID: 222},
+			ReminderID:  "reminder2",
 		},
 		{
-			Description:  "Water plants",
-			DeadlineAt:   now.Add(-36 * time.Hour), // 1.5 days ago - medium
-			User:         &store.User{FirstName: "Charlie", TelegramUserID: 333},
-			ReminderID:   "reminder3",
+			Description: "Water plants",
+			DeadlineAt:  now.Add(-36 * time.Hour), // 1.5 days ago - medium
+			User:        &store.User{FirstName: "Charlie", TelegramUserID: 333},
+			ReminderID:  "reminder3",
 		},
 		{
-			Description:  "Fix door",
-			DeadlineAt:   now.Add(-24 * time.Hour), // 1 day ago - medium
-			User:         &store.User{FirstName: "Diana", TelegramUserID: 444},
-			ReminderID:   "reminder4",
+			Description: "Fix door",
+			DeadlineAt:  now.Add(-24 * time.Hour), // 1 day ago - medium
+			User:        &store.User{FirstName: "Diana", TelegramUserID: 444},
+			ReminderID:  "reminder4",
 		},
 		{
-			Description:  "Buy groceries",
+			Description: "Buy groceries",
 			// Set deadline to 10 AM today to ensure it's always on the same calendar day
-			DeadlineAt:   time.Date(now.Year(), now.Month(), now.Day(), 10, 0, 0, 0, loc),
-			User:         &store.User{FirstName: "Eve", TelegramUserID: 555},
-			ReminderID:   "reminder5",
+			DeadlineAt: time.Date(now.Year(), now.Month(), now.Day(), 10, 0, 0, 0, loc),
+			User:       &store.User{FirstName: "Eve", TelegramUserID: 555},
+			ReminderID: "reminder5",
 		},
 	}
 
