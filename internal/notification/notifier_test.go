@@ -506,6 +506,81 @@ func TestSendWeeklyChoreStats(t *testing.T) {
 	assert.Contains(t, sentText, "🥇 <b>Winner of the week: Alice</b>") // Winner
 }
 
+func TestSendDailyChoreSummary_WithOverdue(t *testing.T) {
+	mockStore := new(MockStore)
+	var sentText string
+	bot := setupBotAPI(t, func(form url.Values) { sentText = form.Get("text") })
+
+	loc, _ := time.LoadLocation("Europe/Berlin")
+	now := time.Now().In(loc)
+
+	// Create overdue chores in different categories
+	// Note: SendDailyChoreSummary uses time.Now() directly, so we must use the actual current time
+	chores := []*store.Chore{
+		{
+			Description:  "Clean the kitchen",
+			DeadlineAt:   now.Add(-96 * time.Hour), // 4 days ago - critical
+			User:         &store.User{FirstName: "Alice", TelegramUserID: 111},
+			ReminderID:   "reminder1",
+		},
+		{
+			Description:  "Take out trash",
+			DeadlineAt:   now.Add(-72 * time.Hour), // 3 days ago - critical
+			User:         &store.User{FirstName: "Bob", TelegramUserID: 222},
+			ReminderID:   "reminder2",
+		},
+		{
+			Description:  "Water plants",
+			DeadlineAt:   now.Add(-36 * time.Hour), // 1.5 days ago - medium
+			User:         &store.User{FirstName: "Charlie", TelegramUserID: 333},
+			ReminderID:   "reminder3",
+		},
+		{
+			Description:  "Fix door",
+			DeadlineAt:   now.Add(-24 * time.Hour), // 1 day ago - medium
+			User:         &store.User{FirstName: "Diana", TelegramUserID: 444},
+			ReminderID:   "reminder4",
+		},
+		{
+			Description:  "Buy groceries",
+			DeadlineAt:   now.Add(-2 * time.Hour), // earlier today - due today
+			User:         &store.User{FirstName: "Eve", TelegramUserID: 555},
+			ReminderID:   "reminder5",
+		},
+	}
+
+	mockStore.On("GetLastChoreDigestDate", mock.Anything).Return("", nil)
+	mockStore.On("GetOverdueChores", mock.Anything).Return(chores, nil)
+	mockStore.On("SetLastChoreDigestDate", mock.Anything, mock.Anything).Return(nil)
+
+	err := SendDailyChoreSummary(context.Background(), bot, mockStore, 123, true, "Europe/Berlin")
+	assert.NoError(t, err)
+
+	// Verify the new compact format
+	assert.Contains(t, sentText, "⚠️ <b>Overdue chores:</b>")
+	assert.Contains(t, sentText, "🔴 <b>Critical (3+d):</b>")
+	assert.Contains(t, sentText, "🟠 <b>Overdue (1-2d):</b>")
+	assert.Contains(t, sentText, "🟢 <b>Due today:</b>")
+
+	// Verify the new chore line format "deadline: DATE (+N d)"
+	assert.Contains(t, sentText, "deadline: ")
+	assert.Contains(t, sentText, "(+4 d)")
+	assert.Contains(t, sentText, "(+3 d)")
+	assert.Contains(t, sentText, "(+1 d)")
+
+	// Verify descriptions and users are present
+	assert.Contains(t, sentText, "Clean the kitchen")
+	assert.Contains(t, sentText, "Take out trash")
+	assert.Contains(t, sentText, "Water plants")
+	assert.Contains(t, sentText, "Fix door")
+	assert.Contains(t, sentText, "Buy groceries")
+	assert.Contains(t, sentText, "Alice")
+	assert.Contains(t, sentText, "Bob")
+	assert.Contains(t, sentText, "Charlie")
+	assert.Contains(t, sentText, "Diana")
+	assert.Contains(t, sentText, "Eve")
+}
+
 func setupBotAPI(t *testing.T, checkReq func(url.Values)) *tgbotapi.BotAPI {
 	client := NewTestClient(func(req *http.Request) *http.Response {
 		if strings.Contains(req.URL.String(), "sendMessage") {

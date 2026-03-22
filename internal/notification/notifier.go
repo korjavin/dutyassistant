@@ -205,7 +205,7 @@ func SendDailyChoreSummary(ctx context.Context, bot *tgbotapi.BotAPI, db store.S
 			userMention = "Unknown"
 		}
 
-		choreLine := fmt.Sprintf("• %s — %s (дедлайн: %s, просрочка: %d дн.)", html.EscapeString(chore.Description), userMention, deadline.Format("02.01.2006"), daysOverdue)
+		choreLine := fmt.Sprintf("• %s — %s (deadline: %s (+%d d))", html.EscapeString(chore.Description), userMention, deadline.Format("02.01.2006"), daysOverdue)
 
 		if daysOverdue >= 3 {
 			critical = append(critical, choreLine)
@@ -225,10 +225,10 @@ func SendDailyChoreSummary(ctx context.Context, bot *tgbotapi.BotAPI, db store.S
 
 	if groupID != 0 {
 		var summaryBuilder strings.Builder
-		summaryBuilder.WriteString("📊 <b>Сводка по просроченным chores</b>\n\n")
+		summaryBuilder.WriteString("⚠️ <b>Overdue chores:</b>\n\n")
 
 		if len(critical) > 0 {
-			summaryBuilder.WriteString("🔴 <b>Критично (3+ дней):</b>\n")
+			summaryBuilder.WriteString("🔴 <b>Critical (3+d):</b>\n")
 			for _, line := range critical {
 				summaryBuilder.WriteString(line + "\n")
 			}
@@ -236,7 +236,7 @@ func SendDailyChoreSummary(ctx context.Context, bot *tgbotapi.BotAPI, db store.S
 		}
 
 		if len(medium) > 0 {
-			summaryBuilder.WriteString("🟠 <b>Средне (1–2 дня):</b>\n")
+			summaryBuilder.WriteString("🟠 <b>Overdue (1-2d):</b>\n")
 			for _, line := range medium {
 				summaryBuilder.WriteString(line + "\n")
 			}
@@ -244,7 +244,7 @@ func SendDailyChoreSummary(ctx context.Context, bot *tgbotapi.BotAPI, db store.S
 		}
 
 		if len(today) > 0 {
-			summaryBuilder.WriteString("🟢 <b>Истек срок сегодня:</b>\n")
+			summaryBuilder.WriteString("🟢 <b>Due today:</b>\n")
 			for _, line := range today {
 				summaryBuilder.WriteString(line + "\n")
 			}

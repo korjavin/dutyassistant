@@ -37,10 +37,10 @@ Trim all channel-facing bot messages to be brief one-liners or compact summaries
 **Files:**
 - Modify: `internal/notification/notifier.go`
 
-- [ ] Shorten section header to `⚠️ Overdue chores:`
-- [ ] Shorten category headers: `🔴 Critical (3+d):`, `🟠 Overdue (1-2d):`, `🟢 Due today:`
-- [ ] Shorten each chore line: remove verbose label prefixes, use `deadline: DATE (+N d)` format
-- [ ] Run tests: `go test ./internal/notification/...`
+- [x] Shorten section header to `⚠️ Overdue chores:`
+- [x] Shorten category headers: `🔴 Critical (3+d):`, `🟠 Overdue (1-2d):`, `🟢 Due today:`
+- [x] Shorten each chore line: remove verbose label prefixes, use `deadline: DATE (+N d)` format
+- [x] Run tests: `go test ./internal/notification/...`
 
 ### Task 3: Slim down weekly stats
 
