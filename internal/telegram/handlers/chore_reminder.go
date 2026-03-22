@@ -202,11 +202,9 @@ func (crm *ChoreReminderManager) SendCompletionToGroup(assignment *ChoreAssignme
 	escapedName := html.EscapeString(assignment.UserName)
 	escapedDesc := html.EscapeString(assignment.Description)
 
+	// Use compact format for completion messages without LLM refinement
+	// to ensure they stay brief and reduce channel noise
 	completionMsg := fmt.Sprintf("✅ <b>%s</b> completed: <i>%s</i>", escapedName, escapedDesc)
-
-	if crm.llmClient != nil {
-		completionMsg = crm.llmClient.RefineMessage(context.Background(), "celebrate chore completion, be proud of them", completionMsg)
-	}
 
 	msg := tgbotapi.NewMessage(assignment.GroupID, completionMsg)
 	msg.ParseMode = tgbotapi.ModeHTML

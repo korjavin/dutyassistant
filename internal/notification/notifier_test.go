@@ -544,7 +544,8 @@ func TestSendDailyChoreSummary_WithOverdue(t *testing.T) {
 		},
 		{
 			Description:  "Buy groceries",
-			DeadlineAt:   now.Add(-2 * time.Hour), // earlier today - due today
+			// Set deadline to 10 AM today to ensure it's always on the same calendar day
+			DeadlineAt:   time.Date(now.Year(), now.Month(), now.Day(), 10, 0, 0, 0, loc),
 			User:         &store.User{FirstName: "Eve", TelegramUserID: 555},
 			ReminderID:   "reminder5",
 		},
