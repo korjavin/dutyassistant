@@ -442,7 +442,7 @@ func TestScheduler_ClearOffDuty(t *testing.T) {
 	// First set off-duty
 	start := time.Now()
 	end := start.Add(7 * 24 * time.Hour)
-	scheduler.SetOffDuty(ctx, 1, start, end)
+	_ = scheduler.SetOffDuty(ctx, 1, start, end)
 
 	// Then clear it
 	err := scheduler.ClearOffDuty(ctx, 1)
@@ -558,7 +558,6 @@ func (m *mockStore) SetLastChoreDigestDate(ctx context.Context, date string) err
 func (m *mockStore) GetChoreByID(ctx context.Context, id int64) (*store.Chore, error) {
 	return nil, nil
 }
-
 
 func (m *mockStore) UpdateChoreUserID(ctx context.Context, choreID int64, newUserID int64) error {
 	return nil
