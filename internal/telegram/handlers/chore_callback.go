@@ -120,6 +120,16 @@ func (h *Handlers) HandleChoreListDoneCallback(q *tgbotapi.CallbackQuery) (tgbot
 		return edit, nil
 	}
 
+	// Check if already completed or cancelled
+	if chore.CompletedAt != nil || chore.CancelledAt != nil {
+		edit := tgbotapi.NewEditMessageText(
+			q.Message.Chat.ID,
+			q.Message.MessageID,
+			"❌ This chore has already been completed or cancelled.",
+		)
+		return edit, nil
+	}
+
 	// Get user
 	user, err := h.Store.GetUserByTelegramID(ctx, q.From.ID)
 	if err != nil || user == nil {

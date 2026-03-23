@@ -326,7 +326,7 @@ func SendWeeklyChoreStats(ctx context.Context, bot *tgbotapi.BotAPI, db store.St
 		sb.WriteString("No overdue chores recorded.\n")
 	} else {
 		for i, chore := range topOverdue {
-			fmt.Fprintf(&sb, "%d. %s (%d times)\n", i+1, html.EscapeString(chore.Description), chore.Count)
+			sb.WriteString(fmt.Sprintf("%d. %s (%d times)\n", i+1, html.EscapeString(chore.Description), chore.Count))
 		}
 	}
 	sb.WriteString("\n")
@@ -336,12 +336,12 @@ func SendWeeklyChoreStats(ctx context.Context, bot *tgbotapi.BotAPI, db store.St
 		sb.WriteString("No completed chores recorded this week.\n")
 	} else {
 		for i, stat := range weeklyStats {
-			fmt.Fprintf(&sb, "%d. %s — %d done\n", i+1, html.EscapeString(stat.Name), stat.CompletedCount)
+			sb.WriteString(fmt.Sprintf("%d. %s — %d done\n", i+1, html.EscapeString(stat.Name), stat.CompletedCount))
 		}
 
 		winner := determineWinner(weeklyStats)
 		if winner != nil {
-			fmt.Fprintf(&sb, "🥇 Winner: %s\n", html.EscapeString(winner.Name))
+			sb.WriteString(fmt.Sprintf("🥇 Winner: %s\n", html.EscapeString(winner.Name)))
 		}
 	}
 

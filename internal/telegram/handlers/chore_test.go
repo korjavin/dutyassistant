@@ -234,6 +234,66 @@ func TestHandleChoreListDoneCallback_NotFound(t *testing.T) {
 	assert.Contains(t, edit.Text, "not found")
 }
 
+func TestHandleChoreListDoneCallback_AlreadyCompleted(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
+	h := handlers.NewWithAdminID(mockStore, nil, 0, 123, nil)
+
+	now := time.Now()
+	chore := &store.Chore{
+		ID:          1,
+		UserID:      2,
+		Description: "Take out the trash",
+		ReminderID:  "rem_1",
+		CompletedAt: &now,
+	}
+	mockStore.On("GetChoreByID", mock.Anything, int64(1)).Return(chore, nil)
+
+	callbackQuery := &tgbotapi.CallbackQuery{
+		ID:   "callback_list_4",
+		Data: "chore_list_done:1",
+		From: &tgbotapi.User{ID: 111},
+		Message: &tgbotapi.Message{
+			Chat:      &tgbotapi.Chat{ID: 111},
+			MessageID: 999,
+		},
+	}
+
+	edit, err := h.HandleChoreListDoneCallback(callbackQuery)
+	assert.NoError(t, err)
+	assert.Contains(t, edit.Text, "already been completed or cancelled")
+}
+
+func TestHandleChoreListDoneCallback_AlreadyCancelled(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
+	h := handlers.NewWithAdminID(mockStore, nil, 0, 123, nil)
+
+	now := time.Now()
+	chore := &store.Chore{
+		ID:          1,
+		UserID:      2,
+		Description: "Take out the trash",
+		ReminderID:  "rem_1",
+		CancelledAt: &now,
+	}
+	mockStore.On("GetChoreByID", mock.Anything, int64(1)).Return(chore, nil)
+
+	callbackQuery := &tgbotapi.CallbackQuery{
+		ID:   "callback_list_5",
+		Data: "chore_list_done:1",
+		From: &tgbotapi.User{ID: 111},
+		Message: &tgbotapi.Message{
+			Chat:      &tgbotapi.Chat{ID: 111},
+			MessageID: 999,
+		},
+	}
+
+	edit, err := h.HandleChoreListDoneCallback(callbackQuery)
+	assert.NoError(t, err)
+	assert.Contains(t, edit.Text, "already been completed or cancelled")
+}
+
 func TestHandleChore_NonAdmin_UserNotRegistered(t *testing.T) {
 	mockStore := new(mocks.MockStore)
 	h := handlers.New(mockStore, nil, 0, nil)
