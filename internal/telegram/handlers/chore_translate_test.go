@@ -195,7 +195,7 @@ func TestHandleChoreTranslate_LLMErrorFallback(t *testing.T) {
 	// Mock server that returns an error
 	errorServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Internal Server Error"))
+		_, _ = w.Write([]byte("Internal Server Error"))
 	}))
 	defer errorServer.Close()
 
