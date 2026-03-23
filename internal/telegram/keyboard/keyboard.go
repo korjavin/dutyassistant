@@ -145,7 +145,7 @@ func Calendar(t time.Time, duties []*store.Duty, allUsers []*store.User) tgbotap
 					// Show day number and user number circle
 					userNum := userNumbers[duty.UserID]
 					var numberCircle string
-					if userNum > 0 && userNum <= len(numberCircles) {
+					if userNum > 0 && userNum-1 < len(numberCircles) {
 						numberCircle = numberCircles[userNum-1]
 					} else {
 						numberCircle = fmt.Sprintf("%d", userNum)
@@ -185,7 +185,7 @@ func Calendar(t time.Time, duties []*store.Duty, allUsers []*store.User) tgbotap
 	for idx, user := range userList {
 		userNum := idx + 1
 		var numberCircle string
-		if userNum <= len(numberCircles) {
+		if userNum > 0 && userNum-1 < len(numberCircles) {
 			numberCircle = numberCircles[userNum-1]
 		} else {
 			numberCircle = fmt.Sprintf("%d", userNum)

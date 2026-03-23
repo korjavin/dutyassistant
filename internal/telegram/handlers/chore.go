@@ -150,7 +150,7 @@ func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 		}
 		loc, err := time.LoadLocation(tz)
 		if err != nil {
-			slog.Error(fmt.Sprintf("Failed to load %s location: %v", tz, err))
+			slog.Error("Failed to load timezone location", "tz", tz)
 			loc = time.Local
 		}
 
