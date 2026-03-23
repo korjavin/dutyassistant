@@ -388,7 +388,7 @@ func (m *MockStore) GetChoreByID(ctx context.Context, id int64) (*store.Chore, e
 	return nil, nil
 }
 
-func (m *MockStore) UpdateChoreUserID(ctx context.Context, choreID int64, newUserID int64) error {
+func (m *MockStore) UpdateChoreUserID(ctx context.Context, choreID, newUserID int64) error {
 	return nil
 }
 
