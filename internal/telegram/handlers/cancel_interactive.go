@@ -169,7 +169,7 @@ func (h *Handlers) HandleCancelAssignmentConfirmCallback(q *tgbotapi.CallbackQue
 		if parseErr == nil {
 			actionErr = h.Store.CancelRecurringChore(context.Background(), int64(id))
 			if actionErr == nil {
-				msgText = "✅ Periodic chore cancelled successfully."
+					msgText = "✅ Periodic chore cancelled successfully."
 			}
 		} else {
 			actionErr = parseErr

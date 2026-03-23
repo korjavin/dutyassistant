@@ -3,12 +3,11 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"github.com/korjavin/dutyassistant/internal/notification"
 	"html"
 	"log/slog"
 	"os"
 	"strings"
-
-	"github.com/korjavin/dutyassistant/internal/notification"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/korjavin/dutyassistant/internal/store"
