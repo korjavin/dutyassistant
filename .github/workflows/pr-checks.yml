@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -27,7 +29,7 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.11.4
-          args: --timeout=5m
+          args: --timeout=5m --new-from-rev=origin/master
 
       - name: Run tests
         run: go test -mod=vendor -race -count=1 ./...
