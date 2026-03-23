@@ -2,10 +2,11 @@ package handlers
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"html"
 	"log/slog"
-	"math/rand"
+	"math/big"
 	"os"
 	"regexp"
 	"strconv"
@@ -23,7 +24,7 @@ import (
 // It assigns a random active user to the described chore.
 // If the /<N>d suffix is provided, it sets up a recurring chore.
 // If no description is provided, it enters interactive mode.
-func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
+func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 	// 1. Admin check
 	isAdmin, err := h.checkAdmin(m.From.ID)
 
@@ -45,9 +46,6 @@ func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 			return tgbotapi.NewMessage(m.Chat.ID, "🎉 You have no active chores right now!"), nil
 		}
 
-		var sb strings.Builder
-		sb.WriteString("📋 <b>Your Active Chores:</b>\n\n")
-
 		tz := os.Getenv("CHORE_TIMEZONE")
 		if tz == "" {
 			tz = "Europe/Berlin"
@@ -57,14 +55,29 @@ func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 			loc = time.Local
 		}
 
-		for i, chore := range chores {
+		for _, chore := range chores {
 			assignedAt := chore.AssignedAt.In(loc).Format("2006-01-02 15:04")
-			sb.WriteString(fmt.Sprintf("%d. <i>%s</i> (Assigned: %s)\n", i+1, html.EscapeString(chore.Description), assignedAt))
+			text := fmt.Sprintf("📋 <b>Active Chore</b>\n\n<i>%s</i>\n\nAssigned: %s", html.EscapeString(chore.Description), assignedAt)
+
+			msg := tgbotapi.NewMessage(m.Chat.ID, text)
+			msg.ParseMode = tgbotapi.ModeHTML
+
+			// Add inline keyboard with a single "Mark as Done" button
+			keyboard := tgbotapi.NewInlineKeyboardMarkup(
+				tgbotapi.NewInlineKeyboardRow(
+					tgbotapi.NewInlineKeyboardButtonData("✅ Mark as Done", fmt.Sprintf("chore_list_done:%d", chore.ID)),
+				),
+			)
+			msg.ReplyMarkup = keyboard
+
+			if h.Bot != nil {
+				if _, err := h.Bot.Send(msg); err != nil {
+					slog.Error(fmt.Sprintf("Failed to send chore message for chore %d: %v", chore.ID, err))
+				}
+			}
 		}
 
-		msg := tgbotapi.NewMessage(m.Chat.ID, sb.String())
-		msg.ParseMode = tgbotapi.ModeHTML
-		return msg, nil
+		return nil, nil
 	}
 
 	args := strings.TrimSpace(m.CommandArguments())
@@ -121,7 +134,7 @@ func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 		}
 		loc, err := time.LoadLocation(tz)
 		if err != nil {
-			slog.Error(fmt.Sprintf("Failed to load %s location: %v", tz, err))
+			slog.Error("Failed to load location", "tz", tz, "error", err) //nolint:gosec // G706 - structured logging is safe, tz is from env var
 			loc = time.Local
 		}
 
@@ -286,7 +299,7 @@ func (h *Handlers) assignChore(chatID int64, fromUserID int64, description strin
 	var weightedCandidates []weightedUser
 	var totalWeight float64
 
-	slog.Info(fmt.Sprintf("[CHORE] Starting weighted selection for chore assignment"))
+	slog.Info("[CHORE] Starting weighted selection for chore assignment")
 	slog.Info(fmt.Sprintf("[CHORE] Number of candidates after filtering: %d", len(candidates)))
 
 	for _, u := range candidates {
@@ -305,9 +318,22 @@ func (h *Handlers) assignChore(chatID int64, fromUserID int64, description strin
 
 	slog.Info(fmt.Sprintf("[CHORE] Total weight: %.3f", totalWeight))
 
-	// Select user
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	target := r.Float64() * totalWeight
+	// Select user using crypto/rand
+	// Convert total weight to int for big.Int (multiply by 1000 for precision)
+	maxWeightInt := int64(totalWeight * 1000)
+	if maxWeightInt <= 0 {
+		maxWeightInt = 1
+	}
+
+	randomBigInt, err := rand.Int(rand.Reader, big.NewInt(maxWeightInt))
+	var target float64
+	if err != nil {
+		slog.Error(fmt.Sprintf("[CHORE] Error generating random number: %v", err))
+		target = 0
+	} else {
+		target = float64(randomBigInt.Int64()) / 1000.0
+	}
+
 	slog.Info(fmt.Sprintf("[CHORE] Random target value: %.3f (0 to %.3f)", target, totalWeight))
 
 	var selectedUser *store.User
@@ -324,9 +350,14 @@ func (h *Handlers) assignChore(chatID int64, fromUserID int64, description strin
 	}
 	// Fallback (should not happen mathematically if totalWeight > 0)
 	if selectedUser == nil && len(candidates) > 0 {
-		slog.Warn(fmt.Sprintf("[CHORE] WARNING: Fallback selection triggered (this should not happen)"))
+		slog.Warn("[CHORE] WARNING: Fallback selection triggered (this should not happen)")
 		// Just pick randomly
-		selectedUser = candidates[r.Intn(len(candidates))]
+		idx, err := rand.Int(rand.Reader, big.NewInt(int64(len(candidates))))
+		if err != nil {
+			selectedUser = candidates[0]
+		} else {
+			selectedUser = candidates[idx.Int64()]
+		}
 		slog.Info(fmt.Sprintf("[CHORE] Fallback selected: %s (ID: %d)", selectedUser.FirstName, selectedUser.ID))
 	}
 

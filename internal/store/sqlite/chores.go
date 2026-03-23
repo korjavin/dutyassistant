@@ -62,6 +62,7 @@ func (s *SQLiteStore) GetChoreByID(ctx context.Context, id int64) (*store.Chore,
 }
 
 // UpdateChoreUserID reassigns a chore to a different user.
+
 func (s *SQLiteStore) UpdateChoreUserID(ctx context.Context, choreID int64, newUserID int64) error {
 	query := `UPDATE chores SET user_id = ? WHERE id = ? AND completed_at IS NULL AND cancelled_at IS NULL`
 	res, err := s.db.ExecContext(ctx, query, newUserID, choreID)
@@ -92,7 +93,7 @@ func (s *SQLiteStore) GetActiveChores(ctx context.Context) ([]*store.Chore, erro
 	if err != nil {
 		return nil, fmt.Errorf("could not query active chores: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	return scanChoreRowsWithUser(rows)
 }
@@ -111,7 +112,7 @@ func (s *SQLiteStore) GetActiveChoresByUserID(ctx context.Context, userID int64)
 	if err != nil {
 		return nil, fmt.Errorf("could not query active chores for user: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	return scanChoreRowsWithUser(rows)
 }
@@ -131,7 +132,7 @@ func (s *SQLiteStore) GetOverdueChores(ctx context.Context) ([]*store.Chore, err
 	if err != nil {
 		return nil, fmt.Errorf("could not query overdue chores: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	return scanChoreRowsWithUser(rows)
 }
@@ -197,7 +198,7 @@ func (s *SQLiteStore) GetTopOverdueChores(ctx context.Context, limit int) ([]*st
 	if err != nil {
 		return nil, fmt.Errorf("could not query top overdue chores: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var chores []*store.ChoreStat
 	for rows.Next() {
@@ -226,7 +227,7 @@ func (s *SQLiteStore) GetTopCompletedChoresUsers(ctx context.Context, limit int)
 	if err != nil {
 		return nil, fmt.Errorf("could not query top completed chores users: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var stats []*store.UserChoreStat
 	for rows.Next() {
@@ -258,7 +259,7 @@ func (s *SQLiteStore) GetUserWeeklyStats(ctx context.Context, since time.Time) (
 	if err != nil {
 		return nil, fmt.Errorf("could not query user weekly stats: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var stats []*store.UserWeeklyStats
 	for rows.Next() {

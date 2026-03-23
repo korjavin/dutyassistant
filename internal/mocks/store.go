@@ -249,7 +249,7 @@ func (m *MockStore) GetChoreByID(ctx context.Context, id int64) (*store.Chore, e
 	return args.Get(0).(*store.Chore), args.Error(1)
 }
 
-func (m *MockStore) UpdateChoreUserID(ctx context.Context, choreID int64, newUserID int64) error {
+func (m *MockStore) UpdateChoreUserID(ctx context.Context, choreID, newUserID int64) error {
 	args := m.Called(ctx, choreID, newUserID)
 	return args.Error(0)
 }

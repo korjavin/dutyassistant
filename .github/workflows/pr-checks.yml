@@ -15,7 +15,9 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -24,11 +26,10 @@ jobs:
           cache: true
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v9
         with:
-          version: latest
-          install-mode: goinstall
-          args: --timeout=5m
+          version: v2.11.4
+          args: --timeout=5m --new-from-rev=origin/master
 
       - name: Run tests
         run: go test -mod=vendor -race -count=1 ./...

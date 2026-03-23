@@ -34,7 +34,7 @@ func (s *SQLiteStore) SaveDailyParticipantRatings(ctx context.Context, date time
 	if err != nil {
 		return fmt.Errorf("could not prepare participant ratings statement: %w", err)
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }()
 
 	if _, err := tx.ExecContext(ctx, `DELETE FROM participant_ratings WHERE rating_date = ?`, dateStr); err != nil {
 		return fmt.Errorf("could not clear participant ratings for %s: %w", dateStr, err)
@@ -74,7 +74,7 @@ func (s *SQLiteStore) GetParticipantsForRating(ctx context.Context) ([]*store.Us
 	if err != nil {
 		return nil, fmt.Errorf("could not query participants for rating: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var users []*store.User
 	for rows.Next() {
@@ -113,7 +113,7 @@ func (s *SQLiteStore) GetMonthlyParticipantTotals(ctx context.Context, year int,
 	if err != nil {
 		return nil, fmt.Errorf("could not query monthly participant totals: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var totals []*store.ParticipantMonthlyTotal
 	for rows.Next() {
@@ -141,7 +141,7 @@ func (s *SQLiteStore) getParticipantRatingsBetween(ctx context.Context, start ti
 	if err != nil {
 		return nil, fmt.Errorf("could not query participant ratings: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var ratings []*store.ParticipantDailyRating
 	for rows.Next() {

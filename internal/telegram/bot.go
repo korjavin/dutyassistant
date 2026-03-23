@@ -85,7 +85,6 @@ func (b *Bot) checkAccess(userID int64) bool {
 			UserID: userID,
 		},
 	})
-
 	if err != nil {
 		slog.Info(fmt.Sprintf("Error checking group membership for user %d: %v", userID, err), slog.String("component", "access"))
 		return false
@@ -296,6 +295,8 @@ func (b *Bot) handleCallbackQuery(q *tgbotapi.CallbackQuery) (tgbotapi.Chattable
 		return b.handlers.HandleVacationCallback(q)
 	case "chore_done":
 		return b.handlers.HandleChoreDoneCallback(q)
+	case "chore_list_done":
+		return b.handlers.HandleChoreListDoneCallback(q)
 	case "chore_remind":
 		return b.handlers.HandleChoreRemindCallback(q)
 	case "complete_chore":

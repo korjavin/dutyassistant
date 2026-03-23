@@ -2,10 +2,11 @@ package handlers
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"html"
 	"log/slog"
-	"math/rand"
+	"math/big"
 	"sync"
 	"time"
 
@@ -49,8 +50,11 @@ func NewChoreReminderManager(bot *tgbotapi.BotAPI, db store.Store, groupID int64
 // Uses nanosecond precision + random component to prevent collisions
 func GenerateReminderID(userID int64, timestamp time.Time) string {
 	// Add random 6-digit suffix to prevent collisions even if called at exact same nanosecond
-	randomSuffix := rand.Intn(1000000)
-	return fmt.Sprintf("%d_%d_%06d", userID, timestamp.UnixNano(), randomSuffix)
+	randomSuffix, err := rand.Int(rand.Reader, big.NewInt(1000000))
+	if err != nil {
+		randomSuffix = big.NewInt(0)
+	}
+	return fmt.Sprintf("%d_%d_%06d", userID, timestamp.UnixNano(), randomSuffix.Int64())
 }
 
 // SendInitialDM sends the initial DM to the assigned user and schedules the first reminder
@@ -105,7 +109,7 @@ func (crm *ChoreReminderManager) SendReminderWithButtons(reminderID string) {
 	}
 
 	if crm.bot == nil {
-		slog.Info(fmt.Sprintf("Bot not configured, cannot send reminder"))
+		slog.Info("Bot not configured, cannot send reminder")
 		return
 	}
 
@@ -194,7 +198,7 @@ func (crm *ChoreReminderManager) SendCompletionToGroup(assignment *ChoreAssignme
 	}
 
 	if assignment.GroupID == 0 {
-		slog.Info(fmt.Sprintf("No group configured for chore completion announcement"))
+		slog.Info("No group configured for chore completion announcement")
 		return nil
 	}
 

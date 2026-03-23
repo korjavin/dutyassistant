@@ -68,19 +68,19 @@ func (n *Notifier) Start() {
 
 // Stop gracefully stops the cron scheduler.
 func (n *Notifier) Stop() {
-	slog.Info(fmt.Sprint("Stopping notifier..."))
+	slog.Info("Stopping notifier...")
 	if n.cron != nil {
 		ctx := n.cron.Stop()
 		<-ctx.Done()
 	}
-	slog.Info(fmt.Sprint("Notifier stopped."))
+	slog.Info("Notifier stopped.")
 }
 
 // checkAndNotify is the core function executed by the cron job.
 // It checks for tomorrow's duty, assigns one if needed, and sends notifications.
 func (n *Notifier) checkAndNotify() {
 	ctx := context.Background()
-	slog.Info(fmt.Sprint("Cron job triggered: checking for tomorrow's duty."))
+	slog.Info("Cron job triggered: checking for tomorrow's duty.")
 
 	// Determine tomorrow's date in the service's configured timezone.
 	nowInLocation := n.now().In(n.location)
@@ -301,19 +301,6 @@ func determineWinner(stats []*store.UserWeeklyStats) *store.UserWeeklyStats {
 	return winner
 }
 
-func formatDuration(seconds float64) string {
-	d := time.Duration(seconds) * time.Second
-	h := int(d.Hours())
-	m := int(d.Minutes()) % 60
-	s := int(d.Seconds()) % 60
-	if h > 0 {
-		return fmt.Sprintf("%dh%02dm", h, m)
-	} else if m > 0 {
-		return fmt.Sprintf("%dm", m)
-	}
-	return fmt.Sprintf("%ds", s)
-}
-
 // SendWeeklyChoreStats sends a weekly statistics report of chores.
 func SendWeeklyChoreStats(ctx context.Context, bot *tgbotapi.BotAPI, db store.Store, groupID int64) error {
 	if groupID == 0 {
@@ -339,7 +326,7 @@ func SendWeeklyChoreStats(ctx context.Context, bot *tgbotapi.BotAPI, db store.St
 		sb.WriteString("No overdue chores recorded.\n")
 	} else {
 		for i, chore := range topOverdue {
-			sb.WriteString(fmt.Sprintf("%d. %s (%d times)\n", i+1, html.EscapeString(chore.Description), chore.Count))
+			fmt.Fprintf(&sb, "%d. %s (%d times)\n", i+1, html.EscapeString(chore.Description), chore.Count)
 		}
 	}
 	sb.WriteString("\n")
@@ -349,12 +336,12 @@ func SendWeeklyChoreStats(ctx context.Context, bot *tgbotapi.BotAPI, db store.St
 		sb.WriteString("No completed chores recorded this week.\n")
 	} else {
 		for i, stat := range weeklyStats {
-			sb.WriteString(fmt.Sprintf("%d. %s — %d done\n", i+1, html.EscapeString(stat.Name), stat.CompletedCount))
+			fmt.Fprintf(&sb, "%d. %s — %d done\n", i+1, html.EscapeString(stat.Name), stat.CompletedCount)
 		}
 
 		winner := determineWinner(weeklyStats)
 		if winner != nil {
-			sb.WriteString(fmt.Sprintf("🥇 Winner: %s\n", html.EscapeString(winner.Name)))
+			fmt.Fprintf(&sb, "🥇 Winner: %s\n", html.EscapeString(winner.Name))
 		}
 	}
 

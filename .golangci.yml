@@ -1,10 +1,10 @@
+version: "2"
+
 run:
   timeout: 5m
 
 linters:
-  enable-all: false
   enable:
-    - gofumpt
     - gosec
     - errcheck
     - govet
@@ -13,18 +13,6 @@ linters:
     - misspell
     - nolintlint
 
-linters-settings:
-  gofumpt:
-    extra-rules: true
-  gosec:
-    # No exclusions, standard ruleset
-    includes: []
-    excludes: []
-
-issues:
-  exclude-rules:
-    # Suppress known false positives
-    - path: _test\.go
-      linters:
-        - errcheck
-        - gosec
+formatters:
+  enable:
+    - gofumpt

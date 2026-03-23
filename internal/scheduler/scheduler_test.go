@@ -442,7 +442,7 @@ func TestScheduler_ClearOffDuty(t *testing.T) {
 	// First set off-duty
 	start := time.Now()
 	end := start.Add(7 * 24 * time.Hour)
-	scheduler.SetOffDuty(ctx, 1, start, end)
+	_ = scheduler.SetOffDuty(ctx, 1, start, end)
 
 	// Then clear it
 	err := scheduler.ClearOffDuty(ctx, 1)

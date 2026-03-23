@@ -164,7 +164,7 @@ func (c *Client) TranslateToEnglish(ctx context.Context, text string) (string, e
 		slog.Error(fmt.Sprintf("LLM TranslateToEnglish Do error: %v", err))
 		return text, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
@@ -242,7 +242,7 @@ If formatting text, ONLY use Telegram-supported HTML tags (<b>, <i>, <a>, <code>
 		slog.Error(fmt.Sprintf("LLM RefineMessage Do error: %v", err))
 		return vanilla
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
@@ -257,7 +257,7 @@ If formatting text, ONLY use Telegram-supported HTML tags (<b>, <i>, <a>, <code>
 	}
 
 	if len(chatResp.Choices) == 0 {
-		slog.Info(fmt.Sprintf("LLM RefineMessage no choices returned"))
+		slog.Info("LLM RefineMessage no choices returned")
 		return vanilla
 	}
 

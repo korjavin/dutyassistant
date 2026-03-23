@@ -2,8 +2,9 @@ package scheduler
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
-	"math/rand"
+	"math/big"
 	"time"
 
 	"github.com/korjavin/dutyassistant/internal/store"
@@ -203,7 +204,11 @@ func (s *Scheduler) selectUserWithBalancing(ctx context.Context, users []*store.
 	}
 
 	// Randomly select from users with max queue count for fairness
-	return maxQueueUsers[rand.Intn(len(maxQueueUsers))]
+	idx, err := rand.Int(rand.Reader, big.NewInt(int64(len(maxQueueUsers))))
+	if err != nil {
+		return maxQueueUsers[0]
+	}
+	return maxQueueUsers[idx.Int64()]
 }
 
 // selectRoundRobinUser selects the user with the least completed duties in the last 14 days.
@@ -227,7 +232,11 @@ func (s *Scheduler) selectRoundRobinUser(ctx context.Context, users []*store.Use
 	duties, err := s.store.GetCompletedDutiesInRange(ctx, start, today)
 	if err != nil {
 		// If error, randomize selection among all available users
-		return users[rand.Intn(len(users))]
+		idx, err := rand.Int(rand.Reader, big.NewInt(int64(len(users))))
+		if err != nil {
+			return users[0]
+		}
+		return users[idx.Int64()]
 	}
 
 	// Count duties per user (excluding admin assignments)
@@ -258,10 +267,18 @@ func (s *Scheduler) selectRoundRobinUser(ctx context.Context, users []*store.Use
 
 	// Randomly select from candidates for fairness
 	if len(candidateUsers) == 0 {
-		return users[rand.Intn(len(users))]
+		idx, err := rand.Int(rand.Reader, big.NewInt(int64(len(users))))
+		if err != nil {
+			return users[0]
+		}
+		return users[idx.Int64()]
 	}
 
-	return candidateUsers[rand.Intn(len(candidateUsers))]
+	idx, err := rand.Int(rand.Reader, big.NewInt(int64(len(candidateUsers))))
+	if err != nil {
+		return candidateUsers[0]
+	}
+	return candidateUsers[idx.Int64()]
 }
 
 // assignDuty creates a new duty assignment.
