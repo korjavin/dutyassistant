@@ -9,6 +9,7 @@
 
 # Dependency directories
 node_modules/
+vendor/
 
 # IDE and editor files
 .idea/
