@@ -1,11 +1,10 @@
-version: 2
-
 run:
   timeout: 5m
 
 linters:
   enable-all: false
   enable:
+    - gofumpt
     - gosec
     - errcheck
     - govet
@@ -13,10 +12,6 @@ linters:
     - unused
     - misspell
     - nolintlint
-
-formatters:
-  enable:
-    - gofumpt
 
 linters-settings:
   gofumpt:

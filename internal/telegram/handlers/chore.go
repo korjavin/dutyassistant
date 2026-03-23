@@ -134,7 +134,7 @@ func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.Chattable, error) 
 		}
 		loc, err := time.LoadLocation(tz)
 		if err != nil {
-			slog.Error("Failed to load location", "tz", tz, "error", err) //nolint:gosec // G706 - structured logging is safe, tz is from env var
+			slog.Error(fmt.Sprintf("Failed to load %s location: %v", tz, err))
 			loc = time.Local
 		}
 

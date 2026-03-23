@@ -109,7 +109,7 @@ func (crm *ChoreReminderManager) SendReminderWithButtons(reminderID string) {
 	}
 
 	if crm.bot == nil {
-		slog.Info("Bot not configured, cannot send reminder")
+		slog.Info(fmt.Sprintf("Bot not configured, cannot send reminder"))
 		return
 	}
 
@@ -198,7 +198,7 @@ func (crm *ChoreReminderManager) SendCompletionToGroup(assignment *ChoreAssignme
 	}
 
 	if assignment.GroupID == 0 {
-		slog.Info("No group configured for chore completion announcement")
+		slog.Info(fmt.Sprintf("No group configured for chore completion announcement"))
 		return nil
 	}
 
