@@ -35,12 +35,12 @@ Add a "sviniya" award system where the monthly rating winner automatically recei
 - Modify: `internal/store/sqlite/sqlite.go`
 - Create: `internal/store/sqlite/sviniya.go`
 
-- [ ] Add `SviniyaBalance` struct to `store.go` with fields: UserID int64, UserName string, Balance int
-- [ ] Add sviniya methods to `Store` interface: `GetAllSviniyaBalances`, `GetSviniyaBalance`, `AddSviniyaBalance`, `SetSviniyaBalance`, `DecrementSviniyaBalance`
-- [ ] Add `CREATE TABLE IF NOT EXISTS sviniya_balances` to `migrate()` in sqlite.go (user_id PK, balance INTEGER DEFAULT 0)
-- [ ] Implement all store methods in `sqlite/sviniya.go`
-- [ ] Write unit tests for store methods in `sqlite/sviniya_test.go`
-- [ ] run `go test ./internal/store/...` - must pass
+- [x] Add `SviniyaBalance` struct to `store.go` with fields: UserID int64, UserName string, Balance int
+- [x] Add sviniya methods to `Store` interface: `GetAllSviniyaBalances`, `GetSviniyaBalance`, `AddSviniyaBalance`, `SetSviniyaBalance`, `DecrementSviniyaBalance`
+- [x] Add `CREATE TABLE IF NOT EXISTS sviniya_balances` to `migrate()` in sqlite.go (user_id PK, balance INTEGER DEFAULT 0)
+- [x] Implement all store methods in `sqlite/sviniya.go`
+- [x] Write unit tests for store methods in `sqlite/sviniya_test.go`
+- [x] run `go test ./internal/store/...` - must pass
 
 ### Task 2: Update mock store
 

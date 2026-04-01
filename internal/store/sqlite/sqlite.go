@@ -109,6 +109,12 @@ func (s *SQLiteStore) migrate(ctx context.Context) error {
 			UNIQUE(participant_id, rating_date),
 			FOREIGN KEY(participant_id) REFERENCES users(id)
 		);
+
+		CREATE TABLE IF NOT EXISTS sviniya_balances (
+			user_id INTEGER PRIMARY KEY,
+			balance INTEGER NOT NULL DEFAULT 0,
+			FOREIGN KEY(user_id) REFERENCES users(id)
+		);
 	`
 	if _, err := s.db.ExecContext(ctx, schema); err != nil {
 		return err

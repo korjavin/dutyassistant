@@ -115,6 +115,13 @@ type RecurringChore struct {
 	CreatedAt   time.Time
 }
 
+// SviniyaBalance represents a user's sviniya award balance.
+type SviniyaBalance struct {
+	UserID  int64
+	UserName string
+	Balance int
+}
+
 // Store defines the interface for all data operations.
 type Store interface {
 	// User methods
@@ -188,4 +195,11 @@ type Store interface {
 	UpdateRecurringChoreNextRun(ctx context.Context, id int64, nextRun time.Time) error
 	UpdateRecurringChoreDescription(ctx context.Context, id int64, description string) error
 	CancelRecurringChore(ctx context.Context, id int64) error
+
+	// Sviniya balance methods
+	GetAllSviniyaBalances(ctx context.Context) ([]*SviniyaBalance, error)
+	GetSviniyaBalance(ctx context.Context, userID int64) (*SviniyaBalance, error)
+	AddSviniyaBalance(ctx context.Context, userID int64, amount int) error
+	SetSviniyaBalance(ctx context.Context, userID int64, balance int) error
+	DecrementSviniyaBalance(ctx context.Context, userID int64) error
 }
