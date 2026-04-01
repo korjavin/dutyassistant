@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"html"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -123,9 +124,7 @@ func (h *Handlers) HandleSviniya(m *tgbotapi.Message) (tgbotapi.MessageConfig, e
 	sb.WriteString("🐷 <b>Sviniya Balances</b>\n\n")
 
 	for _, balance := range balances {
-		escapedName := strings.ReplaceAll(balance.UserName, "<", "&lt;")
-		escapedName = strings.ReplaceAll(escapedName, ">", "&gt;")
-		escapedName = strings.ReplaceAll(escapedName, "&", "&amp;")
+		escapedName := html.EscapeString(balance.UserName)
 
 		plural := "sviniyas"
 		if balance.Balance == 1 {

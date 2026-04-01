@@ -11,6 +11,18 @@ This file contains project knowledge for AI agents and developers working on thi
 - `internal/http/` - Web interface handlers
 - `deployments/` - Docker and deployment configurations
 
+## Sviniya Award System
+
+The bot includes a "sviniya" award system where:
+- Monthly rating winner automatically receives 1 sviniya
+- Users can view balances via `/sviniya` command
+- Users can spend sviniyas via `/spend` command with a description (generates LLM announcement to group)
+- Admins can set balances via `/set_sviniya_balance <name> <num>` command
+
+Key files:
+- `internal/telegram/handlers/sviniya.go` - Sviniya command handlers
+- `internal/store/sqlite/sviniya.go` - Sviniya store implementation
+
 ## Message Formatting Patterns
 
 ### Channel Messages vs DM Messages
@@ -112,6 +124,7 @@ The bot uses SQLite with the following key tables:
 - `chores` - One-off and recurring chores
 - `chore_assignments` - Active chore assignments
 - `ratings` - Monthly participant ratings
+- `sviniya_balances` - Sviniya award balances (user_id PK, balance INTEGER DEFAULT 0)
 
 ## Timezone Handling
 

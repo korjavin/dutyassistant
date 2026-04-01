@@ -101,5 +101,5 @@ Add a "sviniya" award system where the monthly rating winner automatically recei
 
 ### Task 7: Update documentation
 
-- [ ] update CLAUDE.md if new patterns introduced
-- [ ] move this plan to `docs/plans/completed/`
+- [x] update CLAUDE.md if new patterns introduced
+- [x] move this plan to `docs/plans/completed/`

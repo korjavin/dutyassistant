@@ -88,7 +88,7 @@ func TestHandleSviniya_HTMLEscaping(t *testing.T) {
 
 	msg, err := h.HandleSviniya(message)
 	assert.NoError(t, err)
-	assert.Contains(t, msg.Text, "&amp;lt;User&amp;gt;: 1 sviniya")
+	assert.Contains(t, msg.Text, "&lt;User&gt;: 1 sviniya")
 	assert.Contains(t, msg.Text, "A&amp;B: 2 sviniyas")
 	mockStore.AssertExpectations(t)
 }
