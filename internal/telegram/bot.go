@@ -238,6 +238,10 @@ func (b *Bot) handleCommand(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 		return b.handlers.HandleToggleActive(m)
 	case "complete":
 		return b.handlers.HandleComplete(m)
+	case "sviniya":
+		return b.handlers.HandleSviniya(m)
+	case "set_sviniya_balance":
+		return b.handlers.HandleSetSviniyaBalance(m)
 	default:
 		msg := tgbotapi.NewMessage(m.Chat.ID, "Unknown command. Use /help for a list of commands.")
 		return msg, nil

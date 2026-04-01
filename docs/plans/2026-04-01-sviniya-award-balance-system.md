@@ -56,11 +56,11 @@ Add a "sviniya" award system where the monthly rating winner automatically recei
 - Create: `internal/telegram/handlers/sviniya.go`
 - Modify: `internal/telegram/bot.go`
 
-- [ ] Implement `HandleSviniya(m)` - fetches all balances, formats as list (name: N sviniya(s)), returns message to caller's chat
-- [ ] Implement `HandleSetSviniyaBalance(m)` - admin-only, parses `/set_sviniya_balance <name> <num>`, looks up user by name, calls SetSviniyaBalance, confirms
-- [ ] Register `"sviniya"` and `"set_sviniya_balance"` cases in `bot.go` handleCommand switch
-- [ ] Create `internal/telegram/handlers/sviniya_test.go` with tests for both handlers including zero-balance display and admin check
-- [ ] run `go test ./internal/telegram/...` - must pass
+- [x] Implement `HandleSviniya(m)` - fetches all balances, formats as list (name: N sviniya(s)), returns message to caller's chat
+- [x] Implement `HandleSetSviniyaBalance(m)` - admin-only, parses `/set_sviniya_balance <name> <num>`, looks up user by name, calls SetSviniyaBalance, confirms
+- [x] Register `"sviniya"` and `"set_sviniya_balance"` cases in `bot.go` handleCommand switch
+- [x] Create `internal/telegram/handlers/sviniya_test.go` with tests for both handlers including zero-balance display and admin check
+- [x] run `go test ./internal/telegram/...` - must pass
 
 ### Task 4: /spend interactive command
 
