@@ -291,7 +291,8 @@ func TestHandleSpend_WithInlineDescription(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Contains(t, msg.Text, "Spent 1 sviniya")
 	assert.Contains(t, msg.Text, "coffee for everyone")
-	assert.Contains(t, msg.Text, "Announcement sent")
+	// When Bot is nil, announcement is not sent, so message should NOT contain "Announcement sent"
+	assert.NotContains(t, msg.Text, "Announcement sent")
 	mockStore.AssertExpectations(t)
 }
 
@@ -366,7 +367,8 @@ func TestHandleSpendInteractive_HappyPath(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Contains(t, msg.Text, "Spent 1 sviniya")
 	assert.Contains(t, msg.Text, "a fancy dinner")
-	assert.Contains(t, msg.Text, "Announcement sent")
+	// When Bot is nil, announcement is not sent, so message should NOT contain "Announcement sent"
+	assert.NotContains(t, msg.Text, "Announcement sent")
 
 	// Check that session was ended
 	_, exists := h.SessionManager.GetSession(123)

@@ -67,16 +67,10 @@ func (h *Handlers) processSpend(m *tgbotapi.Message, description string) (tgbota
 		return tgbotapi.NewMessage(m.Chat.ID, "Failed to retrieve your user information."), nil
 	}
 
-	// Decrement balance
-	err = h.Store.DecrementSviniyaBalance(ctx, m.From.ID)
-	if err != nil {
-		slog.Error(fmt.Sprintf("[processSpend] Error decrementing sviniya balance for user %d: %v", m.From.ID, err))
-		return tgbotapi.NewMessage(m.Chat.ID, "Failed to spend sviniya."), nil
-	}
-
 	// Build announcement message
-	intent := fmt.Sprintf("User %s is spending a sviniya. Create a fun announcement.", user.FirstName)
-	vanilla := fmt.Sprintf("%s spent a sviniya on: %s", user.FirstName, html.EscapeString(description))
+	escapedName := html.EscapeString(user.FirstName)
+	intent := fmt.Sprintf("User %s is spending a sviniya. Create a fun announcement.", escapedName)
+	vanilla := fmt.Sprintf("%s spent a sviniya on: %s", escapedName, html.EscapeString(description))
 
 	var announcementText string
 	if h.LLMClient != nil {
@@ -85,24 +79,36 @@ func (h *Handlers) processSpend(m *tgbotapi.Message, description string) (tgbota
 		announcementText = vanilla
 	}
 
-	// Send announcement to group
+	// Send announcement to group FIRST (before decrementing balance)
+	announcementSent := false
 	if h.Bot != nil && h.GroupID != 0 {
 		groupMsg := tgbotapi.NewMessage(h.GroupID, announcementText)
 		groupMsg.ParseMode = tgbotapi.ModeHTML
 		if _, err := h.Bot.Send(groupMsg); err != nil {
 			slog.Error(fmt.Sprintf("[processSpend] Failed to send announcement to group %d: %v", h.GroupID, err))
-		} else {
-			slog.Info(fmt.Sprintf("[processSpend] Sent sviniya spend announcement to group %d", h.GroupID))
+			return tgbotapi.NewMessage(m.Chat.ID, "Failed to send announcement to the group. Your sviniya was not spent."), nil
 		}
+		slog.Info(fmt.Sprintf("[processSpend] Sent sviniya spend announcement to group %d", h.GroupID))
+		announcementSent = true
 	} else {
 		slog.Warn("[processSpend] Bot or GroupID not configured, skipping group announcement")
+	}
+
+	// Decrement balance AFTER announcement is sent
+	err = h.Store.DecrementSviniyaBalance(ctx, m.From.ID)
+	if err != nil {
+		slog.Error(fmt.Sprintf("[processSpend] Error decrementing sviniya balance for user %d: %v", m.From.ID, err))
+		return tgbotapi.NewMessage(m.Chat.ID, "Failed to spend sviniya."), nil
 	}
 
 	// End session if we were in one
 	h.SessionManager.EndSession(m.Chat.ID)
 
 	// Confirm to user
-	return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("Spent 1 sviniya on: %s\n\nAnnouncement sent to the group!", description)), nil
+	if announcementSent {
+		return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("Spent 1 sviniya on: %s\n\nAnnouncement sent to the group!", description)), nil
+	}
+	return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("Spent 1 sviniya on: %s", description)), nil
 }
 
 // HandleSviniya handles the /sviniya command - displays all user balances.

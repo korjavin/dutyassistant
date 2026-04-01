@@ -256,8 +256,12 @@ func (h *Handlers) BuildMonthlyRatingsWinnersAnnouncement(now time.Time) (*tgbot
 
 	if len(totals) > 0 {
 		winner := totals[0]
+		// Note: Sviniya is granted here before message is sent. If message send fails later,
+		// the winner has still received the sviniya. This is acceptable as the grant is
+		// the critical action, and announcement failures can be handled by retry/verification.
 		if err := h.Store.AddSviniyaBalance(context.Background(), winner.ParticipantID, 1); err != nil {
 			slog.Error("error granting sviniya to monthly rating winner", "winner", winner.ParticipantName, "err", err)
+			// Continue anyway - winner should still be announced even if sviniya grant failed
 		}
 	}
 

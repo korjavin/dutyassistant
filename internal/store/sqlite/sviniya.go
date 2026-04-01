@@ -89,11 +89,19 @@ func (s *SQLiteStore) SetSviniyaBalance(ctx context.Context, userID int64, balan
 }
 
 // DecrementSviniyaBalance decrements a user's sviniya balance by 1 (minimum 0).
+// Returns an error if the user has no balance record.
 func (s *SQLiteStore) DecrementSviniyaBalance(ctx context.Context, userID int64) error {
 	query := `UPDATE sviniya_balances SET balance = MAX(0, balance - 1) WHERE user_id = ?`
-	_, err := s.db.ExecContext(ctx, query, userID)
+	result, err := s.db.ExecContext(ctx, query, userID)
 	if err != nil {
 		return fmt.Errorf("could not decrement sviniya balance: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("could not get rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("no sviniya balance record found for user %d", userID)
 	}
 	return nil
 }
