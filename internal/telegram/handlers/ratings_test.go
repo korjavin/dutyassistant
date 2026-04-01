@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -983,9 +982,9 @@ func TestBuildMonthlyRatingsWinnersAnnouncement_Idempotent(t *testing.T) {
 	}
 
 	// Simulate that the sviniya was already granted for this month
-	// GrantSviniyaForMonth will return an error because it's already granted
+	// GrantSviniyaForMonth will return ErrSviniyaAlreadyGranted to test idempotent path
 	mockStore.On("GetMonthlyParticipantTotals", mock.Anything, 2026, time.March).Return(totals, nil).Once()
-	mockStore.On("GrantSviniyaForMonth", mock.Anything, 2026, time.March, int64(10)).Return(fmt.Errorf("sviniya already granted for March 2026 to user 10")).Once()
+	mockStore.On("GrantSviniyaForMonth", mock.Anything, 2026, time.March, int64(10)).Return(store.ErrSviniyaAlreadyGranted).Once()
 
 	msg, ok, err := h.BuildMonthlyRatingsWinnersAnnouncement(now)
 	assert.NoError(t, err)

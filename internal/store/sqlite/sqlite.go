@@ -112,7 +112,7 @@ func (s *SQLiteStore) migrate(ctx context.Context) error {
 
 		CREATE TABLE IF NOT EXISTS sviniya_balances (
 			user_id INTEGER PRIMARY KEY,
-			balance INTEGER NOT NULL DEFAULT 0,
+			balance INTEGER NOT NULL DEFAULT 0 CHECK(balance >= 0),
 			FOREIGN KEY(user_id) REFERENCES users(id)
 		);
 

@@ -102,18 +102,9 @@ func (s *SQLiteStore) DecrementSviniyaBalance(ctx context.Context, userID int64)
 		return fmt.Errorf("could not get rows affected: %w", err)
 	}
 	if rowsAffected == 0 {
-		// Check if user has a balance record
-		balance, err := s.GetSviniyaBalance(ctx, userID)
-		if err != nil {
-			return fmt.Errorf("could not check sviniya balance: %w", err)
-		}
-		if balance == nil {
-			return fmt.Errorf("no sviniya balance record found for user %d", userID)
-		}
-		if balance.Balance <= 0 {
-			return store.ErrInsufficientBalance
-		}
-		return fmt.Errorf("failed to decrement sviniya balance for user %d", userID)
+		// Either user has no balance record or balance is <= 0
+		// The UPDATE with "WHERE balance > 0" ensures atomicity
+		return store.ErrInsufficientBalance
 	}
 	return nil
 }

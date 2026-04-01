@@ -94,15 +94,16 @@ func (h *Handlers) HandleSpendInteractive(m *tgbotapi.Message) (tgbotapi.Chattab
 	}
 
 	// Treat text as description and process
-	// Validate description length to prevent abuse
-	if len(m.Text) > 500 {
-		return tgbotapi.NewMessage(m.Chat.ID, "Description is too long. Please limit your description to 500 characters."), nil
-	}
 	return h.processSpend(m, m.Text)
 }
 
 // processSpend handles the actual spending logic - decrements balance and sends announcement to group.
 func (h *Handlers) processSpend(m *tgbotapi.Message, description string) (tgbotapi.MessageConfig, error) {
+	// Validate description length to prevent abuse
+	if len(description) > 500 {
+		return tgbotapi.NewMessage(m.Chat.ID, "Description is too long. Please limit your description to 500 characters."), nil
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
