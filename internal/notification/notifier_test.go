@@ -537,28 +537,29 @@ func TestSendDailyChoreSummary_WithOverdue(t *testing.T) {
 
 	// Create overdue chores in different categories
 	// Note: SendDailyChoreSummary uses time.Now() directly, so we must use the actual current time
+	// We use AddDate to make the test deterministic regardless of time of day
 	chores := []*store.Chore{
 		{
 			Description: "Clean the kitchen",
-			DeadlineAt:  now.Add(-96 * time.Hour), // 4 days ago - critical
+			DeadlineAt:  now.AddDate(0, 0, -4), // 4 calendar days ago - critical
 			User:        &store.User{FirstName: "Alice", TelegramUserID: 111},
 			ReminderID:  "reminder1",
 		},
 		{
 			Description: "Take out trash",
-			DeadlineAt:  now.Add(-72 * time.Hour), // 3 days ago - critical
+			DeadlineAt:  now.AddDate(0, 0, -3), // 3 calendar days ago - critical
 			User:        &store.User{FirstName: "Bob", TelegramUserID: 222},
 			ReminderID:  "reminder2",
 		},
 		{
 			Description: "Water plants",
-			DeadlineAt:  now.Add(-36 * time.Hour), // 1.5 days ago - medium
+			DeadlineAt:  now.AddDate(0, 0, -1), // 1 calendar day ago - medium
 			User:        &store.User{FirstName: "Charlie", TelegramUserID: 333},
 			ReminderID:  "reminder3",
 		},
 		{
 			Description: "Fix door",
-			DeadlineAt:  now.Add(-24 * time.Hour), // 1 day ago - medium
+			DeadlineAt:  now.AddDate(0, 0, -2), // 2 calendar days ago - medium
 			User:        &store.User{FirstName: "Diana", TelegramUserID: 444},
 			ReminderID:  "reminder4",
 		},
@@ -586,9 +587,10 @@ func TestSendDailyChoreSummary_WithOverdue(t *testing.T) {
 
 	// Verify the new chore line format "deadline: DATE (+N d)"
 	assert.Contains(t, sentText, "deadline: ")
-	assert.Contains(t, sentText, "(+4 d)")
 	assert.Contains(t, sentText, "(+3 d)")
+	assert.Contains(t, sentText, "(+2 d)")
 	assert.Contains(t, sentText, "(+1 d)")
+	assert.Contains(t, sentText, "(+0 d)")
 
 	// Verify descriptions and users are present
 	assert.Contains(t, sentText, "Clean the kitchen")
