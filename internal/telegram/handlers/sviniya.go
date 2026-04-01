@@ -2,12 +2,14 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"html"
 	"log/slog"
 	"strconv"
 	"strings"
 
+	"github.com/korjavin/dutyassistant/internal/store"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
@@ -17,28 +19,10 @@ import (
 func (h *Handlers) HandleSpend(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
 	slog.Info(fmt.Sprintf("[HandleSpend] User %d (%s) triggered /spend with args: '%s'", m.From.ID, m.From.FirstName, m.CommandArguments()))
 
-	// Get user info first to translate Telegram ID to internal user ID
-	user, err := h.Store.GetUserByTelegramID(context.Background(), m.From.ID)
-	if err != nil || user == nil {
-		slog.Error(fmt.Sprintf("[HandleSpend] Error getting user by Telegram ID %d: %v", m.From.ID, err))
-		return tgbotapi.NewMessage(m.Chat.ID, "Failed to retrieve your user information."), nil
-	}
-
-	// Get user's balance
-	balance, err := h.Store.GetSviniyaBalance(context.Background(), user.ID)
-	if err != nil {
-		slog.Error(fmt.Sprintf("[HandleSpend] Error getting sviniya balance for user %d: %v", user.ID, err))
-		return tgbotapi.NewMessage(m.Chat.ID, "Failed to check your sviniya balance."), nil
-	}
-
-	// Check if user has any balance
-	if balance == nil || balance.Balance <= 0 {
-		return tgbotapi.NewMessage(m.Chat.ID, "Sorry, you have no sviniyas on your balance to spend."), nil
-	}
-
 	args := strings.TrimSpace(m.CommandArguments())
 
-	// If argument provided, check for existing sessions first
+	// If argument provided, process immediately without pre-checking balance
+	// The atomic DecrementSviniyaBalance will handle insufficient balance
 	if args != "" {
 		if session, exists := h.SessionManager.GetSession(m.Chat.ID); exists {
 			// Don't interrupt another user's session or a different session type
@@ -47,6 +31,13 @@ func (h *Handlers) HandleSpend(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 			}
 		}
 		return h.processSpend(m, args)
+	}
+
+	// No argument - get user info and balance for interactive session
+	user, err := h.Store.GetUserByTelegramID(context.Background(), m.From.ID)
+	if err != nil || user == nil {
+		slog.Error(fmt.Sprintf("[HandleSpend] Error getting user by Telegram ID %d: %v", m.From.ID, err))
+		return tgbotapi.NewMessage(m.Chat.ID, "Failed to retrieve your user information."), nil
 	}
 
 	// No argument - check for existing session before starting a new one
@@ -58,7 +49,19 @@ func (h *Handlers) HandleSpend(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 		return tgbotapi.NewMessage(m.Chat.ID, "Another user has an active session in this chat. Please wait for them to finish."), nil
 	}
 
-	// No argument - start interactive session
+	// No argument - get balance and start interactive session
+	balance, err := h.Store.GetSviniyaBalance(context.Background(), user.ID)
+	if err != nil {
+		slog.Error(fmt.Sprintf("[HandleSpend] Error getting sviniya balance for user %d: %v", user.ID, err))
+		return tgbotapi.NewMessage(m.Chat.ID, "Failed to check your sviniya balance."), nil
+	}
+
+	// Check if user has any balance before starting interactive session
+	if balance == nil || balance.Balance <= 0 {
+		return tgbotapi.NewMessage(m.Chat.ID, "Sorry, you have no sviniyas on your balance to spend."), nil
+	}
+
+	// Start interactive session
 	h.SessionManager.StartSession(m.Chat.ID, m.From.ID, SessionTypeSpendSviniya)
 	promptMsg := tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("You have %d sviniya(s). What would you like to spend it on? Send a brief description.\n\nSend /cancel to abort.", balance.Balance))
 	return promptMsg, nil
@@ -111,7 +114,7 @@ func (h *Handlers) processSpend(m *tgbotapi.Message, description string) (tgbota
 		// End the session since the operation failed
 		h.SessionManager.EndSession(m.Chat.ID)
 		// Check if it's an insufficient balance error
-		if strings.Contains(err.Error(), "insufficient") {
+		if errors.Is(err, store.ErrInsufficientBalance) {
 			return tgbotapi.NewMessage(m.Chat.ID, "Sorry, you have no sviniyas on your balance to spend."), nil
 		}
 		return tgbotapi.NewMessage(m.Chat.ID, "Failed to spend sviniya."), nil

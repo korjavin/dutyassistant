@@ -111,7 +111,7 @@ func (s *SQLiteStore) DecrementSviniyaBalance(ctx context.Context, userID int64)
 			return fmt.Errorf("no sviniya balance record found for user %d", userID)
 		}
 		if balance.Balance <= 0 {
-			return fmt.Errorf("insufficient sviniya balance for user %d", userID)
+			return store.ErrInsufficientBalance
 		}
 		return fmt.Errorf("failed to decrement sviniya balance for user %d", userID)
 	}
@@ -155,8 +155,11 @@ func (s *SQLiteStore) GrantSviniyaForMonth(ctx context.Context, year int, month 
 	if err != nil {
 		return fmt.Errorf("could not begin transaction: %w", err)
 	}
+
+	// Use a flag to track if we should rollback
+	shouldRollback := true
 	defer func() {
-		if err != nil {
+		if shouldRollback {
 			_ = tx.Rollback()
 		}
 	}()
@@ -167,8 +170,7 @@ func (s *SQLiteStore) GrantSviniyaForMonth(ctx context.Context, year int, month 
 	err = tx.QueryRowContext(ctx, checkQuery, year, int(month)).Scan(&existingUserID)
 	if err == nil {
 		// Grant already exists
-		tx.Rollback()
-		return fmt.Errorf("sviniya already granted for %s %d to user %d", month, year, existingUserID)
+		return store.ErrSviniyaAlreadyGranted
 	}
 	if err != sql.ErrNoRows {
 		return fmt.Errorf("could not check existing grant: %w", err)
@@ -199,5 +201,8 @@ func (s *SQLiteStore) GrantSviniyaForMonth(ctx context.Context, year int, month 
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("could not commit transaction: %w", err)
 	}
+
+	// Successfully committed - don't rollback
+	shouldRollback = false
 	return nil
 }

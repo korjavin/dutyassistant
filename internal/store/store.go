@@ -3,7 +3,16 @@ package store
 
 import (
 	"context"
+	"errors"
 	"time"
+)
+
+// Custom error types for store operations
+var (
+	// ErrInsufficientBalance is returned when a sviniya balance operation fails due to insufficient funds
+	ErrInsufficientBalance = errors.New("insufficient sviniya balance")
+	// ErrSviniyaAlreadyGranted is returned when attempting to grant a sviniya for a month that already has a grant
+	ErrSviniyaAlreadyGranted = errors.New("sviniya already granted for this month")
 )
 
 // AssignmentType defines the type of duty assignment.

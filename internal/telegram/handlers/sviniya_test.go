@@ -1,7 +1,6 @@
 package handlers_test
 
 import (
-	"fmt"
 	"testing"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -292,8 +291,9 @@ func TestHandleSpend_WithInlineDescription(t *testing.T) {
 	}
 
 	user := &store.User{ID: 1, TelegramUserID: 456, FirstName: "TestUser", IsAdmin: false, IsActive: true}
-	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return(user, nil).Twice()
-	mockStore.On("GetSviniyaBalance", mock.Anything, int64(1)).Return(&store.SviniyaBalance{UserID: 1, Balance: 5}, nil)
+	// Immediate mode: GetUserByTelegramID is called once in processSpend
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return(user, nil).Once()
+	// DecrementSviniyaBalance is called atomically without pre-checking balance
 	mockStore.On("DecrementSviniyaBalance", mock.Anything, int64(1)).Return(nil)
 
 	msg, err := h.HandleSpend(message)
@@ -404,8 +404,9 @@ func TestHandleSpend_NoLLMFallback(t *testing.T) {
 	}
 
 	user := &store.User{ID: 1, TelegramUserID: 456, FirstName: "TestUser", IsAdmin: false, IsActive: true}
-	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return(user, nil).Twice()
-	mockStore.On("GetSviniyaBalance", mock.Anything, int64(1)).Return(&store.SviniyaBalance{UserID: 1, Balance: 5}, nil)
+	// Immediate mode: GetUserByTelegramID is called once in processSpend
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return(user, nil).Once()
+	// DecrementSviniyaBalance is called atomically without pre-checking balance
 	mockStore.On("DecrementSviniyaBalance", mock.Anything, int64(1)).Return(nil)
 
 	msg, err := h.HandleSpend(message)
@@ -623,8 +624,8 @@ func TestHandleSpendInteractive_InsufficientBalanceError(t *testing.T) {
 
 	user := &store.User{ID: 1, TelegramUserID: 456, FirstName: "TestUser", IsAdmin: false, IsActive: true}
 	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return(user, nil)
-	// Return insufficient balance error
-	mockStore.On("DecrementSviniyaBalance", mock.Anything, int64(1)).Return(fmt.Errorf("insufficient sviniya balance for user 1"))
+	// Return insufficient balance error using the custom error type
+	mockStore.On("DecrementSviniyaBalance", mock.Anything, int64(1)).Return(store.ErrInsufficientBalance)
 
 	msg, err := h.HandleSpendInteractive(message)
 	assert.NoError(t, err)

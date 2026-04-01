@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -153,7 +154,7 @@ func TestDecrementSviniyaBalance(t *testing.T) {
 	// Decrement below zero (should fail with insufficient balance error)
 	err = s.DecrementSviniyaBalance(ctx, user.ID)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "insufficient")
+	assert.True(t, errors.Is(err, store.ErrInsufficientBalance), "Should return ErrInsufficientBalance")
 
 	balance, err = s.GetSviniyaBalance(ctx, user.ID)
 	require.NoError(t, err)
@@ -241,3 +242,90 @@ func TestRecordSviniyaMonthlyGrant_Idempotent(t *testing.T) {
 	err = s.RecordSviniyaMonthlyGrant(ctx, 2026, time.March, user.ID)
 	assert.Error(t, err, "Should fail when recording duplicate grant for same month")
 }
+
+func TestGrantSviniyaForMonth_Success(t *testing.T) {
+	s := setupTestDB(t)
+	ctx := context.Background()
+
+	// Create test user
+	user := &store.User{TelegramUserID: 1, FirstName: "Alice", IsAdmin: false, IsActive: true}
+	require.NoError(t, s.CreateUser(ctx, user))
+
+	// Grant sviniya for March 2026
+	err := s.GrantSviniyaForMonth(ctx, 2026, time.March, user.ID)
+	require.NoError(t, err, "First grant should succeed")
+
+	// Verify balance was incremented
+	balance, err := s.GetSviniyaBalance(ctx, user.ID)
+	require.NoError(t, err)
+	require.NotNil(t, balance)
+	assert.Equal(t, 1, balance.Balance, "Balance should be 1 after grant")
+
+	// Verify grant was recorded
+	userID, granted, err := s.GetSviniyaMonthlyGrant(ctx, 2026, time.March)
+	require.NoError(t, err)
+	assert.True(t, granted, "Grant should be recorded")
+	assert.Equal(t, user.ID, userID, "Grant should be for the correct user")
+}
+
+func TestGrantSviniyaForMonth_Idempotent(t *testing.T) {
+	s := setupTestDB(t)
+	ctx := context.Background()
+
+	// Create test user
+	user := &store.User{TelegramUserID: 1, FirstName: "Alice", IsAdmin: false, IsActive: true}
+	require.NoError(t, s.CreateUser(ctx, user))
+
+	t.Logf("User created with ID: %d", user.ID)
+
+	// Grant sviniya for March 2026
+	err := s.GrantSviniyaForMonth(ctx, 2026, time.March, user.ID)
+	require.NoError(t, err, "First grant should succeed")
+
+	t.Logf("First grant succeeded")
+
+	// Verify balance was created and incremented
+	balance, err := s.GetSviniyaBalance(ctx, user.ID)
+	require.NoError(t, err)
+	require.NotNil(t, balance)
+	assert.Equal(t, 1, balance.Balance, "Balance should be 1 after first grant")
+
+	t.Logf("Balance verified: %d", balance.Balance)
+
+	// Try to grant again for same month - should fail with already granted error
+	err = s.GrantSviniyaForMonth(ctx, 2026, time.March, user.ID)
+	require.Error(t, err, "Second grant should fail")
+	assert.True(t, errors.Is(err, store.ErrSviniyaAlreadyGranted), "Should return ErrSviniyaAlreadyGranted")
+
+	t.Logf("Second grant failed as expected: %v", err)
+
+	// Verify balance was only incremented once (not twice)
+	balance, err = s.GetSviniyaBalance(ctx, user.ID)
+	t.Logf("Getting balance after failed grant...")
+	require.NoError(t, err)
+	require.NotNil(t, balance)
+	assert.Equal(t, 1, balance.Balance, "Balance should still be 1, not 2")
+}
+
+func TestGrantSviniyaForMonth_AddsToExistingBalance(t *testing.T) {
+	s := setupTestDB(t)
+	ctx := context.Background()
+
+	// Create test user
+	user := &store.User{TelegramUserID: 1, FirstName: "Alice", IsAdmin: false, IsActive: true}
+	require.NoError(t, s.CreateUser(ctx, user))
+
+	// Set existing balance to 5
+	require.NoError(t, s.SetSviniyaBalance(ctx, user.ID, 5))
+
+	// Grant sviniya for March 2026
+	err := s.GrantSviniyaForMonth(ctx, 2026, time.March, user.ID)
+	require.NoError(t, err, "Grant should succeed")
+
+	// Verify balance was incremented (5 + 1 = 6)
+	balance, err := s.GetSviniyaBalance(ctx, user.ID)
+	require.NoError(t, err)
+	require.NotNil(t, balance)
+	assert.Equal(t, 6, balance.Balance, "Balance should be 6 after adding grant to existing balance")
+}
+

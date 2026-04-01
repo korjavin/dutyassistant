@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"html"
 	"log/slog"
@@ -260,7 +261,7 @@ func (h *Handlers) BuildMonthlyRatingsWinnersAnnouncement(now time.Time) (*tgbot
 		// Grant sviniya to winner atomically (checks, records, and adds balance in one transaction)
 		err := h.Store.GrantSviniyaForMonth(context.Background(), normalizedNow.Year(), normalizedNow.Month(), winner.ParticipantID)
 		if err != nil {
-			if strings.Contains(err.Error(), "already granted") {
+			if errors.Is(err, store.ErrSviniyaAlreadyGranted) {
 				// Already granted for this month - log and continue
 				slog.Info(fmt.Sprintf("Sviniya already granted for %s %d, skipping duplicate grant",
 					normalizedNow.Month(), normalizedNow.Year()))
