@@ -267,7 +267,9 @@ func (h *Handlers) BuildMonthlyRatingsWinnersAnnouncement(now time.Time) (*tgbot
 					normalizedNow.Month(), normalizedNow.Year()))
 			} else {
 				slog.Error("error granting sviniya to monthly rating winner", "winner", winner.ParticipantName, "err", err)
-				// Continue anyway - winner should still be announced even if sviniya grant failed
+				// Include a note in the announcement that sviniya grant failed
+				msg := tgbotapi.NewMessage(h.GroupID, formatMonthlyRatingsWinnersDigest(totals, normalizedNow, true))
+				return &msg, true, nil
 			}
 		} else {
 			slog.Info(fmt.Sprintf("Granted 1 sviniya to %s for %s %d",
@@ -275,7 +277,7 @@ func (h *Handlers) BuildMonthlyRatingsWinnersAnnouncement(now time.Time) (*tgbot
 		}
 	}
 
-	msg := tgbotapi.NewMessage(h.GroupID, formatMonthlyRatingsWinnersDigest(totals, normalizedNow))
+	msg := tgbotapi.NewMessage(h.GroupID, formatMonthlyRatingsWinnersDigest(totals, normalizedNow, false))
 	return &msg, true, nil
 }
 
@@ -505,7 +507,7 @@ func formatDailyAndMonthlySummary(dailyRatings []*store.ParticipantDailyRating, 
 	return b.String()
 }
 
-func formatMonthlyRatingsWinnersDigest(totals []*store.ParticipantMonthlyTotal, now time.Time) string {
+func formatMonthlyRatingsWinnersDigest(totals []*store.ParticipantMonthlyTotal, now time.Time, sviniyaGrantFailed bool) string {
 	normalizedNow := normalizeRatingDate(now)
 
 	var b strings.Builder
@@ -533,6 +535,10 @@ func formatMonthlyRatingsWinnersDigest(totals []*store.ParticipantMonthlyTotal, 
 		if i < len(totals)-1 {
 			b.WriteString("\n")
 		}
+	}
+
+	if sviniyaGrantFailed && len(totals) > 0 {
+		b.WriteString("\n\nNote: Sviniya grant to the winner failed. Please check with an admin.")
 	}
 
 	return b.String()

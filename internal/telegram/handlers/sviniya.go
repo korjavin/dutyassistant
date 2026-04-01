@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/korjavin/dutyassistant/internal/store"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -93,12 +94,17 @@ func (h *Handlers) HandleSpendInteractive(m *tgbotapi.Message) (tgbotapi.Chattab
 	}
 
 	// Treat text as description and process
+	// Validate description length to prevent abuse
+	if len(m.Text) > 500 {
+		return tgbotapi.NewMessage(m.Chat.ID, "Description is too long. Please limit your description to 500 characters."), nil
+	}
 	return h.processSpend(m, m.Text)
 }
 
 // processSpend handles the actual spending logic - decrements balance and sends announcement to group.
 func (h *Handlers) processSpend(m *tgbotapi.Message, description string) (tgbotapi.MessageConfig, error) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
 	// Get user info to get their internal ID and name
 	user, err := h.Store.GetUserByTelegramID(ctx, m.From.ID)
@@ -224,6 +230,9 @@ func (h *Handlers) HandleSetSviniyaBalance(m *tgbotapi.Message) (tgbotapi.Messag
 	}
 	if balance < 0 {
 		return tgbotapi.NewMessage(m.Chat.ID, "Balance cannot be negative.\nExample: /set_sviniya_balance Ivan 3"), nil
+	}
+	if balance > 1000 {
+		return tgbotapi.NewMessage(m.Chat.ID, "Balance value too high. Maximum allowed is 1000."), nil
 	}
 
 	user, err := h.Store.GetUserByName(context.Background(), userName)
