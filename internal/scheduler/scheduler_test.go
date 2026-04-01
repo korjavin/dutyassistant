@@ -582,3 +582,15 @@ func (m *mockStore) SetSviniyaBalance(ctx context.Context, userID int64, balance
 func (m *mockStore) DecrementSviniyaBalance(ctx context.Context, userID int64) error {
 	return nil
 }
+
+func (m *mockStore) GetSviniyaMonthlyGrant(ctx context.Context, year int, month time.Month) (userID int64, granted bool, err error) {
+	return 0, false, nil
+}
+
+func (m *mockStore) RecordSviniyaMonthlyGrant(ctx context.Context, year int, month time.Month, userID int64) error {
+	return nil
+}
+
+func (m *mockStore) GrantSviniyaForMonth(ctx context.Context, year int, month time.Month, userID int64) error {
+	return nil
+}

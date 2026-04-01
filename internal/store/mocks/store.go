@@ -452,3 +452,21 @@ func (m *MockStore) DecrementSviniyaBalance(ctx context.Context, userID int64) e
 	args := m.Called(ctx, userID)
 	return args.Error(0)
 }
+
+// GetSviniyaMonthlyGrant mocks the GetSviniyaMonthlyGrant method.
+func (m *MockStore) GetSviniyaMonthlyGrant(ctx context.Context, year int, month time.Month) (userID int64, granted bool, err error) {
+	args := m.Called(ctx, year, month)
+	return args.Get(0).(int64), args.Get(1).(bool), args.Error(2)
+}
+
+// RecordSviniyaMonthlyGrant mocks the RecordSviniyaMonthlyGrant method.
+func (m *MockStore) RecordSviniyaMonthlyGrant(ctx context.Context, year int, month time.Month, userID int64) error {
+	args := m.Called(ctx, year, month, userID)
+	return args.Error(0)
+}
+
+// GrantSviniyaForMonth mocks the GrantSviniyaForMonth method.
+func (m *MockStore) GrantSviniyaForMonth(ctx context.Context, year int, month time.Month, userID int64) error {
+	args := m.Called(ctx, year, month, userID)
+	return args.Error(0)
+}

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -753,7 +754,7 @@ func TestBuildMonthlyRatingsWinnersAnnouncement_LastDayFormatting(t *testing.T) 
 	}
 
 	mockStore.On("GetMonthlyParticipantTotals", mock.Anything, 2026, time.March).Return(totals, nil).Once()
-	mockStore.On("AddSviniyaBalance", mock.Anything, int64(10), 1).Return(nil).Once()
+	mockStore.On("GrantSviniyaForMonth", mock.Anything, 2026, time.March, int64(10)).Return(nil).Once()
 
 	msg, ok, err := h.BuildMonthlyRatingsWinnersAnnouncement(now)
 	assert.NoError(t, err)
@@ -884,7 +885,7 @@ func TestBuildMonthlyRatingsWinnersAnnouncement_WaitsForInFlightSave(t *testing.
 	mockStore.On("GetMonthlyParticipantTotals", mock.Anything, 2026, time.March).Return([]*store.ParticipantMonthlyTotal{
 		{ParticipantID: 10, ParticipantName: "Alice", TotalScore: 5, DaysRated: 1},
 	}, nil).Once()
-	mockStore.On("AddSviniyaBalance", mock.Anything, int64(10), 1).Return(nil).Once()
+	mockStore.On("GrantSviniyaForMonth", mock.Anything, 2026, time.March, int64(10)).Return(nil).Once()
 
 	_, err := h.StartDailyRatingsSession(807, 123, time.Date(2026, time.March, 31, 18, 50, 0, 0, time.UTC))
 	assert.NoError(t, err)
@@ -932,7 +933,7 @@ func TestBuildMonthlyRatingsWinnersAnnouncement_GrantsSviniyaToWinner(t *testing
 	}
 
 	mockStore.On("GetMonthlyParticipantTotals", mock.Anything, 2026, time.March).Return(totals, nil).Once()
-	mockStore.On("AddSviniyaBalance", mock.Anything, int64(10), 1).Return(nil).Once()
+	mockStore.On("GrantSviniyaForMonth", mock.Anything, 2026, time.March, int64(10)).Return(nil).Once()
 
 	msg, ok, err := h.BuildMonthlyRatingsWinnersAnnouncement(now)
 	assert.NoError(t, err)
@@ -957,7 +958,34 @@ func TestBuildMonthlyRatingsWinnersAnnouncement_ToleratesStoreError(t *testing.T
 	}
 
 	mockStore.On("GetMonthlyParticipantTotals", mock.Anything, 2026, time.March).Return(totals, nil).Once()
-	mockStore.On("AddSviniyaBalance", mock.Anything, int64(10), 1).Return(assert.AnError).Once()
+	mockStore.On("GrantSviniyaForMonth", mock.Anything, 2026, time.March, int64(10)).Return(assert.AnError).Once()
+
+	msg, ok, err := h.BuildMonthlyRatingsWinnersAnnouncement(now)
+	assert.NoError(t, err)
+	assert.True(t, ok)
+	assert.NotNil(t, msg)
+	assert.Equal(t, int64(-1001), msg.ChatID)
+	assert.Contains(t, msg.Text, "Monthly participant ratings for March 2026")
+	assert.Contains(t, msg.Text, "1st: Alice with 14 point(s)")
+
+	mockStore.AssertExpectations(t)
+}
+
+func TestBuildMonthlyRatingsWinnersAnnouncement_Idempotent(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := NewWithAdminID(mockStore, nil, -1001, 123, nil)
+
+	now := time.Date(2026, time.March, 31, 21, 0, 0, 0, time.UTC)
+	totals := []*store.ParticipantMonthlyTotal{
+		{ParticipantID: 10, ParticipantName: "Alice", TotalScore: 14, DaysRated: 4},
+		{ParticipantID: 11, ParticipantName: "Bob", TotalScore: 11, DaysRated: 4},
+		{ParticipantID: 12, ParticipantName: "Cara", TotalScore: 8, DaysRated: 3},
+	}
+
+	// Simulate that the sviniya was already granted for this month
+	// GrantSviniyaForMonth will return an error because it's already granted
+	mockStore.On("GetMonthlyParticipantTotals", mock.Anything, 2026, time.March).Return(totals, nil).Once()
+	mockStore.On("GrantSviniyaForMonth", mock.Anything, 2026, time.March, int64(10)).Return(fmt.Errorf("sviniya already granted for March 2026 to user 10")).Once()
 
 	msg, ok, err := h.BuildMonthlyRatingsWinnersAnnouncement(now)
 	assert.NoError(t, err)

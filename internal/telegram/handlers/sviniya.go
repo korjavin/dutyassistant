@@ -17,10 +17,17 @@ import (
 func (h *Handlers) HandleSpend(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
 	slog.Info(fmt.Sprintf("[HandleSpend] User %d (%s) triggered /spend with args: '%s'", m.From.ID, m.From.FirstName, m.CommandArguments()))
 
+	// Get user info first to translate Telegram ID to internal user ID
+	user, err := h.Store.GetUserByTelegramID(context.Background(), m.From.ID)
+	if err != nil || user == nil {
+		slog.Error(fmt.Sprintf("[HandleSpend] Error getting user by Telegram ID %d: %v", m.From.ID, err))
+		return tgbotapi.NewMessage(m.Chat.ID, "Failed to retrieve your user information."), nil
+	}
+
 	// Get user's balance
-	balance, err := h.Store.GetSviniyaBalance(context.Background(), m.From.ID)
+	balance, err := h.Store.GetSviniyaBalance(context.Background(), user.ID)
 	if err != nil {
-		slog.Error(fmt.Sprintf("[HandleSpend] Error getting sviniya balance for user %d: %v", m.From.ID, err))
+		slog.Error(fmt.Sprintf("[HandleSpend] Error getting sviniya balance for user %d: %v", user.ID, err))
 		return tgbotapi.NewMessage(m.Chat.ID, "Failed to check your sviniya balance."), nil
 	}
 
@@ -31,9 +38,24 @@ func (h *Handlers) HandleSpend(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 
 	args := strings.TrimSpace(m.CommandArguments())
 
-	// If argument provided, process immediately
+	// If argument provided, check for existing sessions first
 	if args != "" {
+		if session, exists := h.SessionManager.GetSession(m.Chat.ID); exists {
+			// Don't interrupt another user's session or a different session type
+			if session.UserID != m.From.ID || session.Type != SessionTypeSpendSviniya {
+				return tgbotapi.NewMessage(m.Chat.ID, "Another user has an active session in this chat. Please wait for them to finish."), nil
+			}
+		}
 		return h.processSpend(m, args)
+	}
+
+	// No argument - check for existing session before starting a new one
+	if session, exists := h.SessionManager.GetSession(m.Chat.ID); exists {
+		// There's an existing session - don't clobber it
+		if session.UserID == m.From.ID {
+			return tgbotapi.NewMessage(m.Chat.ID, "You already have an active session. Send /cancel to end it first."), nil
+		}
+		return tgbotapi.NewMessage(m.Chat.ID, "Another user has an active session in this chat. Please wait for them to finish."), nil
 	}
 
 	// No argument - start interactive session
@@ -43,13 +65,28 @@ func (h *Handlers) HandleSpend(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 }
 
 // HandleSpendInteractive handles messages during an active spend sviniya session.
-func (h *Handlers) HandleSpendInteractive(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
+func (h *Handlers) HandleSpendInteractive(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 	slog.Info(fmt.Sprintf("[HandleSpendInteractive] User %d (%s) in spend session", m.From.ID, m.From.FirstName))
+
+	// Verify the message is from the user who started the session
+	session, exists := h.SessionManager.GetSession(m.Chat.ID)
+	if !exists {
+		return tgbotapi.NewMessage(m.Chat.ID, "No active spend session. Use /spend to start."), nil
+	}
+	if session.UserID != m.From.ID {
+		// Ignore messages from non-owners - don't interrupt the conversation
+		return nil, nil
+	}
 
 	// Check for cancel command
 	if m.IsCommand() && m.Command() == "cancel" {
 		h.SessionManager.EndSession(m.Chat.ID)
 		return tgbotapi.NewMessage(m.Chat.ID, "Spend sviniya cancelled."), nil
+	}
+
+	// Ensure there's text to process as description
+	if m.Text == "" {
+		return tgbotapi.NewMessage(m.Chat.ID, "Please send a text description of what you're spending the sviniya on, or use /cancel to abort."), nil
 	}
 
 	// Treat text as description and process
@@ -60,11 +97,24 @@ func (h *Handlers) HandleSpendInteractive(m *tgbotapi.Message) (tgbotapi.Message
 func (h *Handlers) processSpend(m *tgbotapi.Message, description string) (tgbotapi.MessageConfig, error) {
 	ctx := context.Background()
 
-	// Get user info to get their name
+	// Get user info to get their internal ID and name
 	user, err := h.Store.GetUserByTelegramID(ctx, m.From.ID)
 	if err != nil || user == nil {
 		slog.Error(fmt.Sprintf("[processSpend] Error getting user by Telegram ID %d: %v", m.From.ID, err))
 		return tgbotapi.NewMessage(m.Chat.ID, "Failed to retrieve your user information."), nil
+	}
+
+	// Decrement balance FIRST to prevent false announcements
+	err = h.Store.DecrementSviniyaBalance(ctx, user.ID)
+	if err != nil {
+		slog.Error(fmt.Sprintf("[processSpend] Error decrementing sviniya balance for user %d: %v", user.ID, err))
+		// End the session since the operation failed
+		h.SessionManager.EndSession(m.Chat.ID)
+		// Check if it's an insufficient balance error
+		if strings.Contains(err.Error(), "insufficient") {
+			return tgbotapi.NewMessage(m.Chat.ID, "Sorry, you have no sviniyas on your balance to spend."), nil
+		}
+		return tgbotapi.NewMessage(m.Chat.ID, "Failed to spend sviniya."), nil
 	}
 
 	// Build announcement message
@@ -79,30 +129,28 @@ func (h *Handlers) processSpend(m *tgbotapi.Message, description string) (tgbota
 		announcementText = vanilla
 	}
 
-	// Send announcement to group FIRST (before decrementing balance)
+	// Send announcement to group AFTER successful decrement
 	announcementSent := false
 	if h.Bot != nil && h.GroupID != 0 {
 		groupMsg := tgbotapi.NewMessage(h.GroupID, announcementText)
 		groupMsg.ParseMode = tgbotapi.ModeHTML
 		if _, err := h.Bot.Send(groupMsg); err != nil {
 			slog.Error(fmt.Sprintf("[processSpend] Failed to send announcement to group %d: %v", h.GroupID, err))
-			return tgbotapi.NewMessage(m.Chat.ID, "Failed to send announcement to the group. Your sviniya was not spent."), nil
+			// Don't fail the spend if announcement fails - balance was already decremented
+		} else {
+			slog.Info(fmt.Sprintf("[processSpend] Sent sviniya spend announcement to group %d", h.GroupID))
+			announcementSent = true
 		}
-		slog.Info(fmt.Sprintf("[processSpend] Sent sviniya spend announcement to group %d", h.GroupID))
-		announcementSent = true
 	} else {
 		slog.Warn("[processSpend] Bot or GroupID not configured, skipping group announcement")
 	}
 
-	// Decrement balance AFTER announcement is sent
-	err = h.Store.DecrementSviniyaBalance(ctx, m.From.ID)
-	if err != nil {
-		slog.Error(fmt.Sprintf("[processSpend] Error decrementing sviniya balance for user %d: %v", m.From.ID, err))
-		return tgbotapi.NewMessage(m.Chat.ID, "Failed to spend sviniya."), nil
+	// End session only if it's a spend session belonging to this user
+	if session, exists := h.SessionManager.GetSession(m.Chat.ID); exists {
+		if session.UserID == m.From.ID && session.Type == SessionTypeSpendSviniya {
+			h.SessionManager.EndSession(m.Chat.ID)
+		}
 	}
-
-	// End session if we were in one
-	h.SessionManager.EndSession(m.Chat.ID)
 
 	// Confirm to user
 	if announcementSent {

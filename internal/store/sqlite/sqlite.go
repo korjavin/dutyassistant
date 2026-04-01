@@ -115,6 +115,15 @@ func (s *SQLiteStore) migrate(ctx context.Context) error {
 			balance INTEGER NOT NULL DEFAULT 0,
 			FOREIGN KEY(user_id) REFERENCES users(id)
 		);
+
+		CREATE TABLE IF NOT EXISTS sviniya_monthly_grants (
+			year INTEGER NOT NULL,
+			month INTEGER NOT NULL,
+			user_id INTEGER NOT NULL,
+			granted_at TEXT NOT NULL,
+			PRIMARY KEY (year, month),
+			FOREIGN KEY(user_id) REFERENCES users(id)
+		);
 	`
 	if _, err := s.db.ExecContext(ctx, schema); err != nil {
 		return err

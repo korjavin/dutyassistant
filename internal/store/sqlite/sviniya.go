@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/korjavin/dutyassistant/internal/store"
 )
@@ -88,10 +89,10 @@ func (s *SQLiteStore) SetSviniyaBalance(ctx context.Context, userID int64, balan
 	return nil
 }
 
-// DecrementSviniyaBalance decrements a user's sviniya balance by 1 (minimum 0).
-// Returns an error if the user has no balance record.
+// DecrementSviniyaBalance decrements a user's sviniya balance by 1.
+// Returns an error if the user has no balance record or if balance is already 0.
 func (s *SQLiteStore) DecrementSviniyaBalance(ctx context.Context, userID int64) error {
-	query := `UPDATE sviniya_balances SET balance = MAX(0, balance - 1) WHERE user_id = ?`
+	query := `UPDATE sviniya_balances SET balance = balance - 1 WHERE user_id = ? AND balance > 0`
 	result, err := s.db.ExecContext(ctx, query, userID)
 	if err != nil {
 		return fmt.Errorf("could not decrement sviniya balance: %w", err)
@@ -101,7 +102,102 @@ func (s *SQLiteStore) DecrementSviniyaBalance(ctx context.Context, userID int64)
 		return fmt.Errorf("could not get rows affected: %w", err)
 	}
 	if rowsAffected == 0 {
-		return fmt.Errorf("no sviniya balance record found for user %d", userID)
+		// Check if user has a balance record
+		balance, err := s.GetSviniyaBalance(ctx, userID)
+		if err != nil {
+			return fmt.Errorf("could not check sviniya balance: %w", err)
+		}
+		if balance == nil {
+			return fmt.Errorf("no sviniya balance record found for user %d", userID)
+		}
+		if balance.Balance <= 0 {
+			return fmt.Errorf("insufficient sviniya balance for user %d", userID)
+		}
+		return fmt.Errorf("failed to decrement sviniya balance for user %d", userID)
+	}
+	return nil
+}
+
+// GetSviniyaMonthlyGrant checks if a sviniya has already been granted for a given month/year.
+// Returns the user ID who received the grant and whether a grant exists.
+func (s *SQLiteStore) GetSviniyaMonthlyGrant(ctx context.Context, year int, month time.Month) (userID int64, granted bool, err error) {
+	query := `SELECT user_id FROM sviniya_monthly_grants WHERE year = ? AND month = ?`
+	row := s.db.QueryRowContext(ctx, query, year, int(month))
+	err = row.Scan(&userID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return 0, false, nil
+		}
+		return 0, false, fmt.Errorf("could not query sviniya monthly grant: %w", err)
+	}
+	return userID, true, nil
+}
+
+// RecordSviniyaMonthlyGrant records that a sviniya was granted to a user for a specific month/year.
+// This prevents duplicate grants if the function is called multiple times.
+func (s *SQLiteStore) RecordSviniyaMonthlyGrant(ctx context.Context, year int, month time.Month, userID int64) error {
+	query := `
+		INSERT INTO sviniya_monthly_grants (year, month, user_id, granted_at)
+		VALUES (?, ?, ?, ?)
+	`
+	_, err := s.db.ExecContext(ctx, query, year, int(month), userID, time.Now().Format(time.RFC3339))
+	if err != nil {
+		return fmt.Errorf("could not record sviniya monthly grant: %w", err)
+	}
+	return nil
+}
+
+// GrantSviniyaForMonth atomically grants a sviniya to a user for a specific month/year.
+// It records the grant and adds the balance in a single transaction to prevent either operation from succeeding without the other.
+// Returns an error if a grant already exists for this month/year.
+func (s *SQLiteStore) GrantSviniyaForMonth(ctx context.Context, year int, month time.Month, userID int64) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("could not begin transaction: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	// Check if grant already exists
+	var existingUserID int64
+	checkQuery := `SELECT user_id FROM sviniya_monthly_grants WHERE year = ? AND month = ?`
+	err = tx.QueryRowContext(ctx, checkQuery, year, int(month)).Scan(&existingUserID)
+	if err == nil {
+		// Grant already exists
+		tx.Rollback()
+		return fmt.Errorf("sviniya already granted for %s %d to user %d", month, year, existingUserID)
+	}
+	if err != sql.ErrNoRows {
+		return fmt.Errorf("could not check existing grant: %w", err)
+	}
+
+	// Record the grant
+	grantQuery := `
+		INSERT INTO sviniya_monthly_grants (year, month, user_id, granted_at)
+		VALUES (?, ?, ?, ?)
+	`
+	_, err = tx.ExecContext(ctx, grantQuery, year, int(month), userID, time.Now().Format(time.RFC3339))
+	if err != nil {
+		return fmt.Errorf("could not record sviniya monthly grant: %w", err)
+	}
+
+	// Add the balance
+	balanceQuery := `
+		INSERT INTO sviniya_balances (user_id, balance)
+		VALUES (?, ?)
+		ON CONFLICT(user_id) DO UPDATE SET
+			balance = balance + ?
+	`
+	_, err = tx.ExecContext(ctx, balanceQuery, userID, 1, 1)
+	if err != nil {
+		return fmt.Errorf("could not add sviniya balance: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("could not commit transaction: %w", err)
 	}
 	return nil
 }

@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/korjavin/dutyassistant/internal/store"
 	"github.com/stretchr/testify/assert"
@@ -149,9 +150,10 @@ func TestDecrementSviniyaBalance(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 0, balance.Balance)
 
-	// Decrement below zero (should stay at zero)
+	// Decrement below zero (should fail with insufficient balance error)
 	err = s.DecrementSviniyaBalance(ctx, user.ID)
-	require.NoError(t, err)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "insufficient")
 
 	balance, err = s.GetSviniyaBalance(ctx, user.ID)
 	require.NoError(t, err)
@@ -186,4 +188,56 @@ func TestSviniyaBalancesWithMultipleUsers(t *testing.T) {
 	assert.Equal(t, bob.ID, balances[1].UserID)
 	assert.Equal(t, "Bob", balances[1].UserName)
 	assert.Equal(t, 5, balances[1].Balance)
+}
+
+func TestGetSviniyaMonthlyGrant_NotGranted(t *testing.T) {
+	s := setupTestDB(t)
+	ctx := context.Background()
+
+	// Check for a month that hasn't been granted
+	userID, granted, err := s.GetSviniyaMonthlyGrant(ctx, 2026, time.March)
+	require.NoError(t, err)
+	assert.False(t, granted, "Should not be granted")
+	assert.Zero(t, userID, "UserID should be zero when not granted")
+}
+
+func TestRecordSviniyaMonthlyGrantAndGet(t *testing.T) {
+	s := setupTestDB(t)
+	ctx := context.Background()
+
+	// Create test user
+	user := &store.User{TelegramUserID: 1, FirstName: "Alice", IsAdmin: false, IsActive: true}
+	require.NoError(t, s.CreateUser(ctx, user))
+
+	// Record a grant for March 2026
+	err := s.RecordSviniyaMonthlyGrant(ctx, 2026, time.March, user.ID)
+	require.NoError(t, err)
+
+	// Check that it was recorded
+	userID, granted, err := s.GetSviniyaMonthlyGrant(ctx, 2026, time.March)
+	require.NoError(t, err)
+	assert.True(t, granted, "Should be granted")
+	assert.Equal(t, user.ID, userID, "UserID should match")
+
+	// Check a different month - should not be granted
+	userID, granted, err = s.GetSviniyaMonthlyGrant(ctx, 2026, time.April)
+	require.NoError(t, err)
+	assert.False(t, granted, "Different month should not be granted")
+}
+
+func TestRecordSviniyaMonthlyGrant_Idempotent(t *testing.T) {
+	s := setupTestDB(t)
+	ctx := context.Background()
+
+	// Create test user
+	user := &store.User{TelegramUserID: 1, FirstName: "Alice", IsAdmin: false, IsActive: true}
+	require.NoError(t, s.CreateUser(ctx, user))
+
+	// Record a grant for March 2026
+	err := s.RecordSviniyaMonthlyGrant(ctx, 2026, time.March, user.ID)
+	require.NoError(t, err)
+
+	// Try to record again - should fail due to UNIQUE constraint
+	err = s.RecordSviniyaMonthlyGrant(ctx, 2026, time.March, user.ID)
+	assert.Error(t, err, "Should fail when recording duplicate grant for same month")
 }

@@ -412,6 +412,18 @@ func (m *MockStore) DecrementSviniyaBalance(ctx context.Context, userID int64) e
 	return nil
 }
 
+func (m *MockStore) GetSviniyaMonthlyGrant(ctx context.Context, year int, month time.Month) (userID int64, granted bool, err error) {
+	return 0, false, nil
+}
+
+func (m *MockStore) RecordSviniyaMonthlyGrant(ctx context.Context, year int, month time.Month, userID int64) error {
+	return nil
+}
+
+func (m *MockStore) GrantSviniyaForMonth(ctx context.Context, year int, month time.Month, userID int64) error {
+	return nil
+}
+
 func TestSendDailyChoreSummary_NoOverdue(t *testing.T) {
 	mockStore := new(MockStore)
 	var sentText string

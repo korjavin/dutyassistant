@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"fmt"
 	"testing"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -243,8 +244,12 @@ func TestHandleSpend_ZeroBalance(t *testing.T) {
 		Text: "/spend",
 	}
 
-	// Return balance of 0
-	mockStore.On("GetSviniyaBalance", mock.Anything, int64(456)).Return(&store.SviniyaBalance{UserID: 456, Balance: 0}, nil)
+	// First, GetUserByTelegramID is called to get internal ID
+	user := &store.User{ID: 1, TelegramUserID: 456, FirstName: "TestUser", IsAdmin: false, IsActive: true}
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return(user, nil).Once()
+
+	// Return balance of 0 using internal ID
+	mockStore.On("GetSviniyaBalance", mock.Anything, int64(1)).Return(&store.SviniyaBalance{UserID: 1, Balance: 0}, nil)
 
 	msg, err := h.HandleSpend(message)
 	assert.NoError(t, err)
@@ -262,8 +267,12 @@ func TestHandleSpend_NilBalance(t *testing.T) {
 		Text: "/spend",
 	}
 
+	// First, GetUserByTelegramID is called to get internal ID
+	user := &store.User{ID: 1, TelegramUserID: 456, FirstName: "TestUser", IsAdmin: false, IsActive: true}
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return(user, nil).Once()
+
 	// Return nil balance (user doesn't exist in sviniya_balances)
-	mockStore.On("GetSviniyaBalance", mock.Anything, int64(456)).Return(nil, nil)
+	mockStore.On("GetSviniyaBalance", mock.Anything, int64(1)).Return(nil, nil)
 
 	msg, err := h.HandleSpend(message)
 	assert.NoError(t, err)
@@ -283,9 +292,9 @@ func TestHandleSpend_WithInlineDescription(t *testing.T) {
 	}
 
 	user := &store.User{ID: 1, TelegramUserID: 456, FirstName: "TestUser", IsAdmin: false, IsActive: true}
-	mockStore.On("GetSviniyaBalance", mock.Anything, int64(456)).Return(&store.SviniyaBalance{UserID: 456, Balance: 5}, nil)
-	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return(user, nil)
-	mockStore.On("DecrementSviniyaBalance", mock.Anything, int64(456)).Return(nil)
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return(user, nil).Twice()
+	mockStore.On("GetSviniyaBalance", mock.Anything, int64(1)).Return(&store.SviniyaBalance{UserID: 1, Balance: 5}, nil)
+	mockStore.On("DecrementSviniyaBalance", mock.Anything, int64(1)).Return(nil)
 
 	msg, err := h.HandleSpend(message)
 	assert.NoError(t, err)
@@ -306,8 +315,12 @@ func TestHandleSpend_InteractiveMode_HasBalance(t *testing.T) {
 		Text: "/spend",
 	}
 
-	// Return balance > 0
-	mockStore.On("GetSviniyaBalance", mock.Anything, int64(456)).Return(&store.SviniyaBalance{UserID: 456, Balance: 3}, nil)
+	// First, GetUserByTelegramID is called to get internal ID
+	user := &store.User{ID: 1, TelegramUserID: 456, FirstName: "TestUser", IsAdmin: false, IsActive: true}
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return(user, nil).Once()
+
+	// Return balance > 0 using internal ID
+	mockStore.On("GetSviniyaBalance", mock.Anything, int64(1)).Return(&store.SviniyaBalance{UserID: 1, Balance: 3}, nil)
 
 	msg, err := h.HandleSpend(message)
 	assert.NoError(t, err)
@@ -339,7 +352,8 @@ func TestHandleSpendInteractive_Cancel(t *testing.T) {
 
 	msg, err := h.HandleSpendInteractive(message)
 	assert.NoError(t, err)
-	assert.Contains(t, msg.Text, "cancelled")
+	msgConfig := msg.(tgbotapi.MessageConfig)
+	assert.Contains(t, msgConfig.Text, "cancelled")
 
 	// Check that session was ended
 	_, exists := h.SessionManager.GetSession(123)
@@ -361,14 +375,15 @@ func TestHandleSpendInteractive_HappyPath(t *testing.T) {
 
 	user := &store.User{ID: 1, TelegramUserID: 456, FirstName: "TestUser", IsAdmin: false, IsActive: true}
 	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return(user, nil)
-	mockStore.On("DecrementSviniyaBalance", mock.Anything, int64(456)).Return(nil)
+	mockStore.On("DecrementSviniyaBalance", mock.Anything, int64(1)).Return(nil)
 
 	msg, err := h.HandleSpendInteractive(message)
 	assert.NoError(t, err)
-	assert.Contains(t, msg.Text, "Spent 1 sviniya")
-	assert.Contains(t, msg.Text, "a fancy dinner")
+	msgConfig := msg.(tgbotapi.MessageConfig)
+	assert.Contains(t, msgConfig.Text, "Spent 1 sviniya")
+	assert.Contains(t, msgConfig.Text, "a fancy dinner")
 	// When Bot is nil, announcement is not sent, so message should NOT contain "Announcement sent"
-	assert.NotContains(t, msg.Text, "Announcement sent")
+	assert.NotContains(t, msgConfig.Text, "Announcement sent")
 
 	// Check that session was ended
 	_, exists := h.SessionManager.GetSession(123)
@@ -389,9 +404,9 @@ func TestHandleSpend_NoLLMFallback(t *testing.T) {
 	}
 
 	user := &store.User{ID: 1, TelegramUserID: 456, FirstName: "TestUser", IsAdmin: false, IsActive: true}
-	mockStore.On("GetSviniyaBalance", mock.Anything, int64(456)).Return(&store.SviniyaBalance{UserID: 456, Balance: 5}, nil)
-	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return(user, nil)
-	mockStore.On("DecrementSviniyaBalance", mock.Anything, int64(456)).Return(nil)
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return(user, nil).Twice()
+	mockStore.On("GetSviniyaBalance", mock.Anything, int64(1)).Return(&store.SviniyaBalance{UserID: 1, Balance: 5}, nil)
+	mockStore.On("DecrementSviniyaBalance", mock.Anything, int64(1)).Return(nil)
 
 	msg, err := h.HandleSpend(message)
 	assert.NoError(t, err)
@@ -410,7 +425,9 @@ func TestHandleSpend_GetBalanceError(t *testing.T) {
 		Text: "/spend",
 	}
 
-	mockStore.On("GetSviniyaBalance", mock.Anything, int64(456)).Return(nil, assert.AnError)
+	user := &store.User{ID: 1, TelegramUserID: 456, FirstName: "TestUser", IsAdmin: false, IsActive: true}
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return(user, nil).Once()
+	mockStore.On("GetSviniyaBalance", mock.Anything, int64(1)).Return(nil, assert.AnError)
 
 	msg, err := h.HandleSpend(message)
 	assert.NoError(t, err)
@@ -435,7 +452,8 @@ func TestHandleSpendInteractive_GetUserError(t *testing.T) {
 
 	msg, err := h.HandleSpendInteractive(message)
 	assert.NoError(t, err)
-	assert.Contains(t, msg.Text, "Failed to retrieve your user information")
+	msgConfig := msg.(tgbotapi.MessageConfig)
+	assert.Contains(t, msgConfig.Text, "Failed to retrieve your user information")
 	mockStore.AssertExpectations(t)
 }
 
@@ -454,10 +472,166 @@ func TestHandleSpendInteractive_DecrementError(t *testing.T) {
 
 	user := &store.User{ID: 1, TelegramUserID: 456, FirstName: "TestUser", IsAdmin: false, IsActive: true}
 	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return(user, nil)
-	mockStore.On("DecrementSviniyaBalance", mock.Anything, int64(456)).Return(assert.AnError)
+	mockStore.On("DecrementSviniyaBalance", mock.Anything, int64(1)).Return(assert.AnError)
 
 	msg, err := h.HandleSpendInteractive(message)
 	assert.NoError(t, err)
-	assert.Contains(t, msg.Text, "Failed to spend sviniya")
+	msgConfig := msg.(tgbotapi.MessageConfig)
+	assert.Contains(t, msgConfig.Text, "Failed to spend sviniya")
 	mockStore.AssertExpectations(t)
+}
+
+func TestHandleSpendInteractive_WrongUser(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.New(mockStore, nil, 0, nil)
+
+	// Start a session first with user 456
+	h.SessionManager.StartSession(123, 456, handlers.SessionTypeSpendSviniya)
+
+	// Try to spend from a different user (789)
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 123},
+		From: &tgbotapi.User{ID: 789, FirstName: "OtherUser"},
+		Text: "something nice",
+	}
+
+	msg, err := h.HandleSpendInteractive(message)
+	assert.NoError(t, err)
+	// Message should be ignored (nil) for non-owners
+	assert.Nil(t, msg)
+
+	// Check that session is still active (not ended)
+	session, exists := h.SessionManager.GetSession(123)
+	assert.True(t, exists, "Session should still be active")
+	assert.Equal(t, int64(456), session.UserID)
+}
+
+func TestHandleSpendInteractive_NoSession(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.New(mockStore, nil, 0, nil)
+
+	// Don't start a session
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 123},
+		From: &tgbotapi.User{ID: 456, FirstName: "TestUser"},
+		Text: "something nice",
+	}
+
+	msg, err := h.HandleSpendInteractive(message)
+	assert.NoError(t, err)
+	msgConfig := msg.(tgbotapi.MessageConfig)
+	assert.Contains(t, msgConfig.Text, "No active spend session")
+}
+
+func TestHandleSpendInteractive_EmptyText(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.New(mockStore, nil, 0, nil)
+
+	// Start a session first
+	h.SessionManager.StartSession(123, 456, handlers.SessionTypeSpendSviniya)
+
+	// Send a message with empty text (e.g., a sticker or photo)
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 123},
+		From: &tgbotapi.User{ID: 456, FirstName: "TestUser"},
+		Text: "",
+	}
+
+	msg, err := h.HandleSpendInteractive(message)
+	assert.NoError(t, err)
+	msgConfig := msg.(tgbotapi.MessageConfig)
+	assert.Contains(t, msgConfig.Text, "Please send a text description")
+
+	// Check that session is still active (not ended)
+	_, exists := h.SessionManager.GetSession(123)
+	assert.True(t, exists, "Session should still be active")
+}
+
+func TestHandleSpend_ExistingSessionBySameUser(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.New(mockStore, nil, 0, nil)
+
+	// Start an existing session (could be any session type)
+	h.SessionManager.StartSession(123, 456, handlers.SessionTypeChoreCreation)
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 123},
+		From: &tgbotapi.User{ID: 456, FirstName: "TestUser"},
+		Text: "/spend",
+	}
+
+	// First, GetUserByTelegramID is called to get internal ID
+	user := &store.User{ID: 1, TelegramUserID: 456, FirstName: "TestUser", IsAdmin: false, IsActive: true}
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return(user, nil).Once()
+
+	// Return balance > 0 using internal ID (won't actually check because of existing session)
+	mockStore.On("GetSviniyaBalance", mock.Anything, int64(1)).Return(&store.SviniyaBalance{UserID: 1, Balance: 3}, nil)
+
+	msg, err := h.HandleSpend(message)
+	assert.NoError(t, err)
+	assert.Contains(t, msg.Text, "You already have an active session")
+
+	// Check that original chore creation session is still active
+	session, exists := h.SessionManager.GetSession(123)
+	assert.True(t, exists, "Session should still be active")
+	assert.Equal(t, handlers.SessionTypeChoreCreation, session.Type)
+}
+
+func TestHandleSpend_ExistingSessionByDifferentUser(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.New(mockStore, nil, 0, nil)
+
+	// Start an existing session by a different user
+	h.SessionManager.StartSession(123, 789, handlers.SessionTypeChoreCreation)
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 123},
+		From: &tgbotapi.User{ID: 456, FirstName: "TestUser"},
+		Text: "/spend",
+	}
+
+	// First, GetUserByTelegramID is called to get internal ID
+	user := &store.User{ID: 1, TelegramUserID: 456, FirstName: "TestUser", IsAdmin: false, IsActive: true}
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return(user, nil).Once()
+
+	// Return balance > 0 using internal ID (won't actually check because of existing session)
+	mockStore.On("GetSviniyaBalance", mock.Anything, int64(1)).Return(&store.SviniyaBalance{UserID: 1, Balance: 3}, nil)
+
+	msg, err := h.HandleSpend(message)
+	assert.NoError(t, err)
+	assert.Contains(t, msg.Text, "Another user has an active session")
+
+	// Check that original session is still active
+	session, exists := h.SessionManager.GetSession(123)
+	assert.True(t, exists, "Session should still be active")
+	assert.Equal(t, int64(789), session.UserID)
+}
+
+func TestHandleSpendInteractive_InsufficientBalanceError(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.New(mockStore, nil, 0, nil)
+
+	// Start a session first
+	h.SessionManager.StartSession(123, 456, handlers.SessionTypeSpendSviniya)
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 123},
+		From: &tgbotapi.User{ID: 456, FirstName: "TestUser"},
+		Text: "chocolate",
+	}
+
+	user := &store.User{ID: 1, TelegramUserID: 456, FirstName: "TestUser", IsAdmin: false, IsActive: true}
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return(user, nil)
+	// Return insufficient balance error
+	mockStore.On("DecrementSviniyaBalance", mock.Anything, int64(1)).Return(fmt.Errorf("insufficient sviniya balance for user 1"))
+
+	msg, err := h.HandleSpendInteractive(message)
+	assert.NoError(t, err)
+	msgConfig := msg.(tgbotapi.MessageConfig)
+	assert.Contains(t, msgConfig.Text, "no sviniyas")
+
+	// Check that session was ended
+	_, exists := h.SessionManager.GetSession(123)
+	assert.False(t, exists, "Session should be ended")
 }

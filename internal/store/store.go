@@ -202,4 +202,9 @@ type Store interface {
 	AddSviniyaBalance(ctx context.Context, userID int64, amount int) error
 	SetSviniyaBalance(ctx context.Context, userID int64, balance int) error
 	DecrementSviniyaBalance(ctx context.Context, userID int64) error
+
+	// Sviniya monthly grant tracking
+	GetSviniyaMonthlyGrant(ctx context.Context, year int, month time.Month) (userID int64, granted bool, err error)
+	RecordSviniyaMonthlyGrant(ctx context.Context, year int, month time.Month, userID int64) error
+	GrantSviniyaForMonth(ctx context.Context, year int, month time.Month, userID int64) error
 }
