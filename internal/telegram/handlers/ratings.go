@@ -505,12 +505,14 @@ func formatMonthlyRatingsWinnersDigest(totals []*store.ParticipantMonthlyTotal, 
 	b.WriteString("Winners:\n")
 	places := []string{"1st", "2nd", "3rd"}
 	for i := 0; i < len(totals) && i < len(places); i++ {
-		b.WriteString(fmt.Sprintf("%s: %s with %d point(s)\n", places[i], totals[i].ParticipantName, totals[i].TotalScore))
+		escapedName := html.EscapeString(totals[i].ParticipantName)
+		b.WriteString(fmt.Sprintf("%s: %s with %d point(s)\n", places[i], escapedName, totals[i].TotalScore))
 	}
 
 	b.WriteString("\nTotals:\n")
 	for i, total := range totals {
-		b.WriteString(fmt.Sprintf("%d. %s - %d point(s)", i+1, total.ParticipantName, total.TotalScore))
+		escapedName := html.EscapeString(total.ParticipantName)
+		b.WriteString(fmt.Sprintf("%d. %s - %d point(s)", i+1, escapedName, total.TotalScore))
 		if total.DaysRated > 0 {
 			b.WriteString(fmt.Sprintf(" across %d rated day(s)", total.DaysRated))
 		}

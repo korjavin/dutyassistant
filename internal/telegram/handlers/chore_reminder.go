@@ -11,7 +11,6 @@ import (
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"github.com/korjavin/dutyassistant/internal/llm"
 	"github.com/korjavin/dutyassistant/internal/store"
 )
 
@@ -30,15 +29,13 @@ type ChoreReminderManager struct {
 	activeChores map[string]*ChoreAssignment // key is reminderID
 	mu           sync.RWMutex
 	bot          *tgbotapi.BotAPI
-	llmClient    llm.ClientInterface
 }
 
 // NewChoreReminderManager creates a new chore reminder manager
-func NewChoreReminderManager(bot *tgbotapi.BotAPI, db store.Store, groupID int64, llmClient llm.ClientInterface) *ChoreReminderManager {
+func NewChoreReminderManager(bot *tgbotapi.BotAPI, db store.Store, groupID int64) *ChoreReminderManager {
 	crm := &ChoreReminderManager{
 		activeChores: make(map[string]*ChoreAssignment),
 		bot:          bot,
-		llmClient:    llmClient,
 	}
 	if db != nil {
 		crm.loadActiveChores(db, groupID)

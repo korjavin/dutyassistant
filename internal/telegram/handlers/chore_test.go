@@ -878,7 +878,7 @@ func TestSendInitialDM_IncludesDescriptionAndButtons(t *testing.T) {
 	bot, err := tgbotapi.NewBotAPIWithClient("TOKEN", tgbotapi.APIEndpoint, client)
 	assert.NoError(t, err)
 
-	crm := handlers.NewChoreReminderManager(bot, nil, 0, nil)
+	crm := handlers.NewChoreReminderManager(bot, nil, 0)
 	assignment := &handlers.ChoreAssignment{
 		UserID:      777,
 		UserName:    "Vasiliy",
@@ -898,7 +898,7 @@ func TestSendInitialDM_IncludesDescriptionAndButtons(t *testing.T) {
 }
 
 func TestSendInitialDM_NilBot(t *testing.T) {
-	crm := handlers.NewChoreReminderManager(nil, nil, 0, nil)
+	crm := handlers.NewChoreReminderManager(nil, nil, 0)
 	assignment := &handlers.ChoreAssignment{
 		UserID:     777,
 		ReminderID: "test_123",
@@ -930,7 +930,7 @@ func TestSendInitialDM_SendFailurePreventsStorage(t *testing.T) {
 	bot, err := tgbotapi.NewBotAPIWithClient("TOKEN", tgbotapi.APIEndpoint, client)
 	assert.NoError(t, err)
 
-	crm := handlers.NewChoreReminderManager(bot, nil, 0, nil)
+	crm := handlers.NewChoreReminderManager(bot, nil, 0)
 	assignment := &handlers.ChoreAssignment{
 		UserID:      777,
 		ReminderID:  "test_123",
@@ -1052,7 +1052,7 @@ func TestSendCompletionToGroup_OneLinerFormat(t *testing.T) {
 	bot, err := tgbotapi.NewBotAPIWithClient("TOKEN", tgbotapi.APIEndpoint, client)
 	assert.NoError(t, err)
 
-	crm := handlers.NewChoreReminderManager(bot, nil, 0, nil)
+	crm := handlers.NewChoreReminderManager(bot, nil, 0)
 	assignment := &handlers.ChoreAssignment{
 		UserID:      777,
 		UserName:    "Alice",
@@ -1077,7 +1077,7 @@ func TestSendCompletionToGroup_OneLinerFormat(t *testing.T) {
 }
 
 func TestSendCompletionToGroup_NilBot(t *testing.T) {
-	crm := handlers.NewChoreReminderManager(nil, nil, 0, nil)
+	crm := handlers.NewChoreReminderManager(nil, nil, 0)
 	assignment := &handlers.ChoreAssignment{
 		GroupID: -1001234567890,
 	}
@@ -1097,7 +1097,7 @@ func TestSendCompletionToGroup_ZeroGroupID(t *testing.T) {
 	bot, err := tgbotapi.NewBotAPIWithClient("TOKEN", tgbotapi.APIEndpoint, client)
 	assert.NoError(t, err)
 
-	crm := handlers.NewChoreReminderManager(bot, nil, 0, nil)
+	crm := handlers.NewChoreReminderManager(bot, nil, 0)
 	assignment := &handlers.ChoreAssignment{GroupID: 0}
 	err = crm.SendCompletionToGroup(assignment)
 	assert.NoError(t, err) // Should return nil, not error when group ID is 0
@@ -1122,7 +1122,7 @@ func TestSendCompletionToGroup_BotSendFailure(t *testing.T) {
 	bot, err := tgbotapi.NewBotAPIWithClient("TOKEN", tgbotapi.APIEndpoint, client)
 	assert.NoError(t, err)
 
-	crm := handlers.NewChoreReminderManager(bot, nil, 0, nil)
+	crm := handlers.NewChoreReminderManager(bot, nil, 0)
 	assignment := &handlers.ChoreAssignment{
 		GroupID:     -1001234567890,
 		UserName:    "Alice",

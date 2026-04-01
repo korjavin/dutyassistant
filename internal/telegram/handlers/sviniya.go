@@ -76,7 +76,7 @@ func (h *Handlers) processSpend(m *tgbotapi.Message, description string) (tgbota
 
 	// Build announcement message
 	intent := fmt.Sprintf("User %s is spending a sviniya. Create a fun announcement.", user.FirstName)
-	vanilla := fmt.Sprintf("%s spent a sviniya on: %s", user.FirstName, description)
+	vanilla := fmt.Sprintf("%s spent a sviniya on: %s", user.FirstName, html.EscapeString(description))
 
 	var announcementText string
 	if h.LLMClient != nil {
@@ -164,6 +164,9 @@ func (h *Handlers) HandleSetSviniyaBalance(m *tgbotapi.Message) (tgbotapi.Messag
 	balance, err := strconv.Atoi(balanceStr)
 	if err != nil {
 		return tgbotapi.NewMessage(m.Chat.ID, "Invalid balance value. Please provide a number.\nExample: /set_sviniya_balance Ivan 3"), nil
+	}
+	if balance < 0 {
+		return tgbotapi.NewMessage(m.Chat.ID, "Balance cannot be negative.\nExample: /set_sviniya_balance Ivan 3"), nil
 	}
 
 	user, err := h.Store.GetUserByName(context.Background(), userName)

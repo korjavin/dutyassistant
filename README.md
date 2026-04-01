@@ -15,6 +15,7 @@ Duty Assistant Bot is a Telegram bot designed to help manage on-call duty roster
 *   **User Management**: Toggle active/inactive status via buttons
 *   **Weekly Statistics**: Automated weekly reports every Sunday at 21:10 PM
 *   **Monthly Participant Ratings**: Daily admin scoring prompt, month-to-date rating calendar, and month-end winners announcement
+*   **Sviniya Award System**: Monthly rating winner automatically receives 1 sviniya, users can spend sviniyas with LLM-generated announcements, admins can manage balances
 *   **Web Interface**: View duty schedule and queue status in browser
 
 ## Environment Variables
@@ -100,6 +101,8 @@ DM messages remain verbose and friendly with full sentences.
 - `/volunteer` - Volunteer for duty (shows interactive day selection buttons)
 - `/chore` - View your currently assigned active chores
 - `/explain` - Explain how the most recent dish hero duty was assigned
+- `/sviniya` - View all user sviniya balances
+- `/spend [description]` - Spend 1 sviniya with a description (generates LLM announcement to group)
 
 ### Admin Commands
 - `/assign` - Assign days to a user's admin queue (interactive user + days selection)
@@ -115,6 +118,7 @@ DM messages remain verbose and friendly with full sentences.
 - `/vacation [on|off]` - Toggle vacation mode to pause all duty assignments (interactive button UI when no argument provided)
 - `/users` - List all users with their queues and status
 - `/ratings` - Show the current month's participant rating calendar
+- `/set_sviniya_balance <name> <num>` - Set a user's sviniya balance to a specific number (admin only)
 
 ### Participant Rating Flow
 
@@ -122,7 +126,7 @@ DM messages remain verbose and friendly with full sentences.
 - The prompt lists participants in a stable order. Reply with one space-separated score per participant, using integers from 1 to 5.
 - Sending another reply later on the same day overwrites that day's participant ratings instead of creating duplicates.
 - `/ratings` shows the current month from day 1 through today, with missing scores displayed as `-`.
-- At 21:00 Europe/Berlin on the last calendar day of the month, the bot posts the monthly participant totals and 1st, 2nd, and 3rd place winners to the group.
+- At 21:00 Europe/Berlin on the last calendar day of the month, the bot posts the monthly participant totals and 1st, 2nd, and 3rd place winners to the group. The 1st place winner is automatically granted 1 sviniya.
 
 ### Interactive UX
 
