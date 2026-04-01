@@ -562,3 +562,23 @@ func (m *mockStore) GetChoreByID(ctx context.Context, id int64) (*store.Chore, e
 func (m *mockStore) UpdateChoreUserID(ctx context.Context, choreID int64, newUserID int64) error {
 	return nil
 }
+
+func (m *mockStore) GetAllSviniyaBalances(ctx context.Context) ([]*store.SviniyaBalance, error) {
+	return nil, nil
+}
+
+func (m *mockStore) GetSviniyaBalance(ctx context.Context, userID int64) (*store.SviniyaBalance, error) {
+	return nil, nil
+}
+
+func (m *mockStore) AddSviniyaBalance(ctx context.Context, userID int64, amount int) error {
+	return nil
+}
+
+func (m *mockStore) SetSviniyaBalance(ctx context.Context, userID int64, balance int) error {
+	return nil
+}
+
+func (m *mockStore) DecrementSviniyaBalance(ctx context.Context, userID int64) error {
+	return nil
+}

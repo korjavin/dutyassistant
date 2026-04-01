@@ -403,3 +403,39 @@ func (m *MockStore) CancelRecurringChore(ctx context.Context, id int64) error {
 	args := m.Called(ctx, id)
 	return args.Error(0)
 }
+
+// GetAllSviniyaBalances mocks the GetAllSviniyaBalances method.
+func (m *MockStore) GetAllSviniyaBalances(ctx context.Context) ([]*store.SviniyaBalance, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*store.SviniyaBalance), args.Error(1)
+}
+
+// GetSviniyaBalance mocks the GetSviniyaBalance method.
+func (m *MockStore) GetSviniyaBalance(ctx context.Context, userID int64) (*store.SviniyaBalance, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*store.SviniyaBalance), args.Error(1)
+}
+
+// AddSviniyaBalance mocks the AddSviniyaBalance method.
+func (m *MockStore) AddSviniyaBalance(ctx context.Context, userID int64, amount int) error {
+	args := m.Called(ctx, userID, amount)
+	return args.Error(0)
+}
+
+// SetSviniyaBalance mocks the SetSviniyaBalance method.
+func (m *MockStore) SetSviniyaBalance(ctx context.Context, userID int64, balance int) error {
+	args := m.Called(ctx, userID, balance)
+	return args.Error(0)
+}
+
+// DecrementSviniyaBalance mocks the DecrementSviniyaBalance method.
+func (m *MockStore) DecrementSviniyaBalance(ctx context.Context, userID int64) error {
+	args := m.Called(ctx, userID)
+	return args.Error(0)
+}

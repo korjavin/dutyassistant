@@ -47,8 +47,8 @@ Add a "sviniya" award system where the monthly rating winner automatically recei
 **Files:**
 - Modify: `internal/store/mocks/mock_store.go`
 
-- [ ] Add mock implementations for all 5 new sviniya store methods following existing mock patterns
-- [ ] run `go test ./...` - must pass (compile check)
+- [x] Add mock implementations for all 5 new sviniya store methods following existing mock patterns
+- [x] run `go test ./...` - must pass (compile check)
 
 ### Task 3: /sviniya command and /set_sviniya_balance admin command
 
