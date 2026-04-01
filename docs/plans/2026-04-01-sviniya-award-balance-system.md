@@ -88,10 +88,10 @@ Add a "sviniya" award system where the monthly rating winner automatically recei
 - Modify: `internal/telegram/handlers/ratings.go`
 - Modify: `internal/telegram/handlers/ratings_test.go`
 
-- [ ] In `BuildMonthlyRatingsWinnersAnnouncement`, after computing `totals`, grant 1 sviniya to `totals[0]` (first place) via `h.Store.AddSviniyaBalance`
-- [ ] Log error but don't fail the announcement if sviniya grant fails
-- [ ] Add test case: winner gets sviniya granted, store error is tolerated
-- [ ] run `go test ./internal/telegram/...` - must pass
+- [x] In `BuildMonthlyRatingsWinnersAnnouncement`, after computing `totals`, grant 1 sviniya to `totals[0]` (first place) via `h.Store.AddSviniyaBalance`
+- [x] Log error but don't fail the announcement if sviniya grant fails
+- [x] Add test case: winner gets sviniya granted, store error is tolerated
+- [x] run `go test ./internal/telegram/...` - must pass
 
 ### Task 6: Verify acceptance criteria
 

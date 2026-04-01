@@ -254,6 +254,13 @@ func (h *Handlers) BuildMonthlyRatingsWinnersAnnouncement(now time.Time) (*tgbot
 		return nil, false, err
 	}
 
+	if len(totals) > 0 {
+		winner := totals[0]
+		if err := h.Store.AddSviniyaBalance(context.Background(), winner.ParticipantID, 1); err != nil {
+			slog.Error("error granting sviniya to monthly rating winner", "winner", winner.ParticipantName, "err", err)
+		}
+	}
+
 	msg := tgbotapi.NewMessage(h.GroupID, formatMonthlyRatingsWinnersDigest(totals, normalizedNow))
 	return &msg, true, nil
 }
