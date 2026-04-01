@@ -13,6 +13,12 @@ import (
 	"time"
 )
 
+// ClientInterface defines the interface for LLM operations.
+type ClientInterface interface {
+	TranslateToEnglish(ctx context.Context, text string) (string, error)
+	RefineMessage(ctx context.Context, intent, vanilla string) string
+}
+
 // Client is an adapter for calling the OpenAI chat completion API.
 type Client struct {
 	apiKey      string

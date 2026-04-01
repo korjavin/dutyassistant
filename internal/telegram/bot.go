@@ -242,6 +242,8 @@ func (b *Bot) handleCommand(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 		return b.handlers.HandleSviniya(m)
 	case "set_sviniya_balance":
 		return b.handlers.HandleSetSviniyaBalance(m)
+	case "spend":
+		return b.handlers.HandleSpend(m)
 	default:
 		msg := tgbotapi.NewMessage(m.Chat.ID, "Unknown command. Use /help for a list of commands.")
 		return msg, nil
@@ -344,6 +346,8 @@ func (b *Bot) handleMessage(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 		return b.handlers.HandleDailyRatingsInteractive(m)
 	case handlers.SessionTypeEditChore:
 		return b.handlers.HandleEditChoreInteractive(m)
+	case handlers.SessionTypeSpendSviniya:
+		return b.handlers.HandleSpendInteractive(m)
 	default:
 		slog.Info(fmt.Sprintf("Unknown session type: %s", session.Type))
 		return nil, nil

@@ -232,3 +232,230 @@ func TestHandleSetSviniyaBalance_AdminIDNotConfigured(t *testing.T) {
 	assert.Equal(t, "Sorry, this command is for admins only.", msg.Text)
 	mockStore.AssertExpectations(t)
 }
+
+func TestHandleSpend_ZeroBalance(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.New(mockStore, nil, 0, nil)
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 123},
+		From: &tgbotapi.User{ID: 456, FirstName: "TestUser"},
+		Text: "/spend",
+	}
+
+	// Return balance of 0
+	mockStore.On("GetSviniyaBalance", mock.Anything, int64(456)).Return(&store.SviniyaBalance{UserID: 456, Balance: 0}, nil)
+
+	msg, err := h.HandleSpend(message)
+	assert.NoError(t, err)
+	assert.Contains(t, msg.Text, "no sviniyas")
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleSpend_NilBalance(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.New(mockStore, nil, 0, nil)
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 123},
+		From: &tgbotapi.User{ID: 456, FirstName: "TestUser"},
+		Text: "/spend",
+	}
+
+	// Return nil balance (user doesn't exist in sviniya_balances)
+	mockStore.On("GetSviniyaBalance", mock.Anything, int64(456)).Return(nil, nil)
+
+	msg, err := h.HandleSpend(message)
+	assert.NoError(t, err)
+	assert.Contains(t, msg.Text, "no sviniyas")
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleSpend_WithInlineDescription(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.New(mockStore, nil, 0, nil) // nil LLM client tests fallback
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 123},
+		From: &tgbotapi.User{ID: 456, FirstName: "TestUser"},
+		Text:     "/spend coffee for everyone",
+		Entities: []tgbotapi.MessageEntity{{Type: "bot_command", Offset: 0, Length: 6}},
+	}
+
+	user := &store.User{ID: 1, TelegramUserID: 456, FirstName: "TestUser", IsAdmin: false, IsActive: true}
+	mockStore.On("GetSviniyaBalance", mock.Anything, int64(456)).Return(&store.SviniyaBalance{UserID: 456, Balance: 5}, nil)
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return(user, nil)
+	mockStore.On("DecrementSviniyaBalance", mock.Anything, int64(456)).Return(nil)
+
+	msg, err := h.HandleSpend(message)
+	assert.NoError(t, err)
+	assert.Contains(t, msg.Text, "Spent 1 sviniya")
+	assert.Contains(t, msg.Text, "coffee for everyone")
+	assert.Contains(t, msg.Text, "Announcement sent")
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleSpend_InteractiveMode_HasBalance(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.New(mockStore, nil, 0, nil)
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 123},
+		From: &tgbotapi.User{ID: 456, FirstName: "TestUser"},
+		Text: "/spend",
+	}
+
+	// Return balance > 0
+	mockStore.On("GetSviniyaBalance", mock.Anything, int64(456)).Return(&store.SviniyaBalance{UserID: 456, Balance: 3}, nil)
+
+	msg, err := h.HandleSpend(message)
+	assert.NoError(t, err)
+	assert.Contains(t, msg.Text, "You have 3 sviniya(s)")
+	assert.Contains(t, msg.Text, "What would you like to spend it on?")
+	assert.Contains(t, msg.Text, "/cancel")
+
+	// Check that session was started
+	session, exists := h.SessionManager.GetSession(123)
+	assert.True(t, exists, "Session should be started")
+	assert.Equal(t, handlers.SessionTypeSpendSviniya, session.Type)
+
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleSpendInteractive_Cancel(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.New(mockStore, nil, 0, nil)
+
+	// Start a session first
+	h.SessionManager.StartSession(123, 456, handlers.SessionTypeSpendSviniya)
+
+	message := &tgbotapi.Message{
+		Chat:     &tgbotapi.Chat{ID: 123},
+		From:     &tgbotapi.User{ID: 456, FirstName: "TestUser"},
+		Text:     "/cancel",
+		Entities: []tgbotapi.MessageEntity{{Type: "bot_command", Offset: 0, Length: 7}},
+	}
+
+	msg, err := h.HandleSpendInteractive(message)
+	assert.NoError(t, err)
+	assert.Contains(t, msg.Text, "cancelled")
+
+	// Check that session was ended
+	_, exists := h.SessionManager.GetSession(123)
+	assert.False(t, exists, "Session should be ended")
+}
+
+func TestHandleSpendInteractive_HappyPath(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.New(mockStore, nil, 0, nil) // nil LLM client tests fallback
+
+	// Start a session first
+	h.SessionManager.StartSession(123, 456, handlers.SessionTypeSpendSviniya)
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 123},
+		From: &tgbotapi.User{ID: 456, FirstName: "TestUser"},
+		Text: "a fancy dinner",
+	}
+
+	user := &store.User{ID: 1, TelegramUserID: 456, FirstName: "TestUser", IsAdmin: false, IsActive: true}
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return(user, nil)
+	mockStore.On("DecrementSviniyaBalance", mock.Anything, int64(456)).Return(nil)
+
+	msg, err := h.HandleSpendInteractive(message)
+	assert.NoError(t, err)
+	assert.Contains(t, msg.Text, "Spent 1 sviniya")
+	assert.Contains(t, msg.Text, "a fancy dinner")
+	assert.Contains(t, msg.Text, "Announcement sent")
+
+	// Check that session was ended
+	_, exists := h.SessionManager.GetSession(123)
+	assert.False(t, exists, "Session should be ended")
+
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleSpend_NoLLMFallback(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.New(mockStore, nil, 0, nil) // No LLM client
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 123},
+		From: &tgbotapi.User{ID: 456, FirstName: "TestUser"},
+		Text:     "/spend pizza party",
+		Entities: []tgbotapi.MessageEntity{{Type: "bot_command", Offset: 0, Length: 6}},
+	}
+
+	user := &store.User{ID: 1, TelegramUserID: 456, FirstName: "TestUser", IsAdmin: false, IsActive: true}
+	mockStore.On("GetSviniyaBalance", mock.Anything, int64(456)).Return(&store.SviniyaBalance{UserID: 456, Balance: 5}, nil)
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return(user, nil)
+	mockStore.On("DecrementSviniyaBalance", mock.Anything, int64(456)).Return(nil)
+
+	msg, err := h.HandleSpend(message)
+	assert.NoError(t, err)
+	assert.Contains(t, msg.Text, "Spent 1 sviniya")
+	assert.Contains(t, msg.Text, "pizza party")
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleSpend_GetBalanceError(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.New(mockStore, nil, 0, nil)
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 123},
+		From: &tgbotapi.User{ID: 456, FirstName: "TestUser"},
+		Text: "/spend",
+	}
+
+	mockStore.On("GetSviniyaBalance", mock.Anything, int64(456)).Return(nil, assert.AnError)
+
+	msg, err := h.HandleSpend(message)
+	assert.NoError(t, err)
+	assert.Contains(t, msg.Text, "Failed to check your sviniya balance")
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleSpendInteractive_GetUserError(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.New(mockStore, nil, 0, nil)
+
+	// Start a session first
+	h.SessionManager.StartSession(123, 456, handlers.SessionTypeSpendSviniya)
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 123},
+		From: &tgbotapi.User{ID: 456, FirstName: "TestUser"},
+		Text: "something nice",
+	}
+
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return(nil, assert.AnError)
+
+	msg, err := h.HandleSpendInteractive(message)
+	assert.NoError(t, err)
+	assert.Contains(t, msg.Text, "Failed to retrieve your user information")
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleSpendInteractive_DecrementError(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := handlers.New(mockStore, nil, 0, nil)
+
+	// Start a session first
+	h.SessionManager.StartSession(123, 456, handlers.SessionTypeSpendSviniya)
+
+	message := &tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 123},
+		From: &tgbotapi.User{ID: 456, FirstName: "TestUser"},
+		Text: "chocolate",
+	}
+
+	user := &store.User{ID: 1, TelegramUserID: 456, FirstName: "TestUser", IsAdmin: false, IsActive: true}
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(456)).Return(user, nil)
+	mockStore.On("DecrementSviniyaBalance", mock.Anything, int64(456)).Return(assert.AnError)
+
+	msg, err := h.HandleSpendInteractive(message)
+	assert.NoError(t, err)
+	assert.Contains(t, msg.Text, "Failed to spend sviniya")
+	mockStore.AssertExpectations(t)
+}

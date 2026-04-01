@@ -70,17 +70,17 @@ Add a "sviniya" award system where the monthly rating winner automatically recei
 - Modify: `internal/telegram/handlers/sviniya_test.go`
 - Modify: `internal/telegram/bot.go`
 
-- [ ] Add `SessionTypeSpendSviniya SessionType = "spend_sviniya"` to session.go
-- [ ] Implement `HandleSpend(m)` in sviniya.go:
+- [x] Add `SessionTypeSpendSviniya SessionType = "spend_sviniya"` to session.go
+- [x] Implement `HandleSpend(m)` in sviniya.go:
   - If arg provided: treat as description and process immediately
   - If no arg: check balance first (reply "sorry, no sviniyas on your balance" if zero), else start `SessionTypeSpendSviniya` session and prompt for description
-- [ ] Implement `HandleSpendInteractive(m)` for mid-session messages:
+- [x] Implement `HandleSpendInteractive(m)` for mid-session messages:
   - Handle /cancel → EndSession, reply cancelled
   - Otherwise treat text as description: decrement balance, build announcement via LLM RefineMessage (fallback to vanilla if nil), send to GroupID, confirm to user
-- [ ] Register `"spend"` in bot.go handleCommand
-- [ ] Add `SessionTypeSpendSviniya` routing in bot.go handleMessage switch
-- [ ] Add tests: zero balance path, cancel path, happy path with mock LLM, LLM unavailable fallback
-- [ ] run `go test ./internal/telegram/...` - must pass
+- [x] Register `"spend"` in bot.go handleCommand
+- [x] Add `SessionTypeSpendSviniya` routing in bot.go handleMessage switch
+- [x] Add tests: zero balance path, cancel path, happy path with mock LLM, LLM unavailable fallback
+- [x] run `go test ./internal/telegram/...` - must pass
 
 ### Task 5: Auto-grant sviniya on monthly rating winner announcement
 

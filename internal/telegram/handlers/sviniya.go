@@ -10,6 +10,100 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
+// HandleSpend handles the /spend command - allows users to spend a sviniya with a description.
+// If an argument is provided, it processes immediately.
+// If no argument, checks balance and starts interactive session if balance > 0.
+func (h *Handlers) HandleSpend(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
+	slog.Info(fmt.Sprintf("[HandleSpend] User %d (%s) triggered /spend with args: '%s'", m.From.ID, m.From.FirstName, m.CommandArguments()))
+
+	// Get user's balance
+	balance, err := h.Store.GetSviniyaBalance(context.Background(), m.From.ID)
+	if err != nil {
+		slog.Error(fmt.Sprintf("[HandleSpend] Error getting sviniya balance for user %d: %v", m.From.ID, err))
+		return tgbotapi.NewMessage(m.Chat.ID, "Failed to check your sviniya balance."), nil
+	}
+
+	// Check if user has any balance
+	if balance == nil || balance.Balance <= 0 {
+		return tgbotapi.NewMessage(m.Chat.ID, "Sorry, you have no sviniyas on your balance to spend."), nil
+	}
+
+	args := strings.TrimSpace(m.CommandArguments())
+
+	// If argument provided, process immediately
+	if args != "" {
+		return h.processSpend(m, args)
+	}
+
+	// No argument - start interactive session
+	h.SessionManager.StartSession(m.Chat.ID, m.From.ID, SessionTypeSpendSviniya)
+	promptMsg := tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("You have %d sviniya(s). What would you like to spend it on? Send a brief description.\n\nSend /cancel to abort.", balance.Balance))
+	return promptMsg, nil
+}
+
+// HandleSpendInteractive handles messages during an active spend sviniya session.
+func (h *Handlers) HandleSpendInteractive(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
+	slog.Info(fmt.Sprintf("[HandleSpendInteractive] User %d (%s) in spend session", m.From.ID, m.From.FirstName))
+
+	// Check for cancel command
+	if m.IsCommand() && m.Command() == "cancel" {
+		h.SessionManager.EndSession(m.Chat.ID)
+		return tgbotapi.NewMessage(m.Chat.ID, "Spend sviniya cancelled."), nil
+	}
+
+	// Treat text as description and process
+	return h.processSpend(m, m.Text)
+}
+
+// processSpend handles the actual spending logic - decrements balance and sends announcement to group.
+func (h *Handlers) processSpend(m *tgbotapi.Message, description string) (tgbotapi.MessageConfig, error) {
+	ctx := context.Background()
+
+	// Get user info to get their name
+	user, err := h.Store.GetUserByTelegramID(ctx, m.From.ID)
+	if err != nil || user == nil {
+		slog.Error(fmt.Sprintf("[processSpend] Error getting user by Telegram ID %d: %v", m.From.ID, err))
+		return tgbotapi.NewMessage(m.Chat.ID, "Failed to retrieve your user information."), nil
+	}
+
+	// Decrement balance
+	err = h.Store.DecrementSviniyaBalance(ctx, m.From.ID)
+	if err != nil {
+		slog.Error(fmt.Sprintf("[processSpend] Error decrementing sviniya balance for user %d: %v", m.From.ID, err))
+		return tgbotapi.NewMessage(m.Chat.ID, "Failed to spend sviniya."), nil
+	}
+
+	// Build announcement message
+	intent := fmt.Sprintf("User %s is spending a sviniya. Create a fun announcement.", user.FirstName)
+	vanilla := fmt.Sprintf("%s spent a sviniya on: %s", user.FirstName, description)
+
+	var announcementText string
+	if h.LLMClient != nil {
+		announcementText = h.LLMClient.RefineMessage(ctx, intent, vanilla)
+	} else {
+		announcementText = vanilla
+	}
+
+	// Send announcement to group
+	if h.Bot != nil && h.GroupID != 0 {
+		groupMsg := tgbotapi.NewMessage(h.GroupID, announcementText)
+		groupMsg.ParseMode = tgbotapi.ModeHTML
+		if _, err := h.Bot.Send(groupMsg); err != nil {
+			slog.Error(fmt.Sprintf("[processSpend] Failed to send announcement to group %d: %v", h.GroupID, err))
+		} else {
+			slog.Info(fmt.Sprintf("[processSpend] Sent sviniya spend announcement to group %d", h.GroupID))
+		}
+	} else {
+		slog.Warn("[processSpend] Bot or GroupID not configured, skipping group announcement")
+	}
+
+	// End session if we were in one
+	h.SessionManager.EndSession(m.Chat.ID)
+
+	// Confirm to user
+	return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("Spent 1 sviniya on: %s\n\nAnnouncement sent to the group!", description)), nil
+}
+
 // HandleSviniya handles the /sviniya command - displays all user balances.
 func (h *Handlers) HandleSviniya(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
 	slog.Info(fmt.Sprintf("[HandleSviniya] User %d (%s) triggered /sviniya", m.From.ID, m.From.FirstName))

@@ -27,7 +27,7 @@ type Handlers struct {
 	Bot                  *tgbotapi.BotAPI      // Bot API instance for sending notifications
 	SessionManager       *SessionManager       // Session manager for interactive commands
 	ChoreReminderManager *ChoreReminderManager // Chore reminder manager
-	LLMClient            *llm.Client
+	LLMClient            llm.ClientInterface
 	ratingsMu            sync.Mutex
 }
 
@@ -41,7 +41,7 @@ func (h *Handlers) SetBot(bot *tgbotapi.BotAPI) {
 }
 
 // New creates a new Handlers instance with the provided dependencies.
-func New(s store.Store, sch scheduler.SchedulerInterface, groupID int64, llmClient *llm.Client) *Handlers {
+func New(s store.Store, sch scheduler.SchedulerInterface, groupID int64, llmClient llm.ClientInterface) *Handlers {
 	return &Handlers{
 		Store:          s,
 		Scheduler:      sch,
@@ -51,7 +51,17 @@ func New(s store.Store, sch scheduler.SchedulerInterface, groupID int64, llmClie
 	}
 }
 
-// hasNonLatinCharacters checks if the text contains non-Latin characters.
+// NewWithAdminID creates a new Handlers instance with admin ID configured.
+func NewWithAdminID(s store.Store, sch scheduler.SchedulerInterface, groupID, adminID int64, llmClient llm.ClientInterface) *Handlers {
+	return &Handlers{
+		Store:          s,
+		Scheduler:      sch,
+		GroupID:        groupID,
+		AdminID:        adminID,
+		SessionManager: NewSessionManager(),
+		LLMClient:      llmClient,
+	}
+}
 func hasNonLatinCharacters(text string) bool {
 	for _, r := range text {
 		if unicode.IsLetter(r) && !unicode.Is(unicode.Latin, r) {
@@ -80,16 +90,4 @@ func (h *Handlers) translateIfNonLatin(ctx context.Context, description string) 
 	}
 
 	return translated
-}
-
-// NewWithAdminID creates a new Handlers instance with admin ID configured.
-func NewWithAdminID(s store.Store, sch scheduler.SchedulerInterface, groupID, adminID int64, llmClient *llm.Client) *Handlers {
-	return &Handlers{
-		Store:          s,
-		Scheduler:      sch,
-		GroupID:        groupID,
-		AdminID:        adminID,
-		SessionManager: NewSessionManager(),
-		LLMClient:      llmClient,
-	}
 }

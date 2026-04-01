@@ -30,11 +30,11 @@ type ChoreReminderManager struct {
 	activeChores map[string]*ChoreAssignment // key is reminderID
 	mu           sync.RWMutex
 	bot          *tgbotapi.BotAPI
-	llmClient    *llm.Client
+	llmClient    llm.ClientInterface
 }
 
 // NewChoreReminderManager creates a new chore reminder manager
-func NewChoreReminderManager(bot *tgbotapi.BotAPI, db store.Store, groupID int64, llmClient *llm.Client) *ChoreReminderManager {
+func NewChoreReminderManager(bot *tgbotapi.BotAPI, db store.Store, groupID int64, llmClient llm.ClientInterface) *ChoreReminderManager {
 	crm := &ChoreReminderManager{
 		activeChores: make(map[string]*ChoreAssignment),
 		bot:          bot,

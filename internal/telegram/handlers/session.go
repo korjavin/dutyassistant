@@ -12,6 +12,7 @@ const (
 	SessionTypeChoreCreation SessionType = "chore_creation"
 	SessionTypeDailyRatings  SessionType = "daily_ratings"
 	SessionTypeEditChore     SessionType = "edit_chore"
+	SessionTypeSpendSviniya  SessionType = "spend_sviniya"
 )
 
 // Session represents an active user session
