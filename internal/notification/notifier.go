@@ -166,12 +166,6 @@ func SendDailyChoreSummary(ctx context.Context, bot *tgbotapi.BotAPI, db store.S
 	}
 
 	if len(chores) == 0 {
-		if groupID != 0 {
-			msg := tgbotapi.NewMessage(groupID, "No overdue chores ✅")
-			if _, err := bot.Send(msg); err != nil {
-				return fmt.Errorf("failed to send 'no chores' message: %w", err)
-			}
-		}
 		if isCron {
 			if err := db.SetLastChoreDigestDate(ctx, todayStr); err != nil {
 				slog.Error(fmt.Sprintf("Failed to set last chore digest date: %v", err))

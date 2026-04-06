@@ -435,7 +435,7 @@ func TestSendDailyChoreSummary_NoOverdue(t *testing.T) {
 
 	err := SendDailyChoreSummary(context.Background(), bot, mockStore, 123, true, "UTC")
 	assert.NoError(t, err)
-	assert.Contains(t, sentText, "No overdue chores")
+	assert.Empty(t, sentText)
 }
 
 func TestSendDailyChoreSummary_Idempotency(t *testing.T) {
@@ -463,11 +463,10 @@ func TestSendDailyChoreSummary_NotCronIgnoresIdempotency(t *testing.T) {
 
 	mockStore.On("GetOverdueChores", mock.Anything).Return([]*store.Chore{}, nil)
 
-	// isCron=false, should NOT check last date, should send the empty message
+	// isCron=false, should NOT check last date and should not send anything when there are no overdue chores
 	err := SendDailyChoreSummary(context.Background(), bot, mockStore, 123, false, "UTC")
 	assert.NoError(t, err)
-	assert.Equal(t, 1, len(sentMessages))
-	assert.Contains(t, sentMessages[0], "No overdue chores")
+	assert.Empty(t, sentMessages)
 }
 
 type RoundTripFunc func(req *http.Request) *http.Response
