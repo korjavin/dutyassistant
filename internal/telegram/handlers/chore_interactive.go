@@ -13,7 +13,7 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-// HandleChoreActionCallback handles chore menu actions (list, create, delete)
+// HandleChoreActionCallback handles chore menu actions (list, create, delete, complete)
 func (h *Handlers) HandleChoreActionCallback(q *tgbotapi.CallbackQuery) (tgbotapi.Chattable, error) {
 	isAdmin, err := h.checkAdmin(q.From.ID)
 	if err != nil || !isAdmin {
@@ -38,6 +38,8 @@ func (h *Handlers) HandleChoreActionCallback(q *tgbotapi.CallbackQuery) (tgbotap
 		return editMsg, nil
 	case "delete":
 		return h.handleChoreDeleteInteractive(q)
+	case "complete":
+		return h.handleChoreCompleteInteractive(q)
 	default:
 		return nil, nil
 	}
@@ -126,8 +128,9 @@ func (h *Handlers) handleChoreDeleteInteractive(q *tgbotapi.CallbackQuery) (tgbo
 
 	for _, c := range chores {
 		desc := c.Description
-		if len(desc) > 30 {
-			desc = desc[:27] + "..."
+		runes := []rune(desc)
+		if len(runes) > 30 {
+			desc = string(runes[:27]) + "..."
 		}
 		btnText := fmt.Sprintf("A%d: %s", c.ID, desc)
 		cbData := fmt.Sprintf("chore_delete:A%d", c.ID)
@@ -136,8 +139,9 @@ func (h *Handlers) handleChoreDeleteInteractive(q *tgbotapi.CallbackQuery) (tgbo
 
 	for _, r := range rChores {
 		desc := r.Description
-		if len(desc) > 30 {
-			desc = desc[:27] + "..."
+		runes := []rune(desc)
+		if len(runes) > 30 {
+			desc = string(runes[:27]) + "..."
 		}
 		btnText := fmt.Sprintf("R%d: %s (Every %d days)", r.ID, desc, r.Interval)
 		cbData := fmt.Sprintf("chore_delete:R%d", r.ID)
@@ -225,3 +229,49 @@ func (h *Handlers) HandleChoreDeleteConfirmCallback(q *tgbotapi.CallbackQuery) (
 	editMsg.ReplyMarkup = nil
 	return editMsg, nil
 }
+
+func (h *Handlers) handleChoreCompleteInteractive(q *tgbotapi.CallbackQuery) (tgbotapi.Chattable, error) {
+	chores, err := h.Store.GetActiveChores(context.Background())
+	if err != nil {
+		slog.Error(fmt.Sprintf("Error fetching active chores: %v", err))
+		editMsg := tgbotapi.NewEditMessageText(q.Message.Chat.ID, q.Message.MessageID, "❌ Failed to fetch active chores.")
+		editMsg.ReplyMarkup = nil
+		return editMsg, nil
+	}
+
+	if len(chores) == 0 {
+		editMsg := tgbotapi.NewEditMessageText(q.Message.Chat.ID, q.Message.MessageID, "✨ No active chores found! All clear.")
+		editMsg.ReplyMarkup = nil
+		return editMsg, nil
+	}
+
+	var keyboard [][]tgbotapi.InlineKeyboardButton
+	for _, chore := range chores {
+		if chore.User == nil {
+			continue
+		}
+		desc := chore.Description
+		runes := []rune(desc)
+		if len(runes) > 30 {
+			desc = string(runes[:27]) + "..."
+		}
+		btnText := fmt.Sprintf("%s - %s", chore.User.FirstName, desc)
+		cbData := fmt.Sprintf("complete_chore:%s", chore.ReminderID)
+		keyboard = append(keyboard, tgbotapi.NewInlineKeyboardRow(tgbotapi.NewInlineKeyboardButtonData(btnText, cbData)))
+	}
+
+	if len(keyboard) == 0 {
+		editMsg := tgbotapi.NewEditMessageText(q.Message.Chat.ID, q.Message.MessageID, "✨ No active chores found! All clear.")
+		editMsg.ReplyMarkup = nil
+		return editMsg, nil
+	}
+
+	keyboard = append(keyboard, tgbotapi.NewInlineKeyboardRow(tgbotapi.NewInlineKeyboardButtonData("❌ Cancel", "cancel_flow")))
+	markup := tgbotapi.NewInlineKeyboardMarkup(keyboard...)
+
+	editMsg := tgbotapi.NewEditMessageText(q.Message.Chat.ID, q.Message.MessageID, "✅ <b>Mark Chore as Completed</b>\n\nSelect a chore to mark as completed:")
+	editMsg.ParseMode = tgbotapi.ModeHTML
+	editMsg.ReplyMarkup = &markup
+	return editMsg, nil
+}
+

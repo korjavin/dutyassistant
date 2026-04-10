@@ -34,6 +34,7 @@ func TestHandleChoreInteractiveNoArgs(t *testing.T) {
 	msgConfig := resp.(tgbotapi.MessageConfig)
 	assert.Contains(t, msgConfig.Text, "Chore Management")
 	assert.NotNil(t, msgConfig.ReplyMarkup)
+	mockStore.AssertExpectations(t)
 }
 
 func TestHandleChoreActionList(t *testing.T) {
@@ -74,6 +75,7 @@ func TestHandleChoreActionList(t *testing.T) {
 	assert.Contains(t, editMsg.Text, "Test chore")
 	assert.Contains(t, editMsg.Text, "Recurring chore")
 	assert.Nil(t, editMsg.ReplyMarkup)
+	mockStore.AssertExpectations(t)
 }
 
 func TestHandleChoreActionDelete(t *testing.T) {
@@ -105,6 +107,70 @@ func TestHandleChoreActionDelete(t *testing.T) {
 	assert.True(t, ok)
 	assert.Contains(t, editMsg.Text, "Select a chore to delete:")
 	assert.NotNil(t, editMsg.ReplyMarkup)
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleChoreActionComplete(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	sm := handlers.NewSessionManager()
+	h := &handlers.Handlers{
+		Store:          mockStore,
+		SessionManager: sm,
+	}
+
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(123)).Return(&store.User{IsAdmin: true}, nil)
+	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{
+		{ID: 1, Description: "Wash dishes", ReminderID: "rem1", User: &store.User{FirstName: "Alice"}},
+	}, nil)
+
+	q := &tgbotapi.CallbackQuery{
+		ID:   "cb1",
+		From: &tgbotapi.User{ID: 123},
+		Message: &tgbotapi.Message{
+			Chat:      &tgbotapi.Chat{ID: 456},
+			MessageID: 789,
+		},
+		Data: "chore_action:complete",
+	}
+
+	resp, err := h.HandleChoreActionCallback(q)
+	assert.NoError(t, err)
+
+	editMsg, ok := resp.(tgbotapi.EditMessageTextConfig)
+	assert.True(t, ok)
+	assert.Contains(t, editMsg.Text, "Mark Chore as Completed")
+	assert.NotNil(t, editMsg.ReplyMarkup)
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleChoreActionCompleteNoChores(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	sm := handlers.NewSessionManager()
+	h := &handlers.Handlers{
+		Store:          mockStore,
+		SessionManager: sm,
+	}
+
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(123)).Return(&store.User{IsAdmin: true}, nil)
+	mockStore.On("GetActiveChores", mock.Anything).Return([]*store.Chore{}, nil)
+
+	q := &tgbotapi.CallbackQuery{
+		ID:   "cb1",
+		From: &tgbotapi.User{ID: 123},
+		Message: &tgbotapi.Message{
+			Chat:      &tgbotapi.Chat{ID: 456},
+			MessageID: 789,
+		},
+		Data: "chore_action:complete",
+	}
+
+	resp, err := h.HandleChoreActionCallback(q)
+	assert.NoError(t, err)
+
+	editMsg, ok := resp.(tgbotapi.EditMessageTextConfig)
+	assert.True(t, ok)
+	assert.Contains(t, editMsg.Text, "No active chores found")
+	mockStore.AssertExpectations(t)
 }
 
 func TestHandleChoreDeleteConfirmCallback(t *testing.T) {
@@ -134,4 +200,5 @@ func TestHandleChoreDeleteConfirmCallback(t *testing.T) {
 	editMsg, ok := resp.(tgbotapi.EditMessageTextConfig)
 	assert.True(t, ok)
 	assert.Contains(t, editMsg.Text, "✅ Chore deleted successfully.")
+	mockStore.AssertExpectations(t)
 }
