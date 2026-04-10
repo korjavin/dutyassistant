@@ -41,6 +41,9 @@ func ChoreMenu() tgbotapi.InlineKeyboardMarkup {
 			tgbotapi.NewInlineKeyboardButtonData("🗑 Delete Chore", "chore_action:delete"),
 		),
 		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("✅ Complete Chore", "chore_action:complete"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("❌ Cancel", "cancel_flow"),
 		),
 	)
