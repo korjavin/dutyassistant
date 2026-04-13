@@ -513,7 +513,7 @@ func formatDailyAndMonthlySummary(dailyRatings []*store.ParticipantDailyRating, 
 		if rating.HasEar {
 			scoreStr += "e"
 		}
-		b.WriteString(fmt.Sprintf("%s: %s\n", html.EscapeString(rating.ParticipantName), scoreStr))
+		fmt.Fprintf(&b, "%s: %s\n", html.EscapeString(rating.ParticipantName), scoreStr)
 	}
 
 	b.WriteString(fmt.Sprintf("\n<b>Monthly Standings (%s)</b>\n", normalizedNow.Format("January 2006")))
@@ -523,7 +523,7 @@ func formatDailyAndMonthlySummary(dailyRatings []*store.ParticipantDailyRating, 
 		for i, total := range totals {
 			b.WriteString(fmt.Sprintf("%d. %s - %d point(s)", i+1, html.EscapeString(total.ParticipantName), total.TotalScore))
 			if total.EarCount > 0 {
-				b.WriteString(fmt.Sprintf(", %d ear(s)", total.EarCount))
+				fmt.Fprintf(&b, ", %d ear(s)", total.EarCount)
 			}
 			if i < len(totals)-1 {
 				b.WriteString("\n")
@@ -549,7 +549,7 @@ func formatMonthlyRatingsWinnersDigest(totals []*store.ParticipantMonthlyTotal, 
 	places := []string{"1st", "2nd", "3rd"}
 	for i := 0; i < len(totals) && i < len(places); i++ {
 		escapedName := html.EscapeString(totals[i].ParticipantName)
-		b.WriteString(fmt.Sprintf("%s: %s with %d point(s)", places[i], escapedName, totals[i].TotalScore))
+		fmt.Fprintf(&b, "%s: %s with %d point(s)", places[i], escapedName, totals[i].TotalScore)
 		if totals[i].EarCount > 0 {
 			b.WriteString(fmt.Sprintf(", %d ear(s)", totals[i].EarCount))
 		}
