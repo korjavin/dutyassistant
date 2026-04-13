@@ -339,7 +339,8 @@ func TestHandleDailyRatingsInteractive_SendsGroupNotification(t *testing.T) {
 
 	mockStore.On("GetParticipantsForRating", mock.Anything).Return(participants, nil).Once()
 	mockStore.On("SaveDailyParticipantRatings", mock.Anything, normalizeRatingDate(ratingDate), mock.MatchedBy(func(ratings []*store.ParticipantDailyRating) bool {
-		return len(ratings) == 2 && ratings[0].Score == 5 && ratings[1].Score == 3
+		return len(ratings) == 2 && ratings[0].Score == 5 && ratings[1].Score == 3 &&
+			ratings[0].HasEar == false && ratings[1].HasEar == false
 	})).Return(nil).Once()
 
 	originalTimeNow := TimeNow
@@ -381,8 +382,8 @@ func TestHandleDailyRatingsInteractive_ValidSubmission(t *testing.T) {
 	mockStore.On("GetParticipantsForRating", mock.Anything).Return(participants, nil).Once()
 	mockStore.On("SaveDailyParticipantRatings", mock.Anything, normalizeRatingDate(ratingDate), mock.MatchedBy(func(ratings []*store.ParticipantDailyRating) bool {
 		return len(ratings) == 2 &&
-			ratings[0].ParticipantID == 10 && ratings[0].ParticipantName == "Alice" && ratings[0].Score == 5 &&
-			ratings[1].ParticipantID == 11 && ratings[1].ParticipantName == "Bob" && ratings[1].Score == 3
+			ratings[0].ParticipantID == 10 && ratings[0].ParticipantName == "Alice" && ratings[0].Score == 5 && ratings[0].HasEar == false &&
+			ratings[1].ParticipantID == 11 && ratings[1].ParticipantName == "Bob" && ratings[1].Score == 3 && ratings[1].HasEar == false
 	})).Return(nil).Once()
 
 	originalTimeNow := TimeNow
@@ -995,4 +996,221 @@ func TestBuildMonthlyRatingsWinnersAnnouncement_Idempotent(t *testing.T) {
 	assert.Contains(t, msg.Text, "1st: Alice with 14 point(s)")
 
 	mockStore.AssertExpectations(t)
+}
+
+func TestParseParticipantScores_AcceptsFiveWithEar(t *testing.T) {
+	scores, err := parseParticipantScores("5e", 1)
+	assert.NoError(t, err)
+	assert.Len(t, scores, 1)
+	assert.Equal(t, 5, scores[0].Score)
+	assert.True(t, scores[0].HasEar)
+}
+
+func TestParseParticipantScores_RejectsNonFiveWithEar(t *testing.T) {
+	_, err := parseParticipantScores("3e", 1)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "ear modifier (e) can only be used with score 5")
+
+	_, err = parseParticipantScores("4e", 1)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "ear modifier (e) can only be used with score 5")
+
+	_, err = parseParticipantScores("1e", 1)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "ear modifier (e) can only be used with score 5")
+}
+
+func TestParseParticipantScores_MixedInputWithEar(t *testing.T) {
+	scores, err := parseParticipantScores("5 5e 4 5", 4)
+	assert.NoError(t, err)
+	assert.Len(t, scores, 4)
+
+	assert.Equal(t, 5, scores[0].Score)
+	assert.False(t, scores[0].HasEar)
+
+	assert.Equal(t, 5, scores[1].Score)
+	assert.True(t, scores[1].HasEar)
+
+	assert.Equal(t, 4, scores[2].Score)
+	assert.False(t, scores[2].HasEar)
+
+	assert.Equal(t, 5, scores[3].Score)
+	assert.False(t, scores[3].HasEar)
+}
+
+func TestParseParticipantScores_PlainScoresStillWork(t *testing.T) {
+	scores, err := parseParticipantScores("1 2 3 4 5", 5)
+	assert.NoError(t, err)
+	assert.Len(t, scores, 5)
+	for i, s := range scores {
+		assert.Equal(t, i+1, s.Score)
+		assert.False(t, s.HasEar)
+	}
+}
+
+func TestParseParticipantScores_UppercaseEarAccepted(t *testing.T) {
+	scores, err := parseParticipantScores("5E", 1)
+	assert.NoError(t, err)
+	assert.Len(t, scores, 1)
+	assert.Equal(t, 5, scores[0].Score)
+	assert.True(t, scores[0].HasEar)
+}
+
+func TestHandleDailyRatingsInteractive_EarSubmission(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := NewWithAdminID(mockStore, nil, 0, 123, nil)
+
+	ratingDate := time.Date(2026, time.March, 13, 20, 50, 0, 0, time.UTC)
+	participants := []*store.User{
+		{ID: 10, FirstName: "Alice"},
+		{ID: 11, FirstName: "Bob"},
+	}
+
+	mockStore.On("GetParticipantsForRating", mock.Anything).Return(participants, nil).Once()
+	mockStore.On("SaveDailyParticipantRatings", mock.Anything, normalizeRatingDate(ratingDate), mock.MatchedBy(func(ratings []*store.ParticipantDailyRating) bool {
+		return len(ratings) == 2 &&
+			ratings[0].ParticipantID == 10 && ratings[0].Score == 5 && ratings[0].HasEar == true &&
+			ratings[1].ParticipantID == 11 && ratings[1].Score == 4 && ratings[1].HasEar == false
+	})).Return(nil).Once()
+
+	originalTimeNow := TimeNow
+	TimeNow = func() time.Time { return ratingDate }
+	defer func() { TimeNow = originalTimeNow }()
+
+	_, err := h.StartDailyRatingsSession(750, 123, ratingDate)
+	assert.NoError(t, err)
+
+	msg, err := h.HandleDailyRatingsInteractive(&tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 750},
+		From: &tgbotapi.User{ID: 123},
+		Text: "5e 4",
+	})
+	assert.NoError(t, err)
+	assert.NotNil(t, msg)
+
+	cfg, ok := msg.(tgbotapi.MessageConfig)
+	assert.True(t, ok)
+	assert.Contains(t, cfg.Text, "Saved ratings for 2026-03-13")
+
+	mockStore.AssertExpectations(t)
+}
+
+func TestBuildDailyRatingsPrompt_MentionsEar(t *testing.T) {
+	participants := []*store.User{
+		{ID: 10, FirstName: "Alice"},
+		{ID: 11, FirstName: "Bob"},
+	}
+	ratingDate := time.Date(2026, time.March, 13, 20, 50, 0, 0, time.UTC)
+
+	prompt := buildDailyRatingsPrompt(participants, ratingDate)
+	assert.Contains(t, prompt, "Use 5e for an ear award.")
+	assert.Contains(t, prompt, "Example: 5 5")
+}
+
+func TestBuildRatingsCalendarTable_ShowsEarScores(t *testing.T) {
+	participants := []ratingSessionParticipant{
+		{ID: 10, Name: "Alice"},
+		{ID: 11, Name: "Bob"},
+	}
+	ratings := []*store.ParticipantDailyRating{
+		{ParticipantID: 10, ParticipantName: "Alice", RatingDate: time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC), Score: 5, HasEar: true},
+		{ParticipantID: 11, ParticipantName: "Bob", RatingDate: time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC), Score: 4},
+		{ParticipantID: 10, ParticipantName: "Alice", RatingDate: time.Date(2026, time.March, 2, 0, 0, 0, 0, time.UTC), Score: 5},
+		{ParticipantID: 11, ParticipantName: "Bob", RatingDate: time.Date(2026, time.March, 2, 0, 0, 0, 0, time.UTC), Score: 5, HasEar: true},
+	}
+	now := time.Date(2026, time.March, 2, 0, 0, 0, 0, time.UTC)
+
+	table := buildRatingsCalendarTable(participants, ratings, now)
+	assert.Contains(t, table, "2026-03-01  5e     4")
+	assert.Contains(t, table, "2026-03-02  5      5e")
+}
+
+func TestHandleRatingsCalendar_ShowsEarInCalendar(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := NewWithAdminID(mockStore, nil, 0, 123, nil)
+
+	originalNow := TimeNow
+	TimeNow = func() time.Time {
+		return time.Date(2026, time.March, 2, 12, 0, 0, 0, time.UTC)
+	}
+	defer func() {
+		TimeNow = originalNow
+	}()
+
+	participants := []*store.User{
+		{ID: 10, FirstName: "Alice"},
+		{ID: 11, FirstName: "Bob"},
+	}
+	ratings := []*store.ParticipantDailyRating{
+		{ParticipantID: 10, ParticipantName: "Alice", RatingDate: time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC), Score: 5, HasEar: true},
+		{ParticipantID: 11, ParticipantName: "Bob", RatingDate: time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC), Score: 4},
+	}
+
+	mockStore.On("GetParticipantsForRating", mock.Anything).Return(participants, nil).Once()
+	mockStore.On("GetCurrentMonthParticipantRatings", mock.Anything, time.Date(2026, time.March, 2, 0, 0, 0, 0, time.UTC)).Return(ratings, nil).Once()
+
+	msg, err := h.HandleRatingsCalendar(&tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 810},
+		From: &tgbotapi.User{ID: 123},
+	})
+	assert.NoError(t, err)
+	assert.Contains(t, msg.Text, "5e")
+	assert.Contains(t, msg.Text, "2026-03-01")
+
+	mockStore.AssertExpectations(t)
+}
+
+func TestFormatDailyAndMonthlySummary_WithEars(t *testing.T) {
+	now := time.Date(2026, time.March, 13, 0, 0, 0, 0, time.UTC)
+	dailyRatings := []*store.ParticipantDailyRating{
+		{ParticipantName: "Alice", Score: 5, HasEar: true},
+		{ParticipantName: "Bob", Score: 4},
+	}
+	totals := []*store.ParticipantMonthlyTotal{
+		{ParticipantName: "Alice", TotalScore: 47, EarCount: 3},
+		{ParticipantName: "Bob", TotalScore: 40, EarCount: 0},
+	}
+
+	result := formatDailyAndMonthlySummary(dailyRatings, totals, now)
+	assert.Contains(t, result, "Alice: 5e")
+	assert.Contains(t, result, "Bob: 4")
+	assert.NotContains(t, result, "Bob: 4e")
+	assert.Contains(t, result, "1. Alice - 47 point(s), 3 ear(s)")
+	assert.Contains(t, result, "2. Bob - 40 point(s)")
+	assert.NotContains(t, result, "Bob - 40 point(s), 0 ear(s)")
+}
+
+func TestFormatMonthlyRatingsWinnersDigest_WithEars(t *testing.T) {
+	now := time.Date(2026, time.March, 31, 0, 0, 0, 0, time.UTC)
+	totals := []*store.ParticipantMonthlyTotal{
+		{ParticipantID: 10, ParticipantName: "Alice", TotalScore: 47, DaysRated: 10, EarCount: 3},
+		{ParticipantID: 11, ParticipantName: "Bob", TotalScore: 40, DaysRated: 10, EarCount: 1},
+		{ParticipantID: 12, ParticipantName: "Cara", TotalScore: 35, DaysRated: 8, EarCount: 0},
+	}
+
+	result := formatMonthlyRatingsWinnersDigest(totals, now, false)
+
+	// Winners section shows ears
+	assert.Contains(t, result, "1st: Alice with 47 point(s), 3 ear(s)")
+	assert.Contains(t, result, "2nd: Bob with 40 point(s), 1 ear(s)")
+	assert.Contains(t, result, "3rd: Cara with 35 point(s)\n")
+	assert.NotContains(t, result, "Cara with 35 point(s), 0 ear(s)")
+
+	// Totals section shows ears
+	assert.Contains(t, result, "1. Alice - 47 point(s), 3 ear(s) across 10 rated day(s)")
+	assert.Contains(t, result, "2. Bob - 40 point(s), 1 ear(s) across 10 rated day(s)")
+	assert.Contains(t, result, "3. Cara - 35 point(s) across 8 rated day(s)")
+}
+
+func TestFormatMonthlyRatingsWinnersDigest_NoEars(t *testing.T) {
+	now := time.Date(2026, time.March, 31, 0, 0, 0, 0, time.UTC)
+	totals := []*store.ParticipantMonthlyTotal{
+		{ParticipantID: 10, ParticipantName: "Alice", TotalScore: 14, DaysRated: 4, EarCount: 0},
+		{ParticipantID: 11, ParticipantName: "Bob", TotalScore: 11, DaysRated: 4, EarCount: 0},
+	}
+
+	result := formatMonthlyRatingsWinnersDigest(totals, now, false)
+	assert.NotContains(t, result, "ear(s)")
+	assert.Contains(t, result, "1st: Alice with 14 point(s)")
+	assert.Contains(t, result, "1. Alice - 14 point(s) across 4 rated day(s)")
 }

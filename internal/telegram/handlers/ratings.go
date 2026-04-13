@@ -119,7 +119,8 @@ func (h *Handlers) HandleDailyRatingsInteractive(m *tgbotapi.Message) (tgbotapi.
 			ParticipantID:   participant.ID,
 			ParticipantName: participant.Name,
 			RatingDate:      ratingDate,
-			Score:           scores[i],
+			Score:           scores[i].Score,
+			HasEar:          scores[i].HasEar,
 		})
 	}
 
@@ -177,11 +178,11 @@ func (h *Handlers) HandleRatingsCalendar(m *tgbotapi.Message) (tgbotapi.MessageC
 
 func buildDailyRatingsPrompt(participants []*store.User, ratingDate time.Time) string {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("Daily participant ratings for %s\n\n", normalizeRatingDate(ratingDate).Format("2006-01-02")))
+	fmt.Fprintf(&b, "Daily participant ratings for %s\n\n", normalizeRatingDate(ratingDate).Format("2006-01-02"))
 	b.WriteString(formatParticipantOrder(sessionParticipants(participants)))
 	b.WriteString("\n\nReply with ")
 	b.WriteString(strconv.Itoa(len(participants)))
-	b.WriteString(" score(s) in this order, separated by spaces.\nExample: ")
+	b.WriteString(" score(s) in this order, separated by spaces.\nUse 5e for an ear award.\nExample: ")
 
 	for i := range participants {
 		if i > 0 {
@@ -193,22 +194,36 @@ func buildDailyRatingsPrompt(participants []*store.User, ratingDate time.Time) s
 	return b.String()
 }
 
-func parseParticipantScores(text string, expected int) ([]int, error) {
+type parsedScore struct {
+	Score  int
+	HasEar bool
+}
+
+func parseParticipantScores(text string, expected int) ([]parsedScore, error) {
 	fields := strings.Fields(text)
 	if len(fields) != expected {
 		return nil, fmt.Errorf("expected %d score(s), received %d", expected, len(fields))
 	}
 
-	scores := make([]int, 0, len(fields))
+	scores := make([]parsedScore, 0, len(fields))
 	for _, field := range fields {
-		score, err := strconv.Atoi(field)
+		hasEar := false
+		raw := field
+		if strings.HasSuffix(strings.ToLower(field), "e") {
+			raw = field[:len(field)-1]
+			hasEar = true
+		}
+		score, err := strconv.Atoi(raw)
 		if err != nil {
-			return nil, fmt.Errorf("all scores must be integers between 1 and 5")
+			return nil, fmt.Errorf("all scores must be integers between 1 and 5 (use 5e for ear)")
 		}
 		if score < 1 || score > 5 {
 			return nil, fmt.Errorf("scores must be between 1 and 5")
 		}
-		scores = append(scores, score)
+		if hasEar && score != 5 {
+			return nil, fmt.Errorf("ear modifier (e) can only be used with score 5")
+		}
+		scores = append(scores, parsedScore{Score: score, HasEar: hasEar})
 	}
 
 	return scores, nil
@@ -419,8 +434,8 @@ func formatRatingsCalendar(participants []*store.User, ratings []*store.Particip
 	table := buildRatingsCalendarTable(sessionOrder, ratings, normalizedNow)
 
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("Participant ratings for %s\n", normalizedNow.Format("January 2006")))
-	b.WriteString(fmt.Sprintf("Showing %s through %s.\n\n", time.Date(normalizedNow.Year(), normalizedNow.Month(), 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02"), normalizedNow.Format("2006-01-02")))
+	fmt.Fprintf(&b, "Participant ratings for %s\n", normalizedNow.Format("January 2006"))
+	fmt.Fprintf(&b, "Showing %s through %s.\n\n", time.Date(normalizedNow.Year(), normalizedNow.Month(), 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02"), normalizedNow.Format("2006-01-02"))
 	b.WriteString("<pre>")
 	b.WriteString(html.EscapeString(table))
 	b.WriteString("</pre>\n")
@@ -428,29 +443,31 @@ func formatRatingsCalendar(participants []*store.User, ratings []*store.Particip
 	return b.String()
 }
 
+type calendarCell struct {
+	Score  int
+	HasEar bool
+}
+
 func buildRatingsCalendarTable(participants []ratingSessionParticipant, ratings []*store.ParticipantDailyRating, now time.Time) string {
 	const missingScore = "-"
+	const earScore = "5e"
 
 	dateWidth := len("2006-01-02")
 	nameWidths := make([]int, len(participants))
 	for i, participant := range participants {
-		if len(participant.Name) > len(missingScore) {
-			nameWidths[i] = len(participant.Name)
-		} else {
-			nameWidths[i] = len(missingScore)
-		}
+		nameWidths[i] = max(len(participant.Name), len(earScore))
 	}
 
-	ratingByDayAndParticipant := make(map[string]map[int64]int, len(ratings))
+	ratingByDayAndParticipant := make(map[string]map[int64]calendarCell, len(ratings))
 	for _, rating := range ratings {
 		if rating == nil {
 			continue
 		}
 		dateKey := normalizeRatingDate(rating.RatingDate).Format("2006-01-02")
 		if _, ok := ratingByDayAndParticipant[dateKey]; !ok {
-			ratingByDayAndParticipant[dateKey] = make(map[int64]int)
+			ratingByDayAndParticipant[dateKey] = make(map[int64]calendarCell)
 		}
-		ratingByDayAndParticipant[dateKey][rating.ParticipantID] = rating.Score
+		ratingByDayAndParticipant[dateKey][rating.ParticipantID] = calendarCell{Score: rating.Score, HasEar: rating.HasEar}
 	}
 
 	formatCell := func(value string, width int) string {
@@ -471,8 +488,11 @@ func buildRatingsCalendarTable(participants []ratingSessionParticipant, ratings 
 		dailyRatings := ratingByDayAndParticipant[dateKey]
 		for i, participant := range participants {
 			cell := missingScore
-			if score, ok := dailyRatings[participant.ID]; ok {
-				cell = strconv.Itoa(score)
+			if c, ok := dailyRatings[participant.ID]; ok {
+				cell = strconv.Itoa(c.Score)
+				if c.HasEar {
+					cell += "e"
+				}
 			}
 			row = append(row, formatCell(cell, nameWidths[i]))
 		}
@@ -486,18 +506,25 @@ func formatDailyAndMonthlySummary(dailyRatings []*store.ParticipantDailyRating, 
 	normalizedNow := normalizeRatingDate(now)
 
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("<b>Daily Ratings for %s</b>\n", normalizedNow.Format("2006-01-02")))
+	fmt.Fprintf(&b, "<b>Daily Ratings for %s</b>\n", normalizedNow.Format("2006-01-02"))
 
 	for _, rating := range dailyRatings {
-		b.WriteString(fmt.Sprintf("%s: %d\n", html.EscapeString(rating.ParticipantName), rating.Score))
+		scoreStr := strconv.Itoa(rating.Score)
+		if rating.HasEar {
+			scoreStr += "e"
+		}
+		fmt.Fprintf(&b, "%s: %s\n", html.EscapeString(rating.ParticipantName), scoreStr)
 	}
 
-	b.WriteString(fmt.Sprintf("\n<b>Monthly Standings (%s)</b>\n", normalizedNow.Format("January 2006")))
+	fmt.Fprintf(&b, "\n<b>Monthly Standings (%s)</b>\n", normalizedNow.Format("January 2006"))
 	if len(totals) == 0 {
 		b.WriteString("No participant ratings were recorded this month.")
 	} else {
 		for i, total := range totals {
-			b.WriteString(fmt.Sprintf("%d. %s - %d point(s)", i+1, html.EscapeString(total.ParticipantName), total.TotalScore))
+			fmt.Fprintf(&b, "%d. %s - %d point(s)", i+1, html.EscapeString(total.ParticipantName), total.TotalScore)
+			if total.EarCount > 0 {
+				fmt.Fprintf(&b, ", %d ear(s)", total.EarCount)
+			}
 			if i < len(totals)-1 {
 				b.WriteString("\n")
 			}
@@ -511,7 +538,7 @@ func formatMonthlyRatingsWinnersDigest(totals []*store.ParticipantMonthlyTotal, 
 	normalizedNow := normalizeRatingDate(now)
 
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("Monthly participant ratings for %s\n\n", normalizedNow.Format("January 2006")))
+	fmt.Fprintf(&b, "Monthly participant ratings for %s\n\n", normalizedNow.Format("January 2006"))
 
 	if len(totals) == 0 {
 		b.WriteString("No participant ratings were recorded this month.")
@@ -522,15 +549,22 @@ func formatMonthlyRatingsWinnersDigest(totals []*store.ParticipantMonthlyTotal, 
 	places := []string{"1st", "2nd", "3rd"}
 	for i := 0; i < len(totals) && i < len(places); i++ {
 		escapedName := html.EscapeString(totals[i].ParticipantName)
-		b.WriteString(fmt.Sprintf("%s: %s with %d point(s)\n", places[i], escapedName, totals[i].TotalScore))
+		fmt.Fprintf(&b, "%s: %s with %d point(s)", places[i], escapedName, totals[i].TotalScore)
+		if totals[i].EarCount > 0 {
+			fmt.Fprintf(&b, ", %d ear(s)", totals[i].EarCount)
+		}
+		b.WriteString("\n")
 	}
 
 	b.WriteString("\nTotals:\n")
 	for i, total := range totals {
 		escapedName := html.EscapeString(total.ParticipantName)
-		b.WriteString(fmt.Sprintf("%d. %s - %d point(s)", i+1, escapedName, total.TotalScore))
+		fmt.Fprintf(&b, "%d. %s - %d point(s)", i+1, escapedName, total.TotalScore)
+		if total.EarCount > 0 {
+			fmt.Fprintf(&b, ", %d ear(s)", total.EarCount)
+		}
 		if total.DaysRated > 0 {
-			b.WriteString(fmt.Sprintf(" across %d rated day(s)", total.DaysRated))
+			fmt.Fprintf(&b, " across %d rated day(s)", total.DaysRated)
 		}
 		if i < len(totals)-1 {
 			b.WriteString("\n")

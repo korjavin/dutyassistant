@@ -104,6 +104,7 @@ type ParticipantDailyRating struct {
 	ParticipantName string
 	RatingDate      time.Time
 	Score           int
+	HasEar          bool
 }
 
 // ParticipantMonthlyTotal represents a participant's aggregate score for one month.
@@ -112,6 +113,7 @@ type ParticipantMonthlyTotal struct {
 	ParticipantName string
 	TotalScore      int
 	DaysRated       int
+	EarCount        int
 }
 
 // RecurringChore represents a scheduled periodic chore.

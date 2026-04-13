@@ -11,6 +11,15 @@ This file contains project knowledge for AI agents and developers working on thi
 - `internal/http/` - Web interface handlers
 - `deployments/` - Docker and deployment configurations
 
+## Rating System
+
+Monthly participant rating contest where admins submit daily scores (1-5) for each participant. The system supports an "ear" modifier: "5e" means a score of 5 with an ear award, indicating exceptional performance beyond the max score. Ears are tracked separately - displayed as "5e" in calendars/summaries and counted per participant in monthly digests.
+
+Key files:
+- `internal/telegram/handlers/ratings.go` - Score parsing (including "5e"), calendar display, daily/monthly summaries
+- `internal/store/sqlite/ratings.go` - DB queries for saving/loading ratings
+- `internal/store/store.go` - `ParticipantDailyRating` (HasEar bool) and `ParticipantMonthlyTotal` (EarCount int) structs
+
 ## Sviniya Award System
 
 The bot includes a "sviniya" award system where:
@@ -123,7 +132,7 @@ The bot uses SQLite with the following key tables:
 - `duty_queue` - Duty assignments and queue management
 - `chores` - One-off and recurring chores
 - `chore_assignments` - Active chore assignments
-- `ratings` - Monthly participant ratings
+- `participant_ratings` - Daily participant scores with optional ear modifier (`has_ear` column)
 - `sviniya_balances` - Sviniya award balances (user_id PK, balance INTEGER DEFAULT 0)
 
 ## Timezone Handling

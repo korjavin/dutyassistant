@@ -477,3 +477,76 @@ func TestGetMonthlyParticipantTotals_RankingAndMonthFilter(t *testing.T) {
 	require.Equal(t, []int{6, 6, 6}, []int{totals[0].TotalScore, totals[1].TotalScore, totals[2].TotalScore})
 	require.Equal(t, []int{2, 2, 2}, []int{totals[0].DaysRated, totals[1].DaysRated, totals[2].DaysRated})
 }
+
+func TestSaveDailyParticipantRatings_WithEars(t *testing.T) {
+	s := setupTestDB(t)
+	ctx := context.Background()
+
+	alice := &store.User{TelegramUserID: 6001, FirstName: "Alice", IsActive: true}
+	bob := &store.User{TelegramUserID: 6002, FirstName: "Bob", IsActive: true}
+	require.NoError(t, s.CreateUser(ctx, alice))
+	require.NoError(t, s.CreateUser(ctx, bob))
+
+	day := time.Date(2026, time.March, 15, 20, 50, 0, 0, time.UTC)
+	require.NoError(t, s.SaveDailyParticipantRatings(ctx, day, []*store.ParticipantDailyRating{
+		{ParticipantID: alice.ID, Score: 5, HasEar: true},
+		{ParticipantID: bob.ID, Score: 4},
+	}))
+
+	ratings, err := s.GetCurrentMonthParticipantRatings(ctx, day)
+	require.NoError(t, err)
+	require.Len(t, ratings, 2)
+	require.Equal(t, true, ratings[0].HasEar)
+	require.Equal(t, false, ratings[1].HasEar)
+
+	// Update: remove ear from Alice, add ear to Bob
+	require.NoError(t, s.SaveDailyParticipantRatings(ctx, day, []*store.ParticipantDailyRating{
+		{ParticipantID: alice.ID, Score: 5, HasEar: false},
+		{ParticipantID: bob.ID, Score: 5, HasEar: true},
+	}))
+
+	ratings, err = s.GetCurrentMonthParticipantRatings(ctx, day)
+	require.NoError(t, err)
+	require.Len(t, ratings, 2)
+	require.Equal(t, false, ratings[0].HasEar)
+	require.Equal(t, true, ratings[1].HasEar)
+}
+
+func TestGetMonthlyParticipantTotals_EarCount(t *testing.T) {
+	s := setupTestDB(t)
+	ctx := context.Background()
+
+	alice := &store.User{TelegramUserID: 7001, FirstName: "Alice", IsActive: true}
+	bob := &store.User{TelegramUserID: 7002, FirstName: "Bob", IsActive: true}
+	require.NoError(t, s.CreateUser(ctx, alice))
+	require.NoError(t, s.CreateUser(ctx, bob))
+
+	// Day 1: Alice gets ear, Bob does not
+	require.NoError(t, s.SaveDailyParticipantRatings(ctx, time.Date(2026, time.March, 10, 0, 0, 0, 0, time.UTC), []*store.ParticipantDailyRating{
+		{ParticipantID: alice.ID, Score: 5, HasEar: true},
+		{ParticipantID: bob.ID, Score: 3},
+	}))
+	// Day 2: Both get ears
+	require.NoError(t, s.SaveDailyParticipantRatings(ctx, time.Date(2026, time.March, 11, 0, 0, 0, 0, time.UTC), []*store.ParticipantDailyRating{
+		{ParticipantID: alice.ID, Score: 5, HasEar: true},
+		{ParticipantID: bob.ID, Score: 5, HasEar: true},
+	}))
+	// Day 3: No ears
+	require.NoError(t, s.SaveDailyParticipantRatings(ctx, time.Date(2026, time.March, 12, 0, 0, 0, 0, time.UTC), []*store.ParticipantDailyRating{
+		{ParticipantID: alice.ID, Score: 4},
+		{ParticipantID: bob.ID, Score: 4},
+	}))
+
+	totals, err := s.GetMonthlyParticipantTotals(ctx, 2026, time.March)
+	require.NoError(t, err)
+	require.Len(t, totals, 2)
+
+	// Alice: 5+5+4=14, 2 ears; Bob: 3+5+4=12, 1 ear
+	require.Equal(t, "Alice", totals[0].ParticipantName)
+	require.Equal(t, 14, totals[0].TotalScore)
+	require.Equal(t, 2, totals[0].EarCount)
+
+	require.Equal(t, "Bob", totals[1].ParticipantName)
+	require.Equal(t, 12, totals[1].TotalScore)
+	require.Equal(t, 1, totals[1].EarCount)
+}

@@ -14,7 +14,7 @@ Duty Assistant Bot is a Telegram bot designed to help manage on-call duty roster
 *   **Off-Duty Periods**: Temporary exclusion from duty rotation with queue freezing
 *   **User Management**: Toggle active/inactive status via buttons
 *   **Weekly Statistics**: Automated weekly reports every Sunday at 21:10 PM
-*   **Monthly Participant Ratings**: Daily admin scoring prompt, month-to-date rating calendar, and month-end winners announcement
+*   **Monthly Participant Ratings**: Daily admin scoring prompt with optional "5e" ear award, month-to-date rating calendar, and month-end winners announcement with ear counts
 *   **Sviniya Award System**: Monthly rating winner automatically receives 1 sviniya, users can spend sviniyas with LLM-generated announcements, admins can manage balances
 *   **Web Interface**: View duty schedule and queue status in browser
 
@@ -123,9 +123,9 @@ DM messages remain verbose and friendly with full sentences.
 ### Participant Rating Flow
 
 - Every day at 20:50 Europe/Berlin, the bot sends the configured admin a participant rating prompt when there are active non-admin participants to score.
-- The prompt lists participants in a stable order. Reply with one space-separated score per participant, using integers from 1 to 5.
+- The prompt lists participants in a stable order. Reply with one space-separated score per participant, using integers from 1 to 5. Use "5e" to award an ear for exceptional performance beyond the max score — the score counts as 5, but the ear is tracked and displayed separately.
 - Sending another reply later on the same day overwrites that day's participant ratings instead of creating duplicates.
-- `/ratings` shows the current month from day 1 through today, with missing scores displayed as `-`.
+- `/ratings` shows the current month from day 1 through today, with missing scores displayed as `-` and ear-awarded scores displayed as `5e`.
 - At 21:00 Europe/Berlin on the last calendar day of the month, the bot posts the monthly participant totals and 1st, 2nd, and 3rd place winners to the group. The 1st place winner is automatically granted 1 sviniya.
 
 ### Interactive UX
