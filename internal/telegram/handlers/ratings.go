@@ -178,7 +178,7 @@ func (h *Handlers) HandleRatingsCalendar(m *tgbotapi.Message) (tgbotapi.MessageC
 
 func buildDailyRatingsPrompt(participants []*store.User, ratingDate time.Time) string {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("Daily participant ratings for %s\n\n", normalizeRatingDate(ratingDate).Format("2006-01-02")))
+	fmt.Fprintf(&b, "Daily participant ratings for %s\n\n", normalizeRatingDate(ratingDate).Format("2006-01-02"))
 	b.WriteString(formatParticipantOrder(sessionParticipants(participants)))
 	b.WriteString("\n\nReply with ")
 	b.WriteString(strconv.Itoa(len(participants)))
@@ -434,8 +434,8 @@ func formatRatingsCalendar(participants []*store.User, ratings []*store.Particip
 	table := buildRatingsCalendarTable(sessionOrder, ratings, normalizedNow)
 
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("Participant ratings for %s\n", normalizedNow.Format("January 2006")))
-	b.WriteString(fmt.Sprintf("Showing %s through %s.\n\n", time.Date(normalizedNow.Year(), normalizedNow.Month(), 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02"), normalizedNow.Format("2006-01-02")))
+	fmt.Fprintf(&b, "Participant ratings for %s\n", normalizedNow.Format("January 2006"))
+	fmt.Fprintf(&b, "Showing %s through %s.\n\n", time.Date(normalizedNow.Year(), normalizedNow.Month(), 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02"), normalizedNow.Format("2006-01-02"))
 	b.WriteString("<pre>")
 	b.WriteString(html.EscapeString(table))
 	b.WriteString("</pre>\n")
@@ -506,7 +506,7 @@ func formatDailyAndMonthlySummary(dailyRatings []*store.ParticipantDailyRating, 
 	normalizedNow := normalizeRatingDate(now)
 
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("<b>Daily Ratings for %s</b>\n", normalizedNow.Format("2006-01-02")))
+	fmt.Fprintf(&b, "<b>Daily Ratings for %s</b>\n", normalizedNow.Format("2006-01-02"))
 
 	for _, rating := range dailyRatings {
 		scoreStr := strconv.Itoa(rating.Score)
@@ -516,12 +516,12 @@ func formatDailyAndMonthlySummary(dailyRatings []*store.ParticipantDailyRating, 
 		fmt.Fprintf(&b, "%s: %s\n", html.EscapeString(rating.ParticipantName), scoreStr)
 	}
 
-	b.WriteString(fmt.Sprintf("\n<b>Monthly Standings (%s)</b>\n", normalizedNow.Format("January 2006")))
+	fmt.Fprintf(&b, "\n<b>Monthly Standings (%s)</b>\n", normalizedNow.Format("January 2006"))
 	if len(totals) == 0 {
 		b.WriteString("No participant ratings were recorded this month.")
 	} else {
 		for i, total := range totals {
-			b.WriteString(fmt.Sprintf("%d. %s - %d point(s)", i+1, html.EscapeString(total.ParticipantName), total.TotalScore))
+			fmt.Fprintf(&b, "%d. %s - %d point(s)", i+1, html.EscapeString(total.ParticipantName), total.TotalScore)
 			if total.EarCount > 0 {
 				fmt.Fprintf(&b, ", %d ear(s)", total.EarCount)
 			}
@@ -538,7 +538,7 @@ func formatMonthlyRatingsWinnersDigest(totals []*store.ParticipantMonthlyTotal, 
 	normalizedNow := normalizeRatingDate(now)
 
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("Monthly participant ratings for %s\n\n", normalizedNow.Format("January 2006")))
+	fmt.Fprintf(&b, "Monthly participant ratings for %s\n\n", normalizedNow.Format("January 2006"))
 
 	if len(totals) == 0 {
 		b.WriteString("No participant ratings were recorded this month.")
@@ -551,7 +551,7 @@ func formatMonthlyRatingsWinnersDigest(totals []*store.ParticipantMonthlyTotal, 
 		escapedName := html.EscapeString(totals[i].ParticipantName)
 		fmt.Fprintf(&b, "%s: %s with %d point(s)", places[i], escapedName, totals[i].TotalScore)
 		if totals[i].EarCount > 0 {
-			b.WriteString(fmt.Sprintf(", %d ear(s)", totals[i].EarCount))
+			fmt.Fprintf(&b, ", %d ear(s)", totals[i].EarCount)
 		}
 		b.WriteString("\n")
 	}
@@ -559,12 +559,12 @@ func formatMonthlyRatingsWinnersDigest(totals []*store.ParticipantMonthlyTotal, 
 	b.WriteString("\nTotals:\n")
 	for i, total := range totals {
 		escapedName := html.EscapeString(total.ParticipantName)
-		b.WriteString(fmt.Sprintf("%d. %s - %d point(s)", i+1, escapedName, total.TotalScore))
+		fmt.Fprintf(&b, "%d. %s - %d point(s)", i+1, escapedName, total.TotalScore)
 		if total.EarCount > 0 {
-			b.WriteString(fmt.Sprintf(", %d ear(s)", total.EarCount))
+			fmt.Fprintf(&b, ", %d ear(s)", total.EarCount)
 		}
 		if total.DaysRated > 0 {
-			b.WriteString(fmt.Sprintf(" across %d rated day(s)", total.DaysRated))
+			fmt.Fprintf(&b, " across %d rated day(s)", total.DaysRated)
 		}
 		if i < len(totals)-1 {
 			b.WriteString("\n")
