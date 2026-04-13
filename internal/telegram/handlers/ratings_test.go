@@ -996,3 +996,112 @@ func TestBuildMonthlyRatingsWinnersAnnouncement_Idempotent(t *testing.T) {
 
 	mockStore.AssertExpectations(t)
 }
+
+func TestParseParticipantScores_AcceptsFiveWithEar(t *testing.T) {
+	scores, err := parseParticipantScores("5e", 1)
+	assert.NoError(t, err)
+	assert.Len(t, scores, 1)
+	assert.Equal(t, 5, scores[0].Score)
+	assert.True(t, scores[0].HasEar)
+}
+
+func TestParseParticipantScores_RejectsNonFiveWithEar(t *testing.T) {
+	_, err := parseParticipantScores("3e", 1)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "ear modifier (e) can only be used with score 5")
+
+	_, err = parseParticipantScores("4e", 1)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "ear modifier (e) can only be used with score 5")
+
+	_, err = parseParticipantScores("1e", 1)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "ear modifier (e) can only be used with score 5")
+}
+
+func TestParseParticipantScores_MixedInputWithEar(t *testing.T) {
+	scores, err := parseParticipantScores("5 5e 4 5", 4)
+	assert.NoError(t, err)
+	assert.Len(t, scores, 4)
+
+	assert.Equal(t, 5, scores[0].Score)
+	assert.False(t, scores[0].HasEar)
+
+	assert.Equal(t, 5, scores[1].Score)
+	assert.True(t, scores[1].HasEar)
+
+	assert.Equal(t, 4, scores[2].Score)
+	assert.False(t, scores[2].HasEar)
+
+	assert.Equal(t, 5, scores[3].Score)
+	assert.False(t, scores[3].HasEar)
+}
+
+func TestParseParticipantScores_PlainScoresStillWork(t *testing.T) {
+	scores, err := parseParticipantScores("1 2 3 4 5", 5)
+	assert.NoError(t, err)
+	assert.Len(t, scores, 5)
+	for i, s := range scores {
+		assert.Equal(t, i+1, s.Score)
+		assert.False(t, s.HasEar)
+	}
+}
+
+func TestParseParticipantScores_UppercaseEarAccepted(t *testing.T) {
+	scores, err := parseParticipantScores("5E", 1)
+	assert.NoError(t, err)
+	assert.Len(t, scores, 1)
+	assert.Equal(t, 5, scores[0].Score)
+	assert.True(t, scores[0].HasEar)
+}
+
+func TestHandleDailyRatingsInteractive_EarSubmission(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := NewWithAdminID(mockStore, nil, 0, 123, nil)
+
+	ratingDate := time.Date(2026, time.March, 13, 20, 50, 0, 0, time.UTC)
+	participants := []*store.User{
+		{ID: 10, FirstName: "Alice"},
+		{ID: 11, FirstName: "Bob"},
+	}
+
+	mockStore.On("GetParticipantsForRating", mock.Anything).Return(participants, nil).Once()
+	mockStore.On("SaveDailyParticipantRatings", mock.Anything, normalizeRatingDate(ratingDate), mock.MatchedBy(func(ratings []*store.ParticipantDailyRating) bool {
+		return len(ratings) == 2 &&
+			ratings[0].ParticipantID == 10 && ratings[0].Score == 5 && ratings[0].HasEar == true &&
+			ratings[1].ParticipantID == 11 && ratings[1].Score == 4 && ratings[1].HasEar == false
+	})).Return(nil).Once()
+
+	originalTimeNow := TimeNow
+	TimeNow = func() time.Time { return ratingDate }
+	defer func() { TimeNow = originalTimeNow }()
+
+	_, err := h.StartDailyRatingsSession(750, 123, ratingDate)
+	assert.NoError(t, err)
+
+	msg, err := h.HandleDailyRatingsInteractive(&tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 750},
+		From: &tgbotapi.User{ID: 123},
+		Text: "5e 4",
+	})
+	assert.NoError(t, err)
+	assert.NotNil(t, msg)
+
+	cfg, ok := msg.(tgbotapi.MessageConfig)
+	assert.True(t, ok)
+	assert.Contains(t, cfg.Text, "Saved ratings for 2026-03-13")
+
+	mockStore.AssertExpectations(t)
+}
+
+func TestBuildDailyRatingsPrompt_MentionsEar(t *testing.T) {
+	participants := []*store.User{
+		{ID: 10, FirstName: "Alice"},
+		{ID: 11, FirstName: "Bob"},
+	}
+	ratingDate := time.Date(2026, time.March, 13, 20, 50, 0, 0, time.UTC)
+
+	prompt := buildDailyRatingsPrompt(participants, ratingDate)
+	assert.Contains(t, prompt, "Use 5e for an ear award.")
+	assert.Contains(t, prompt, "Example: 5 5")
+}

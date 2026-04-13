@@ -46,12 +46,12 @@ Add an "ear" modifier to the rating system. When a participant's performance exc
 **Files:**
 - Modify: `internal/telegram/handlers/ratings.go`
 
-- [ ] Create a `parsedScore` struct with `Score int` and `HasEar bool` fields (local to ratings.go)
-- [ ] Update `parseParticipantScores` to return `[]parsedScore` instead of `[]int`; accept "5e" as valid input (only "5e", not other scores with "e")
-- [ ] Update `HandleDailyRatingsInteractive` to map parsed scores (including HasEar) into `ParticipantDailyRating` structs
-- [ ] Update `buildDailyRatingsPrompt` example text to mention "5e" option (e.g., "Use 5e for an ear award")
-- [ ] Write tests for parsing "5e", rejecting "3e", mixed input like "5 5e 4 5"
-- [ ] Run project test suite - must pass before task 3
+- [x] Create a `parsedScore` struct with `Score int` and `HasEar bool` fields (local to ratings.go)
+- [x] Update `parseParticipantScores` to return `[]parsedScore` instead of `[]int`; accept "5e" as valid input (only "5e", not other scores with "e")
+- [x] Update `HandleDailyRatingsInteractive` to map parsed scores (including HasEar) into `ParticipantDailyRating` structs
+- [x] Update `buildDailyRatingsPrompt` example text to mention "5e" option (e.g., "Use 5e for an ear award")
+- [x] Write tests for parsing "5e", rejecting "3e", mixed input like "5 5e 4 5"
+- [x] Run project test suite - must pass before task 3
 
 ### Task 3: Update display formatting to show ears
 

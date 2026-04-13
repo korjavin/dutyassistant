@@ -119,7 +119,8 @@ func (h *Handlers) HandleDailyRatingsInteractive(m *tgbotapi.Message) (tgbotapi.
 			ParticipantID:   participant.ID,
 			ParticipantName: participant.Name,
 			RatingDate:      ratingDate,
-			Score:           scores[i],
+			Score:           scores[i].Score,
+			HasEar:          scores[i].HasEar,
 		})
 	}
 
@@ -181,7 +182,7 @@ func buildDailyRatingsPrompt(participants []*store.User, ratingDate time.Time) s
 	b.WriteString(formatParticipantOrder(sessionParticipants(participants)))
 	b.WriteString("\n\nReply with ")
 	b.WriteString(strconv.Itoa(len(participants)))
-	b.WriteString(" score(s) in this order, separated by spaces.\nExample: ")
+	b.WriteString(" score(s) in this order, separated by spaces.\nUse 5e for an ear award.\nExample: ")
 
 	for i := range participants {
 		if i > 0 {
@@ -193,22 +194,36 @@ func buildDailyRatingsPrompt(participants []*store.User, ratingDate time.Time) s
 	return b.String()
 }
 
-func parseParticipantScores(text string, expected int) ([]int, error) {
+type parsedScore struct {
+	Score  int
+	HasEar bool
+}
+
+func parseParticipantScores(text string, expected int) ([]parsedScore, error) {
 	fields := strings.Fields(text)
 	if len(fields) != expected {
 		return nil, fmt.Errorf("expected %d score(s), received %d", expected, len(fields))
 	}
 
-	scores := make([]int, 0, len(fields))
+	scores := make([]parsedScore, 0, len(fields))
 	for _, field := range fields {
-		score, err := strconv.Atoi(field)
+		hasEar := false
+		raw := field
+		if strings.HasSuffix(strings.ToLower(field), "e") {
+			raw = field[:len(field)-1]
+			hasEar = true
+		}
+		score, err := strconv.Atoi(raw)
 		if err != nil {
-			return nil, fmt.Errorf("all scores must be integers between 1 and 5")
+			return nil, fmt.Errorf("all scores must be integers between 1 and 5 (use 5e for ear)")
 		}
 		if score < 1 || score > 5 {
 			return nil, fmt.Errorf("scores must be between 1 and 5")
 		}
-		scores = append(scores, score)
+		if hasEar && score != 5 {
+			return nil, fmt.Errorf("ear modifier (e) can only be used with score 5")
+		}
+		scores = append(scores, parsedScore{Score: score, HasEar: hasEar})
 	}
 
 	return scores, nil
