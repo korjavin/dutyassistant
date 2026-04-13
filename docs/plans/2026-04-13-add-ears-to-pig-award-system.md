@@ -58,11 +58,11 @@ Add an "ear" modifier to the rating system. When a participant's performance exc
 **Files:**
 - Modify: `internal/telegram/handlers/ratings.go`
 
-- [ ] Update `buildRatingsCalendarTable` to display "5e" for scores with ears (adjust column width if needed)
-- [ ] Update `formatDailyAndMonthlySummary` to show "5e" for daily ratings with ears, and ear count in monthly standings (e.g., "Alice - 47 point(s), 3 ear(s)")
-- [ ] Update `formatMonthlyRatingsWinnersDigest` to include ear counts in both winners and totals sections when ear count > 0
-- [ ] Write tests verifying ear display in calendar, daily summary, and monthly digest
-- [ ] Run project test suite - must pass before task 4
+- [x] Update `buildRatingsCalendarTable` to display "5e" for scores with ears (adjust column width if needed)
+- [x] Update `formatDailyAndMonthlySummary` to show "5e" for daily ratings with ears, and ear count in monthly standings (e.g., "Alice - 47 point(s), 3 ear(s)")
+- [x] Update `formatMonthlyRatingsWinnersDigest` to include ear counts in both winners and totals sections when ear count > 0
+- [x] Write tests verifying ear display in calendar, daily summary, and monthly digest
+- [x] Run project test suite - must pass before task 4
 
 ### Task 4: Verify acceptance criteria
 

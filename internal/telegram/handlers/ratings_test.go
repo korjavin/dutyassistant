@@ -1105,3 +1105,111 @@ func TestBuildDailyRatingsPrompt_MentionsEar(t *testing.T) {
 	assert.Contains(t, prompt, "Use 5e for an ear award.")
 	assert.Contains(t, prompt, "Example: 5 5")
 }
+
+func TestBuildRatingsCalendarTable_ShowsEarScores(t *testing.T) {
+	participants := []ratingSessionParticipant{
+		{ID: 10, Name: "Alice"},
+		{ID: 11, Name: "Bob"},
+	}
+	ratings := []*store.ParticipantDailyRating{
+		{ParticipantID: 10, ParticipantName: "Alice", RatingDate: time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC), Score: 5, HasEar: true},
+		{ParticipantID: 11, ParticipantName: "Bob", RatingDate: time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC), Score: 4},
+		{ParticipantID: 10, ParticipantName: "Alice", RatingDate: time.Date(2026, time.March, 2, 0, 0, 0, 0, time.UTC), Score: 5},
+		{ParticipantID: 11, ParticipantName: "Bob", RatingDate: time.Date(2026, time.March, 2, 0, 0, 0, 0, time.UTC), Score: 5, HasEar: true},
+	}
+	now := time.Date(2026, time.March, 2, 0, 0, 0, 0, time.UTC)
+
+	table := buildRatingsCalendarTable(participants, ratings, now)
+	assert.Contains(t, table, "2026-03-01  5e     4")
+	assert.Contains(t, table, "2026-03-02  5      5e")
+}
+
+func TestHandleRatingsCalendar_ShowsEarInCalendar(t *testing.T) {
+	mockStore := new(mocks.MockStore)
+	h := NewWithAdminID(mockStore, nil, 0, 123, nil)
+
+	originalNow := TimeNow
+	TimeNow = func() time.Time {
+		return time.Date(2026, time.March, 2, 12, 0, 0, 0, time.UTC)
+	}
+	defer func() {
+		TimeNow = originalNow
+	}()
+
+	participants := []*store.User{
+		{ID: 10, FirstName: "Alice"},
+		{ID: 11, FirstName: "Bob"},
+	}
+	ratings := []*store.ParticipantDailyRating{
+		{ParticipantID: 10, ParticipantName: "Alice", RatingDate: time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC), Score: 5, HasEar: true},
+		{ParticipantID: 11, ParticipantName: "Bob", RatingDate: time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC), Score: 4},
+	}
+
+	mockStore.On("GetParticipantsForRating", mock.Anything).Return(participants, nil).Once()
+	mockStore.On("GetCurrentMonthParticipantRatings", mock.Anything, time.Date(2026, time.March, 2, 0, 0, 0, 0, time.UTC)).Return(ratings, nil).Once()
+
+	msg, err := h.HandleRatingsCalendar(&tgbotapi.Message{
+		Chat: &tgbotapi.Chat{ID: 810},
+		From: &tgbotapi.User{ID: 123},
+	})
+	assert.NoError(t, err)
+	assert.Contains(t, msg.Text, "5e")
+	assert.Contains(t, msg.Text, "2026-03-01")
+
+	mockStore.AssertExpectations(t)
+}
+
+func TestFormatDailyAndMonthlySummary_WithEars(t *testing.T) {
+	now := time.Date(2026, time.March, 13, 0, 0, 0, 0, time.UTC)
+	dailyRatings := []*store.ParticipantDailyRating{
+		{ParticipantName: "Alice", Score: 5, HasEar: true},
+		{ParticipantName: "Bob", Score: 4},
+	}
+	totals := []*store.ParticipantMonthlyTotal{
+		{ParticipantName: "Alice", TotalScore: 47, EarCount: 3},
+		{ParticipantName: "Bob", TotalScore: 40, EarCount: 0},
+	}
+
+	result := formatDailyAndMonthlySummary(dailyRatings, totals, now)
+	assert.Contains(t, result, "Alice: 5e")
+	assert.Contains(t, result, "Bob: 4")
+	assert.NotContains(t, result, "Bob: 4e")
+	assert.Contains(t, result, "1. Alice - 47 point(s), 3 ear(s)")
+	assert.Contains(t, result, "2. Bob - 40 point(s)")
+	assert.NotContains(t, result, "Bob - 40 point(s), 0 ear(s)")
+}
+
+func TestFormatMonthlyRatingsWinnersDigest_WithEars(t *testing.T) {
+	now := time.Date(2026, time.March, 31, 0, 0, 0, 0, time.UTC)
+	totals := []*store.ParticipantMonthlyTotal{
+		{ParticipantID: 10, ParticipantName: "Alice", TotalScore: 47, DaysRated: 10, EarCount: 3},
+		{ParticipantID: 11, ParticipantName: "Bob", TotalScore: 40, DaysRated: 10, EarCount: 1},
+		{ParticipantID: 12, ParticipantName: "Cara", TotalScore: 35, DaysRated: 8, EarCount: 0},
+	}
+
+	result := formatMonthlyRatingsWinnersDigest(totals, now, false)
+
+	// Winners section shows ears
+	assert.Contains(t, result, "1st: Alice with 47 point(s), 3 ear(s)")
+	assert.Contains(t, result, "2nd: Bob with 40 point(s), 1 ear(s)")
+	assert.Contains(t, result, "3rd: Cara with 35 point(s)\n")
+	assert.NotContains(t, result, "Cara with 35 point(s), 0 ear(s)")
+
+	// Totals section shows ears
+	assert.Contains(t, result, "1. Alice - 47 point(s), 3 ear(s) across 10 rated day(s)")
+	assert.Contains(t, result, "2. Bob - 40 point(s), 1 ear(s) across 10 rated day(s)")
+	assert.Contains(t, result, "3. Cara - 35 point(s) across 8 rated day(s)")
+}
+
+func TestFormatMonthlyRatingsWinnersDigest_NoEars(t *testing.T) {
+	now := time.Date(2026, time.March, 31, 0, 0, 0, 0, time.UTC)
+	totals := []*store.ParticipantMonthlyTotal{
+		{ParticipantID: 10, ParticipantName: "Alice", TotalScore: 14, DaysRated: 4, EarCount: 0},
+		{ParticipantID: 11, ParticipantName: "Bob", TotalScore: 11, DaysRated: 4, EarCount: 0},
+	}
+
+	result := formatMonthlyRatingsWinnersDigest(totals, now, false)
+	assert.NotContains(t, result, "ear(s)")
+	assert.Contains(t, result, "1st: Alice with 14 point(s)")
+	assert.Contains(t, result, "1. Alice - 14 point(s) across 4 rated day(s)")
+}
