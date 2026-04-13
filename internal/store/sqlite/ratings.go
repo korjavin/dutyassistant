@@ -51,6 +51,9 @@ func (s *SQLiteStore) SaveDailyParticipantRatings(ctx context.Context, date time
 		if rating.Score < 1 || rating.Score > 5 {
 			return fmt.Errorf("participant rating score must be between 1 and 5")
 		}
+		if rating.HasEar && rating.Score != 5 {
+			return fmt.Errorf("ear modifier can only be used with score 5, got score %d", rating.Score)
+		}
 
 		hasEar := 0
 		if rating.HasEar {

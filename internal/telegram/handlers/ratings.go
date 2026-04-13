@@ -455,15 +455,7 @@ func buildRatingsCalendarTable(participants []ratingSessionParticipant, ratings 
 	dateWidth := len("2006-01-02")
 	nameWidths := make([]int, len(participants))
 	for i, participant := range participants {
-		minWidth := len(missingScore)
-		if len(earScore) > minWidth {
-			minWidth = len(earScore)
-		}
-		if len(participant.Name) > minWidth {
-			nameWidths[i] = len(participant.Name)
-		} else {
-			nameWidths[i] = minWidth
-		}
+		nameWidths[i] = max(len(participant.Name), len(earScore))
 	}
 
 	ratingByDayAndParticipant := make(map[string]map[int64]calendarCell, len(ratings))

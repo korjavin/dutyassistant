@@ -339,7 +339,8 @@ func TestHandleDailyRatingsInteractive_SendsGroupNotification(t *testing.T) {
 
 	mockStore.On("GetParticipantsForRating", mock.Anything).Return(participants, nil).Once()
 	mockStore.On("SaveDailyParticipantRatings", mock.Anything, normalizeRatingDate(ratingDate), mock.MatchedBy(func(ratings []*store.ParticipantDailyRating) bool {
-		return len(ratings) == 2 && ratings[0].Score == 5 && ratings[1].Score == 3
+		return len(ratings) == 2 && ratings[0].Score == 5 && ratings[1].Score == 3 &&
+			ratings[0].HasEar == false && ratings[1].HasEar == false
 	})).Return(nil).Once()
 
 	originalTimeNow := TimeNow
@@ -381,8 +382,8 @@ func TestHandleDailyRatingsInteractive_ValidSubmission(t *testing.T) {
 	mockStore.On("GetParticipantsForRating", mock.Anything).Return(participants, nil).Once()
 	mockStore.On("SaveDailyParticipantRatings", mock.Anything, normalizeRatingDate(ratingDate), mock.MatchedBy(func(ratings []*store.ParticipantDailyRating) bool {
 		return len(ratings) == 2 &&
-			ratings[0].ParticipantID == 10 && ratings[0].ParticipantName == "Alice" && ratings[0].Score == 5 &&
-			ratings[1].ParticipantID == 11 && ratings[1].ParticipantName == "Bob" && ratings[1].Score == 3
+			ratings[0].ParticipantID == 10 && ratings[0].ParticipantName == "Alice" && ratings[0].Score == 5 && ratings[0].HasEar == false &&
+			ratings[1].ParticipantID == 11 && ratings[1].ParticipantName == "Bob" && ratings[1].Score == 3 && ratings[1].HasEar == false
 	})).Return(nil).Once()
 
 	originalTimeNow := TimeNow
