@@ -74,5 +74,5 @@ Add an "ear" modifier to the rating system. When a participant's performance exc
 
 ### Task 5: Update documentation
 
-- [ ] Update CLAUDE.md if internal patterns changed
-- [ ] Move this plan to `docs/plans/completed/`
+- [x] Update CLAUDE.md if internal patterns changed
+- [x] Move this plan to `docs/plans/completed/`
