@@ -31,15 +31,15 @@ Add an "ear" modifier to the rating system. When a participant's performance exc
 - Modify: `internal/store/sqlite/sqlite.go`
 - Modify: `internal/store/sqlite/ratings.go`
 
-- [ ] Add `HasEar bool` field to `ParticipantDailyRating` struct in `store.go`
-- [ ] Add `EarCount int` field to `ParticipantMonthlyTotal` struct in `store.go`
-- [ ] Add migration in `sqlite.go` to add `has_ear INTEGER NOT NULL DEFAULT 0` column to `participant_ratings` table
-- [ ] Update `SaveDailyParticipantRatings` to persist the `HasEar` field
-- [ ] Update `scanParticipantDailyRating` to scan the `has_ear` column
-- [ ] Update `GetMonthlyParticipantTotals` query to include `SUM(pr.has_ear) AS ear_count`
-- [ ] Update `getParticipantRatingsBetween` query to select `has_ear`
-- [ ] Write tests for saving and loading ratings with ears
-- [ ] Run project test suite - must pass before task 2
+- [x] Add `HasEar bool` field to `ParticipantDailyRating` struct in `store.go`
+- [x] Add `EarCount int` field to `ParticipantMonthlyTotal` struct in `store.go`
+- [x] Add migration in `sqlite.go` to add `has_ear INTEGER NOT NULL DEFAULT 0` column to `participant_ratings` table
+- [x] Update `SaveDailyParticipantRatings` to persist the `HasEar` field
+- [x] Update `scanParticipantDailyRating` to scan the `has_ear` column
+- [x] Update `GetMonthlyParticipantTotals` query to include `SUM(pr.has_ear) AS ear_count`
+- [x] Update `getParticipantRatingsBetween` query to select `has_ear`
+- [x] Write tests for saving and loading ratings with ears
+- [x] Run project test suite - must pass before task 2
 
 ### Task 2: Update score parsing to accept "5e" input
 

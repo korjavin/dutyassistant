@@ -25,10 +25,11 @@ func (s *SQLiteStore) SaveDailyParticipantRatings(ctx context.Context, date time
 	dateStr := date.UTC().Format(sqliteDateLayout)
 
 	stmt, err := tx.PrepareContext(ctx, `
-		INSERT INTO participant_ratings (participant_id, rating_date, score, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?)
+		INSERT INTO participant_ratings (participant_id, rating_date, score, has_ear, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?)
 		ON CONFLICT(participant_id, rating_date) DO UPDATE SET
 			score = excluded.score,
+			has_ear = excluded.has_ear,
 			updated_at = excluded.updated_at
 	`)
 	if err != nil {
@@ -51,7 +52,11 @@ func (s *SQLiteStore) SaveDailyParticipantRatings(ctx context.Context, date time
 			return fmt.Errorf("participant rating score must be between 1 and 5")
 		}
 
-		if _, err := stmt.ExecContext(ctx, rating.ParticipantID, dateStr, rating.Score, now, now); err != nil {
+		hasEar := 0
+		if rating.HasEar {
+			hasEar = 1
+		}
+		if _, err := stmt.ExecContext(ctx, rating.ParticipantID, dateStr, rating.Score, hasEar, now, now); err != nil {
 			return fmt.Errorf("could not save participant rating for participant %d: %w", rating.ParticipantID, err)
 		}
 	}
@@ -103,7 +108,7 @@ func (s *SQLiteStore) GetMonthlyParticipantTotals(ctx context.Context, year int,
 	end := start.AddDate(0, 1, 0)
 
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT pr.participant_id, u.first_name, SUM(pr.score) AS total_score, COUNT(*) AS days_rated
+		SELECT pr.participant_id, u.first_name, SUM(pr.score) AS total_score, COUNT(*) AS days_rated, SUM(pr.has_ear) AS ear_count
 		FROM participant_ratings pr
 		JOIN users u ON u.id = pr.participant_id
 		WHERE pr.rating_date >= ? AND pr.rating_date < ?
@@ -118,7 +123,7 @@ func (s *SQLiteStore) GetMonthlyParticipantTotals(ctx context.Context, year int,
 	var totals []*store.ParticipantMonthlyTotal
 	for rows.Next() {
 		total := &store.ParticipantMonthlyTotal{}
-		if err := rows.Scan(&total.ParticipantID, &total.ParticipantName, &total.TotalScore, &total.DaysRated); err != nil {
+		if err := rows.Scan(&total.ParticipantID, &total.ParticipantName, &total.TotalScore, &total.DaysRated, &total.EarCount); err != nil {
 			return nil, fmt.Errorf("could not scan monthly participant total: %w", err)
 		}
 		totals = append(totals, total)
@@ -132,7 +137,7 @@ func (s *SQLiteStore) GetMonthlyParticipantTotals(ctx context.Context, year int,
 
 func (s *SQLiteStore) getParticipantRatingsBetween(ctx context.Context, start time.Time, end time.Time) ([]*store.ParticipantDailyRating, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT pr.participant_id, u.first_name, pr.rating_date, pr.score
+		SELECT pr.participant_id, u.first_name, pr.rating_date, pr.score, pr.has_ear
 		FROM participant_ratings pr
 		JOIN users u ON u.id = pr.participant_id
 		WHERE pr.rating_date >= ? AND pr.rating_date < ?
@@ -161,9 +166,11 @@ func (s *SQLiteStore) getParticipantRatingsBetween(ctx context.Context, start ti
 func scanParticipantDailyRating(rows *sql.Rows) (*store.ParticipantDailyRating, error) {
 	rating := &store.ParticipantDailyRating{}
 	var dateStr string
-	if err := rows.Scan(&rating.ParticipantID, &rating.ParticipantName, &dateStr, &rating.Score); err != nil {
+	var hasEar int
+	if err := rows.Scan(&rating.ParticipantID, &rating.ParticipantName, &dateStr, &rating.Score, &hasEar); err != nil {
 		return nil, fmt.Errorf("could not scan participant rating row: %w", err)
 	}
+	rating.HasEar = hasEar != 0
 
 	parsedDate, err := time.Parse(sqliteDateLayout, dateStr)
 	if err != nil {
