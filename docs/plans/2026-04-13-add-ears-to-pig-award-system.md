@@ -66,11 +66,11 @@ Add an "ear" modifier to the rating system. When a participant's performance exc
 
 ### Task 4: Verify acceptance criteria
 
-- [ ] Run full test suite (`go test ./...`)
-- [ ] Run linter (`go vet ./...`)
-- [ ] Verify: admin can submit "5 5e 4 5" and it saves correctly
-- [ ] Verify: calendar shows "5e" for ear-awarded scores
-- [ ] Verify: monthly digest shows ear counts per participant
+- [x] Run full test suite (`go test ./...`)
+- [x] Run linter (`go vet ./...`)
+- [x] Verify: admin can submit "5 5e 4 5" and it saves correctly
+- [x] Verify: calendar shows "5e" for ear-awarded scores
+- [x] Verify: monthly digest shows ear counts per participant
 
 ### Task 5: Update documentation
 
