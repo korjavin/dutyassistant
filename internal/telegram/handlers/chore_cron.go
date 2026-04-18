@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"html"
 	"log/slog"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"time"
 
@@ -120,8 +120,8 @@ func (h *Handlers) assignRecurringChore(ctx context.Context, chore *store.Recurr
 	}
 
 	// Select user
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	target := r.Float64() * totalWeight
+	//nolint:gosec // pseudo-random is sufficient here
+	target := rand.Float64() * totalWeight
 
 	var selectedUser *store.User
 	currentWeight := 0.0
@@ -134,7 +134,8 @@ func (h *Handlers) assignRecurringChore(ctx context.Context, chore *store.Recurr
 	}
 
 	if selectedUser == nil && len(candidates) > 0 {
-		selectedUser = candidates[r.Intn(len(candidates))]
+		//nolint:gosec // pseudo-random is sufficient here
+		selectedUser = candidates[rand.IntN(len(candidates))]
 	}
 
 	if selectedUser == nil {
@@ -155,12 +156,12 @@ func (h *Handlers) assignRecurringChore(ctx context.Context, chore *store.Recurr
 		if _, err := h.Bot.Send(groupMsg); err != nil {
 			slog.Error(fmt.Sprintf("Failed to send recurring chore announcement to group %d: %v", h.GroupID, err))
 		} else {
-			slog.Info(fmt.Sprintf("Announced recurring chore in group."))
+			slog.Info("Announced recurring chore in group.")
 		}
 	} else if h.GroupID == 0 {
-		slog.Info(fmt.Sprintf("No group configured to announce recurring chore."))
+		slog.Info("No group configured to announce recurring chore.")
 	} else if h.Bot == nil {
-		slog.Info(fmt.Sprintf("Bot API not available for group announcement."))
+		slog.Info("Bot API not available for group announcement.")
 	}
 
 	// 6. Save chore to database to be visible in web UI and loaded on restart

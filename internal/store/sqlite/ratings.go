@@ -128,7 +128,7 @@ func (s *SQLiteStore) GetMonthlyParticipantTotals(ctx context.Context, year int,
 	return totals, nil
 }
 
-func (s *SQLiteStore) getParticipantRatingsBetween(ctx context.Context, start time.Time, end time.Time) ([]*store.ParticipantDailyRating, error) {
+func (s *SQLiteStore) getParticipantRatingsBetween(ctx context.Context, start, end time.Time) ([]*store.ParticipantDailyRating, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT pr.participant_id, u.first_name, pr.rating_date, pr.score
 		FROM participant_ratings pr
