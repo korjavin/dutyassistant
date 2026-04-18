@@ -40,19 +40,24 @@ func (s *Scheduler) ExplainLastAssignment(ctx context.Context) (string, error) {
 	minCount, maxQueueCount := s.getAssignmentThresholds(lastDuty, allUsers, dutyCounts, offDutyStatus)
 	candidates, exclusions, remainingCandidates := s.categorizeUsers(lastDuty, allUsers, dutyCounts, offDutyStatus, minCount, maxQueueCount)
 
+	return formatExplanation(lastDuty, candidates, exclusions, remainingCandidates), nil
+}
+
+// formatExplanation builds the explanation string from the given data.
+func formatExplanation(lastDuty *store.Duty, candidates, exclusions, remainingCandidates []string) string {
 	var buf bytes.Buffer
-	buf.WriteString(fmt.Sprintf("Последнее назначение: @%s (%s)\n", lastDuty.User.FirstName, date.Format("2006-01-02 15:00")))
-	buf.WriteString(fmt.Sprintf("Кандидаты: %s\n", strings.Join(candidates, ", ")))
+	fmt.Fprintf(&buf, "Последнее назначение: @%s (%s)\n", lastDuty.User.FirstName, lastDuty.DutyDate.Format("2006-01-02 15:00"))
+	fmt.Fprintf(&buf, "Кандидаты: %s\n", strings.Join(candidates, ", "))
 
 	if len(exclusions) > 0 {
 		buf.WriteString("Исключены:\n")
 		for _, exc := range exclusions {
-			buf.WriteString(fmt.Sprintf("%s\n", exc))
+			fmt.Fprintf(&buf, "%s\n", exc)
 		}
 	}
 
 	if len(remainingCandidates) > 0 {
-		buf.WriteString(fmt.Sprintf("Оставшиеся кандидаты: %s\n", strings.Join(remainingCandidates, ", ")))
+		fmt.Fprintf(&buf, "Оставшиеся кандидаты: %s\n", strings.Join(remainingCandidates, ", "))
 	}
 
 	var finalReason string
@@ -65,9 +70,9 @@ func (s *Scheduler) ExplainLastAssignment(ctx context.Context) (string, error) {
 		finalReason = "имел наименьшее число дежурств за 14 дней (tie-break случайный при равенстве)."
 	}
 
-	buf.WriteString(fmt.Sprintf("Итог: назначен @%s, так как %s", lastDuty.User.FirstName, finalReason))
+	fmt.Fprintf(&buf, "Итог: назначен @%s, так как %s", lastDuty.User.FirstName, finalReason)
 
-	return buf.String(), nil
+	return buf.String()
 }
 
 // getDutyCounts returns duty counts for each user in the 14 days preceding the given date.
