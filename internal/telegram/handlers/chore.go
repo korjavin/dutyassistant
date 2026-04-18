@@ -253,13 +253,30 @@ func (h *Handlers) assignChore(chatID int64, fromUserID int64, description strin
 	// Note: Description is stored unescaped and will be escaped at display time
 	// This prevents double-escaping when showing in multiple places
 
+	candidates, msgConfig := h.getCandidatesForChore(chatID)
+	if msgConfig != nil {
+		return *msgConfig, nil
+	}
+
+	selectedUser, msgConfig := h.selectUserForChore(chatID, candidates)
+	if msgConfig != nil {
+		return *msgConfig, nil
+	}
+
+	return h.notifyAndScheduleChore(chatID, selectedUser, description), nil
+}
+
+// getCandidatesForChore fetches active users and filters out those on off-duty.
+func (h *Handlers) getCandidatesForChore(chatID int64) ([]*store.User, *tgbotapi.MessageConfig) {
 	// 1. Get candidates
 	users, err := h.Store.ListActiveUsers(context.Background())
 	if err != nil {
-		return tgbotapi.NewMessage(chatID, "Failed to retrieve user list."), nil
+		msg := tgbotapi.NewMessage(chatID, "Failed to retrieve user list.")
+		return nil, &msg
 	}
 	if len(users) == 0 {
-		return tgbotapi.NewMessage(chatID, "No active users found to assign the chore to."), nil
+		msg := tgbotapi.NewMessage(chatID, "No active users found to assign the chore to.")
+		return nil, &msg
 	}
 
 	// Filter candidates (exclude those on off-duty)
@@ -270,7 +287,8 @@ func (h *Handlers) assignChore(chatID int64, fromUserID int64, description strin
 
 	offDutyUsers, err := h.Store.GetOffDutyUsers(context.Background(), checkDate)
 	if err != nil {
-		return tgbotapi.NewMessage(chatID, "Failed to retrieve off-duty users."), nil
+		msg := tgbotapi.NewMessage(chatID, "Failed to retrieve off-duty users.")
+		return nil, &msg
 	}
 	offDutyMap := make(map[int64]bool)
 	for _, u := range offDutyUsers {
@@ -284,9 +302,15 @@ func (h *Handlers) assignChore(chatID int64, fromUserID int64, description strin
 	}
 
 	if len(candidates) == 0 {
-		return tgbotapi.NewMessage(chatID, "All active users are currently off-duty."), nil
+		msg := tgbotapi.NewMessage(chatID, "All active users are currently off-duty.")
+		return nil, &msg
 	}
 
+	return candidates, nil
+}
+
+// selectUserForChore performs weighted random selection from the given candidates.
+func (h *Handlers) selectUserForChore(chatID int64, candidates []*store.User) (*store.User, *tgbotapi.MessageConfig) {
 	// 4. Weighted random assignment
 	// Weight = 1.0 + (AdminQueueDays * 0.02)
 	// Additional +2% chance for every pending admin assigned day
@@ -362,9 +386,15 @@ func (h *Handlers) assignChore(chatID int64, fromUserID int64, description strin
 	}
 
 	if selectedUser == nil {
-		return tgbotapi.NewMessage(chatID, "Failed to select a user."), nil
+		msg := tgbotapi.NewMessage(chatID, "Failed to select a user.")
+		return nil, &msg
 	}
 
+	return selectedUser, nil
+}
+
+// notifyAndScheduleChore creates the chore, announces it, and sends DMs.
+func (h *Handlers) notifyAndScheduleChore(chatID int64, selectedUser *store.User, description string) tgbotapi.MessageConfig {
 	// 5. Notifications
 
 	// Escape HTML at display time (description is stored unescaped)
@@ -406,12 +436,12 @@ func (h *Handlers) assignChore(chatID int64, fromUserID int64, description strin
 	// 6. Send DM to assigned user and schedule reminder
 	if h.ChoreReminderManager == nil {
 		responseMsg.Text += "\n\n⚠️ DM reminders are disabled (bot API is not configured)."
-		return responseMsg, nil
+		return responseMsg
 	}
 
 	if selectedUser.TelegramUserID == 0 {
 		responseMsg.Text += "\n\n⚠️ Couldn't send DM: user is not registered in the bot yet. Ask them to send /start in a DM with the bot."
-		return responseMsg, nil
+		return responseMsg
 	}
 
 	// Create assignment with unescaped description (will be escaped at display time)
@@ -439,7 +469,7 @@ func (h *Handlers) assignChore(chatID int64, fromUserID int64, description strin
 	if err := h.Store.CreateChore(context.Background(), chore); err != nil {
 		slog.Error(fmt.Sprintf("Failed to create chore in database: %v", err))
 		responseMsg.Text += "\n\n⚠️ Failed to save chore to database."
-		return responseMsg, nil
+		return responseMsg
 	}
 	assignment := &ChoreAssignment{
 		UserID:      selectedUser.TelegramUserID,
@@ -463,7 +493,7 @@ func (h *Handlers) assignChore(chatID int64, fromUserID int64, description strin
 		responseMsg.Text += "\n\n📨 DM sent to user with reminder scheduled."
 	}
 
-	return responseMsg, nil
+	return responseMsg
 }
 
 // HandleChoreTranslate handles the "/chore translate <id>" command.
