@@ -163,7 +163,7 @@ func (h *Handlers) HandleStatus(m *tgbotapi.Message) (tgbotapi.MessageConfig, er
 	}
 
 	message := fmt.Sprintf(statusMessage,
-		m.From.FirstName,
+		html.EscapeString(m.From.FirstName),
 		stats.TotalDuties,
 		stats.DutiesThisMonth,
 		nextDuty,
