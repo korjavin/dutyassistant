@@ -551,7 +551,6 @@ func TestGetMonthlyParticipantTotals_EarCount(t *testing.T) {
 	require.Equal(t, 1, totals[1].EarCount)
 }
 
-
 // setupTestDBForBenchmark creates a new in-memory SQLite database for testing.
 func setupTestDBForBenchmark(b *testing.B) *SQLiteStore {
 	b.Helper()

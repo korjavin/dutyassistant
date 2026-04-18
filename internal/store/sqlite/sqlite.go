@@ -324,7 +324,6 @@ func (s *SQLiteStore) GetUserStats(ctx context.Context, userID int64) (*store.Us
 
 	err := s.db.QueryRowContext(ctx, query, start.Format("2006-01-02"), end.Format("2006-01-02"), todayStr, userID).
 		Scan(&totalDuties, &dutiesThisMonth, &nextDate)
-
 	if err != nil {
 		return nil, fmt.Errorf("could not get user stats: %w", err)
 	}
