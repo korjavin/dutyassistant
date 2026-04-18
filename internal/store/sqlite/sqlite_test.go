@@ -550,3 +550,44 @@ func TestGetMonthlyParticipantTotals_EarCount(t *testing.T) {
 	require.Equal(t, 12, totals[1].TotalScore)
 	require.Equal(t, 1, totals[1].EarCount)
 }
+
+// setupTestDBForBenchmark creates a new in-memory SQLite database for testing.
+func setupTestDBForBenchmark(b *testing.B) *SQLiteStore {
+	b.Helper()
+	ctx := context.Background()
+	db, err := New(ctx, ":memory:?_pragma=foreign_keys(1)")
+	if err != nil {
+		b.Fatalf("Failed to create test database: %v", err)
+	}
+	return db
+}
+
+func BenchmarkGetUserStats(b *testing.B) {
+	ctx := context.Background()
+	store_db := setupTestDBForBenchmark(b)
+
+	// Add test data
+	now := time.Now()
+	start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	// add user
+	err := store_db.CreateUser(ctx, &store.User{ID: 1, TelegramUserID: 1, FirstName: "test"})
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	// Add 100 duties for the user
+	for i := 0; i < 100; i++ {
+		err = store_db.CreateDuty(ctx, &store.Duty{UserID: 1, DutyDate: start.AddDate(0, 0, i-50)})
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := store_db.GetUserStats(ctx, 1)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
