@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"html"
 	"log/slog"
-	"os"
 	"strings"
 	"time"
 
@@ -54,16 +53,16 @@ func NewNotifier(s store.Store, sched Scheduler, bot TelegramBot, chatID int64, 
 }
 
 // Start initializes and starts the cron scheduler.
-func (n *Notifier) Start() {
+func (n *Notifier) Start() error {
 	slog.Info(fmt.Sprintf("Starting notifier with schedule '%s' in %s timezone", n.cronSpec, n.location))
 
 	n.cron = cron.New(cron.WithLocation(n.location))
 	_, err := n.cron.AddFunc(n.cronSpec, n.checkAndNotify)
 	if err != nil {
-		slog.Error(fmt.Sprintf("Failed to add cron job: %v", err))
-		os.Exit(1)
+		return fmt.Errorf("failed to add cron job: %w", err)
 	}
 	n.cron.Start()
+	return nil
 }
 
 // Stop gracefully stops the cron scheduler.
