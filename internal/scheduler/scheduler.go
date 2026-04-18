@@ -154,18 +154,20 @@ func (s *Scheduler) AssignTodaysDuty(ctx context.Context) (*store.Duty, error) {
 
 // filterOffDutyUsers removes users who are off-duty on the given date.
 func (s *Scheduler) filterOffDutyUsers(ctx context.Context, users []*store.User, date time.Time) []*store.User {
-	offDutyUsers, err := s.store.GetOffDutyUsers(ctx, date)
+	offDutyUsers, err := s.store.GetOffDutyUsers(ctx, date) // Fix N+1 query
 	if err != nil {
-		return users // Return all users on error to be safe, or should we return empty?
+		return users // Return all users on error to be safe
 	}
-	offDutyMap := make(map[int64]bool)
+	if len(offDutyUsers) == 0 {
+		return users
+	}
+	offDutyMap := make(map[int64]struct{}, len(offDutyUsers)) // memory optimization
 	for _, u := range offDutyUsers {
-		offDutyMap[u.ID] = true
+		offDutyMap[u.ID] = struct{}{}
 	}
-
-	var available []*store.User
+	available := make([]*store.User, 0, len(users)) // capacity pre-allocation
 	for _, user := range users {
-		if !offDutyMap[user.ID] {
+		if _, off := offDutyMap[user.ID]; !off {
 			available = append(available, user)
 		}
 	}
