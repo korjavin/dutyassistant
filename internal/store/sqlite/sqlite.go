@@ -305,32 +305,35 @@ func (s *SQLiteStore) ListAllUsers(ctx context.Context) ([]*store.User, error) {
 func (s *SQLiteStore) GetUserStats(ctx context.Context, userID int64) (*store.UserStats, error) {
 	stats := &store.UserStats{}
 
-	// Get total duties
-	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM duties WHERE user_id = ?`, userID).Scan(&stats.TotalDuties)
-	if err != nil {
-		return nil, fmt.Errorf("could not count total duties: %w", err)
-	}
-
-	// Get duties this month
 	now := time.Now()
 	start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
 	end := start.AddDate(0, 1, 0)
-	err = s.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM duties WHERE user_id = ? AND duty_date >= ? AND duty_date < ?`,
-		userID, start.Format("2006-01-02"), end.Format("2006-01-02")).Scan(&stats.DutiesThisMonth)
+	todayStr := now.Format("2006-01-02")
+
+	query := `
+		SELECT
+			COUNT(*) as total_duties,
+			COALESCE(SUM(CASE WHEN duty_date >= ? AND duty_date < ? THEN 1 ELSE 0 END), 0) as duties_this_month,
+			MIN(CASE WHEN duty_date >= ? THEN duty_date ELSE NULL END) as next_duty_date
+		FROM duties
+		WHERE user_id = ?
+	`
+
+	var totalDuties, dutiesThisMonth int
+	var nextDate sql.NullString
+
+	err := s.db.QueryRowContext(ctx, query, start.Format("2006-01-02"), end.Format("2006-01-02"), todayStr, userID).
+		Scan(&totalDuties, &dutiesThisMonth, &nextDate)
+
 	if err != nil {
-		return nil, fmt.Errorf("could not count duties this month: %w", err)
+		return nil, fmt.Errorf("could not get user stats: %w", err)
 	}
 
-	// Get next duty date
-	var nextDate string
-	err = s.db.QueryRowContext(ctx,
-		`SELECT duty_date FROM duties WHERE user_id = ? AND duty_date >= ? ORDER BY duty_date LIMIT 1`,
-		userID, time.Now().Format("2006-01-02")).Scan(&nextDate)
-	if err != nil && err != sql.ErrNoRows {
-		return nil, fmt.Errorf("could not get next duty date: %w", err)
+	stats.TotalDuties = totalDuties
+	stats.DutiesThisMonth = dutiesThisMonth
+	if nextDate.Valid {
+		stats.NextDutyDate = nextDate.String
 	}
-	stats.NextDutyDate = nextDate
 
 	return stats, nil
 }
