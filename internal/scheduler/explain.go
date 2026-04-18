@@ -40,8 +40,13 @@ func (s *Scheduler) ExplainLastAssignment(ctx context.Context) (string, error) {
 	minCount, maxQueueCount := s.getAssignmentThresholds(lastDuty, allUsers, dutyCounts, offDutyStatus)
 	candidates, exclusions, remainingCandidates := s.categorizeUsers(lastDuty, allUsers, dutyCounts, offDutyStatus, minCount, maxQueueCount)
 
+	return formatExplanation(lastDuty, candidates, exclusions, remainingCandidates), nil
+}
+
+// formatExplanation builds the explanation string from the given data.
+func formatExplanation(lastDuty *store.Duty, candidates, exclusions, remainingCandidates []string) string {
 	var buf bytes.Buffer
-	buf.WriteString(fmt.Sprintf("Последнее назначение: @%s (%s)\n", lastDuty.User.FirstName, date.Format("2006-01-02 15:00")))
+	buf.WriteString(fmt.Sprintf("Последнее назначение: @%s (%s)\n", lastDuty.User.FirstName, lastDuty.DutyDate.Format("2006-01-02 15:00")))
 	buf.WriteString(fmt.Sprintf("Кандидаты: %s\n", strings.Join(candidates, ", ")))
 
 	if len(exclusions) > 0 {
@@ -67,7 +72,7 @@ func (s *Scheduler) ExplainLastAssignment(ctx context.Context) (string, error) {
 
 	buf.WriteString(fmt.Sprintf("Итог: назначен @%s, так как %s", lastDuty.User.FirstName, finalReason))
 
-	return buf.String(), nil
+	return buf.String()
 }
 
 // getDutyCounts returns duty counts for each user in the 14 days preceding the given date.
