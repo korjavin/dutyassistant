@@ -142,7 +142,7 @@ func (s *Scheduler) AssignTodaysDuty(ctx context.Context) (*store.Duty, error) {
 		return nil, fmt.Errorf("no available users for duty")
 	}
 
-	// Select user with least duties in last 14 days (excluding admin assignments)
+	// Select user with least weighted duty load in last year (excluding admin assignments)
 	user := s.selectRoundRobinUser(ctx, allUsers)
 	duty, err := s.assignDuty(ctx, user, today, store.AssignmentTypeRoundRobin)
 	if err != nil {
@@ -213,8 +213,34 @@ func (s *Scheduler) selectUserWithBalancing(ctx context.Context, users []*store.
 	return maxQueueUsers[idx.Int64()]
 }
 
-// selectRoundRobinUser selects the user with the least completed duties in the last 14 days.
-// If multiple users have the same minimum count, one is randomly selected for fairness.
+// Round-robin weighting (scaled ×10 for integer math):
+//   - Admin-assigned days are ignored (they are not a favour to the assignee).
+//   - Round-robin days count as 10.
+//   - Voluntary days count as 11 (a 10% bonus, so a volunteer doing 10 days
+//     is "fair" against someone assigned 11 round-robin days).
+const (
+	roundRobinLookbackDays = 365
+	weightRoundRobin       = 10
+	weightVoluntary        = 11
+)
+
+// dutyLoadWeight returns the scaled round-robin weight contributed by a duty.
+// Returns 0 for duty types that should be excluded from fairness calculations.
+func dutyLoadWeight(t store.AssignmentType) int {
+	switch t {
+	case store.AssignmentTypeRoundRobin:
+		return weightRoundRobin
+	case store.AssignmentTypeVoluntary:
+		return weightVoluntary
+	default:
+		return 0
+	}
+}
+
+// selectRoundRobinUser selects the user with the least weighted duty load over
+// the last year. Voluntary days are weighted 1.1× versus round-robin days,
+// and admin-assigned days are excluded.
+// If multiple users tie on the minimum, one is randomly selected for fairness.
 func (s *Scheduler) selectRoundRobinUser(ctx context.Context, users []*store.User) *store.User {
 	if len(users) == 0 {
 		return nil
@@ -225,12 +251,10 @@ func (s *Scheduler) selectRoundRobinUser(ctx context.Context, users []*store.Use
 		return users[0]
 	}
 
-	// Calculate last 14 days
 	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
-	start := today.AddDate(0, 0, -14)
+	start := today.AddDate(0, 0, -roundRobinLookbackDays)
 
-	// Get completed duties in the last 14 days (excluding admin assignments)
 	duties, err := s.store.GetCompletedDutiesInRange(ctx, start, today)
 	if err != nil {
 		// If error, randomize selection among all available users
@@ -241,28 +265,25 @@ func (s *Scheduler) selectRoundRobinUser(ctx context.Context, users []*store.Use
 		return users[idx.Int64()]
 	}
 
-	// Count duties per user (excluding admin assignments)
-	dutyCounts := make(map[int64]int)
+	// Sum weighted load per user (admin days contribute 0).
+	dutyLoad := make(map[int64]int)
 	for _, duty := range duties {
-		if duty.AssignmentType != store.AssignmentTypeAdmin {
-			dutyCounts[duty.UserID]++
-		}
+		dutyLoad[duty.UserID] += dutyLoadWeight(duty.AssignmentType)
 	}
 
-	// Find minimum duty count
-	minCount := int(^uint(0) >> 1) // max int
+	// Find minimum load
+	minLoad := int(^uint(0) >> 1) // max int
 	for _, user := range users {
-		count := dutyCounts[user.ID]
-		if count < minCount {
-			minCount = count
+		load := dutyLoad[user.ID]
+		if load < minLoad {
+			minLoad = load
 		}
 	}
 
-	// Collect all users with minimum duty count
+	// Collect all users with minimum load
 	var candidateUsers []*store.User
 	for _, user := range users {
-		count := dutyCounts[user.ID]
-		if count == minCount {
+		if dutyLoad[user.ID] == minLoad {
 			candidateUsers = append(candidateUsers, user)
 		}
 	}

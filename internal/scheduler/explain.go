@@ -11,6 +11,17 @@ import (
 	"github.com/korjavin/dutyassistant/internal/store"
 )
 
+// formatLoad renders a weighted duty load (scaled ×10) as a decimal day count,
+// omitting the fractional part when the value is a whole number of days.
+func formatLoad(load int) string {
+	whole := load / 10
+	frac := load % 10
+	if frac == 0 {
+		return fmt.Sprintf("%d", whole)
+	}
+	return fmt.Sprintf("%d.%d", whole, frac)
+}
+
 // ExplainLastAssignment implements the SchedulerInterface by explaining the last duty assignment.
 func (s *Scheduler) ExplainLastAssignment(ctx context.Context) (string, error) {
 	lastDuty, err := s.store.GetLastDuty(ctx)
@@ -37,8 +48,8 @@ func (s *Scheduler) ExplainLastAssignment(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("failed to check off duty status: %w", err)
 	}
 
-	minCount, maxQueueCount := s.getAssignmentThresholds(lastDuty, allUsers, dutyCounts, offDutyStatus)
-	candidates, exclusions, remainingCandidates := s.categorizeUsers(lastDuty, allUsers, dutyCounts, offDutyStatus, minCount, maxQueueCount)
+	minLoad, maxQueueCount := s.getAssignmentThresholds(lastDuty, allUsers, dutyCounts, offDutyStatus)
+	candidates, exclusions, remainingCandidates := s.categorizeUsers(lastDuty, allUsers, dutyCounts, offDutyStatus, minLoad, maxQueueCount)
 
 	return formatExplanation(lastDuty, candidates, exclusions, remainingCandidates), nil
 }
@@ -67,7 +78,7 @@ func formatExplanation(lastDuty *store.Duty, candidates, exclusions, remainingCa
 	case store.AssignmentTypeAdmin:
 		finalReason = "назначен администратором с наибольшим количеством дней в очереди (tie-break случайный при равенстве)."
 	case store.AssignmentTypeRoundRobin:
-		finalReason = "имел наименьшее число дежурств за 14 дней (tie-break случайный при равенстве)."
+		finalReason = "имел наименьшую нагрузку дежурств за год (добровольные дни × 1.1, админ-назначения не учитываются; tie-break случайный при равенстве)."
 	}
 
 	fmt.Fprintf(&buf, "Итог: назначен @%s, так как %s", lastDuty.User.FirstName, finalReason)
@@ -75,21 +86,21 @@ func formatExplanation(lastDuty *store.Duty, candidates, exclusions, remainingCa
 	return buf.String()
 }
 
-// getDutyCounts returns duty counts for each user in the 14 days preceding the given date.
+// getDutyCounts returns the weighted round-robin load per user over the last
+// year preceding the given date. Voluntary days weigh 1.1× round-robin days
+// (scaled ×10 for integer math) and admin-assigned days are excluded.
 func (s *Scheduler) getDutyCounts(ctx context.Context, date time.Time) (map[int64]int, error) {
-	start := date.AddDate(0, 0, -14)
+	start := date.AddDate(0, 0, -roundRobinLookbackDays)
 	duties, err := s.store.GetCompletedDutiesInRange(ctx, start, date)
 	if err != nil {
 		return nil, err
 	}
 
-	dutyCounts := make(map[int64]int)
+	dutyLoad := make(map[int64]int)
 	for _, duty := range duties {
-		if duty.AssignmentType != store.AssignmentTypeAdmin {
-			dutyCounts[duty.UserID]++
-		}
+		dutyLoad[duty.UserID] += dutyLoadWeight(duty.AssignmentType)
 	}
-	return dutyCounts, nil
+	return dutyLoad, nil
 }
 
 // getOffDutyStatuses returns a map of user IDs to their off-duty status on the given date.
@@ -110,8 +121,9 @@ func (s *Scheduler) getOffDutyStatuses(ctx context.Context, users []*store.User,
 	return offDutyStatus, nil
 }
 
-// getAssignmentThresholds calculates minCount for round-robin and maxQueueCount for voluntary/admin assignments.
-func (s *Scheduler) getAssignmentThresholds(lastDuty *store.Duty, allUsers []*store.User, dutyCounts map[int64]int, offDutyStatus map[int64]bool) (int, int) {
+// getAssignmentThresholds calculates minLoad (scaled weighted duty load) for
+// round-robin and maxQueueCount for voluntary/admin assignments.
+func (s *Scheduler) getAssignmentThresholds(lastDuty *store.Duty, allUsers []*store.User, dutyLoad map[int64]int, offDutyStatus map[int64]bool) (int, int) {
 	maxQueueCount := 0
 	if lastDuty.AssignmentType == store.AssignmentTypeVoluntary || lastDuty.AssignmentType == store.AssignmentTypeAdmin {
 		for _, u := range allUsers {
@@ -137,26 +149,26 @@ func (s *Scheduler) getAssignmentThresholds(lastDuty *store.Duty, allUsers []*st
 		}
 	}
 
-	minCount := int(^uint(0) >> 1)
+	minLoad := int(^uint(0) >> 1)
 	if lastDuty.AssignmentType == store.AssignmentTypeRoundRobin {
 		for _, u := range allUsers {
 			if !offDutyStatus[u.ID] {
-				if count := dutyCounts[u.ID]; count < minCount {
-					minCount = count
+				if load := dutyLoad[u.ID]; load < minLoad {
+					minLoad = load
 				}
 			}
 		}
 	}
-	return minCount, maxQueueCount
+	return minLoad, maxQueueCount
 }
 
 // categorizeUsers builds candidates, exclusions, and remainingCandidates lists.
 func (s *Scheduler) categorizeUsers(
 	lastDuty *store.Duty,
 	allUsers []*store.User,
-	dutyCounts map[int64]int,
+	dutyLoad map[int64]int,
 	offDutyStatus map[int64]bool,
-	minCount, maxQueueCount int,
+	minLoad, maxQueueCount int,
 ) ([]string, []string, []string) {
 	var candidates []string
 	var exclusions []string
@@ -174,9 +186,9 @@ func (s *Scheduler) categorizeUsers(
 
 		isRemaining := false
 		if lastDuty.AssignmentType == store.AssignmentTypeRoundRobin {
-			count := dutyCounts[user.ID]
-			if count > minCount {
-				exclusions = append(exclusions, fmt.Sprintf("@%s — %d дежурств за последние 14 дней (минимум %d)", user.FirstName, count, minCount))
+			load := dutyLoad[user.ID]
+			if load > minLoad {
+				exclusions = append(exclusions, fmt.Sprintf("@%s — нагрузка %s за год (минимум %s)", user.FirstName, formatLoad(load), formatLoad(minLoad)))
 			} else {
 				isRemaining = true
 			}
