@@ -216,12 +216,12 @@ func (s *Scheduler) selectUserWithBalancing(ctx context.Context, users []*store.
 // Round-robin weighting (scaled ×10 for integer math):
 //   - Admin-assigned days are ignored (they are not a favour to the assignee).
 //   - Round-robin days count as 10.
-//   - Voluntary days count as 11 (a 10% bonus, so a volunteer doing 10 days
-//     is "fair" against someone assigned 11 round-robin days).
+//   - Voluntary days count as 12 (a 20% bonus, so a volunteer doing 10 days
+//     is "fair" against someone assigned 12 round-robin days).
 const (
 	roundRobinLookbackDays = 365
 	weightRoundRobin       = 10
-	weightVoluntary        = 11
+	weightVoluntary        = 12
 )
 
 // dutyLoadWeight returns the scaled round-robin weight contributed by a duty.
@@ -238,7 +238,7 @@ func dutyLoadWeight(t store.AssignmentType) int {
 }
 
 // selectRoundRobinUser selects the user with the least weighted duty load over
-// the last year. Voluntary days are weighted 1.1× versus round-robin days,
+// the last year. Voluntary days are weighted 1.2× versus round-robin days,
 // and admin-assigned days are excluded.
 // If multiple users tie on the minimum, one is randomly selected for fairness.
 func (s *Scheduler) selectRoundRobinUser(ctx context.Context, users []*store.User) *store.User {

@@ -78,7 +78,7 @@ func formatExplanation(lastDuty *store.Duty, candidates, exclusions, remainingCa
 	case store.AssignmentTypeAdmin:
 		finalReason = "назначен администратором с наибольшим количеством дней в очереди (tie-break случайный при равенстве)."
 	case store.AssignmentTypeRoundRobin:
-		finalReason = "имел наименьшую нагрузку дежурств за год (добровольные дни × 1.1, админ-назначения не учитываются; tie-break случайный при равенстве)."
+		finalReason = "имел наименьшую нагрузку дежурств за год (добровольные дни × 1.2, админ-назначения не учитываются; tie-break случайный при равенстве)."
 	}
 
 	fmt.Fprintf(&buf, "Итог: назначен @%s, так как %s", lastDuty.User.FirstName, finalReason)
@@ -87,7 +87,7 @@ func formatExplanation(lastDuty *store.Duty, candidates, exclusions, remainingCa
 }
 
 // getDutyCounts returns the weighted round-robin load per user over the last
-// year preceding the given date. Voluntary days weigh 1.1× round-robin days
+// year preceding the given date. Voluntary days weigh 1.2× round-robin days
 // (scaled ×10 for integer math) and admin-assigned days are excluded.
 func (s *Scheduler) getDutyCounts(ctx context.Context, date time.Time) (map[int64]int, error) {
 	start := date.AddDate(0, 0, -roundRobinLookbackDays)

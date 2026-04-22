@@ -68,7 +68,7 @@ func TestExplainLastAssignment_RoundRobin(t *testing.T) {
 	assert.Contains(t, explanation, "@maria — отсутствует по расписанию")
 	assert.Contains(t, explanation, "@den — нагрузка 1 за год (минимум 0)")
 	assert.Contains(t, explanation, "Оставшиеся кандидаты: @alex")
-	assert.Contains(t, explanation, "Итог: назначен @alex, так как имел наименьшую нагрузку дежурств за год (добровольные дни × 1.1, админ-назначения не учитываются; tie-break случайный при равенстве).")
+	assert.Contains(t, explanation, "Итог: назначен @alex, так как имел наименьшую нагрузку дежурств за год (добровольные дни × 1.2, админ-назначения не учитываются; tie-break случайный при равенстве).")
 }
 
 func TestExplainLastAssignment_Volunteer(t *testing.T) {
@@ -239,11 +239,11 @@ func TestExplainLastAssignment_WeightedLoad(t *testing.T) {
 
 	// alex was just assigned (round-robin). We construct a duty history that
 	// exercises all three weight cases within the 365-day lookback:
-	//   - maria has 10 voluntary days  -> load = 10 * 11 = 110 (11.0)
-	//   - den has 11 round-robin days  -> load = 11 * 10 = 110 (11.0)
-	//   - alex has 12 round-robin days -> load = 12 * 10 = 120 (12.0)
+	//   - maria has 10 voluntary days  -> load = 10 * 12 = 120 (12.0)
+	//   - den has 12 round-robin days  -> load = 12 * 10 = 120 (12.0)
+	//   - alex has 13 round-robin days -> load = 13 * 10 = 130 (13.0)
 	//   - den also has 50 admin days   -> load contribution = 0 (ignored)
-	// So alex is excluded (max load), and both maria and den tie at 11.0,
+	// So alex is excluded (max load), and both maria and den tie at 12.0,
 	// which must be shown in the explanation.
 	var duties []*store.Duty
 	for i := 0; i < 10; i++ {
@@ -253,14 +253,14 @@ func TestExplainLastAssignment_WeightedLoad(t *testing.T) {
 			DutyDate:       today.AddDate(0, 0, -(i + 1)),
 		})
 	}
-	for i := 0; i < 11; i++ {
+	for i := 0; i < 12; i++ {
 		duties = append(duties, &store.Duty{
 			UserID:         den.ID,
 			AssignmentType: store.AssignmentTypeRoundRobin,
 			DutyDate:       today.AddDate(0, 0, -(i + 20)),
 		})
 	}
-	for i := 0; i < 12; i++ {
+	for i := 0; i < 13; i++ {
 		duties = append(duties, &store.Duty{
 			UserID:         alex.ID,
 			AssignmentType: store.AssignmentTypeRoundRobin,
@@ -300,8 +300,8 @@ func TestExplainLastAssignment_WeightedLoad(t *testing.T) {
 	explanation, err := s.ExplainLastAssignment(ctx)
 
 	assert.NoError(t, err)
-	// alex's 12 round-robin days = load 12.0, above the minimum of 11.0.
-	assert.Contains(t, explanation, "@alex — нагрузка 12 за год (минимум 11)")
-	// maria and den tie at the minimum load of 11.0 — both remain as candidates.
+	// alex's 13 round-robin days = load 13.0, above the minimum of 12.0.
+	assert.Contains(t, explanation, "@alex — нагрузка 13 за год (минимум 12)")
+	// maria and den tie at the minimum load of 12.0 — both remain as candidates.
 	assert.Contains(t, explanation, "Оставшиеся кандидаты: @den, @maria")
 }
