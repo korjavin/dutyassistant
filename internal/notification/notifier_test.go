@@ -488,24 +488,78 @@ func TestRenderBarChart(t *testing.T) {
 }
 
 func TestDetermineWinner(t *testing.T) {
-	stats := []*store.UserWeeklyStats{
-		{Name: "Alice", CompletedCount: 5, AvgLateSeconds: 3600},
-		{Name: "Bob", CompletedCount: 10, AvgLateSeconds: 0},
-		{Name: "Charlie", CompletedCount: 10, AvgLateSeconds: 1800}, // Bob wins over Charlie (less late)
+	tests := []struct {
+		name     string
+		stats    []*store.UserWeeklyStats
+		expected string // Expected winner name, empty string means nil expected
+	}{
+		{
+			name:     "empty list",
+			stats:    []*store.UserWeeklyStats{},
+			expected: "",
+		},
+		{
+			name: "single user",
+			stats: []*store.UserWeeklyStats{
+				{Name: "Alice", CompletedCount: 5, AvgLateSeconds: 0},
+			},
+			expected: "Alice",
+		},
+		{
+			name: "distinct completed counts",
+			stats: []*store.UserWeeklyStats{
+				{Name: "Alice", CompletedCount: 5, AvgLateSeconds: 3600},
+				{Name: "Bob", CompletedCount: 10, AvgLateSeconds: 0},
+			},
+			expected: "Bob",
+		},
+		{
+			name: "tie completed count, lower avg late seconds wins",
+			stats: []*store.UserWeeklyStats{
+				{Name: "Bob", CompletedCount: 10, AvgLateSeconds: 0},
+				{Name: "Charlie", CompletedCount: 10, AvgLateSeconds: 1800},
+			},
+			expected: "Bob",
+		},
+		{
+			name: "tie completed count, higher avg late seconds loses",
+			stats: []*store.UserWeeklyStats{
+				{Name: "Alice", CompletedCount: 10, AvgLateSeconds: 1800},
+				{Name: "Bob", CompletedCount: 10, AvgLateSeconds: 0},
+			},
+			expected: "Bob",
+		},
+		{
+			name: "absolute tie, first user wins",
+			stats: []*store.UserWeeklyStats{
+				{Name: "Alice", CompletedCount: 5, AvgLateSeconds: 0},
+				{Name: "Bob", CompletedCount: 5, AvgLateSeconds: 0},
+			},
+			expected: "Alice",
+		},
+		{
+			name: "complex case",
+			stats: []*store.UserWeeklyStats{
+				{Name: "Alice", CompletedCount: 5, AvgLateSeconds: 3600},
+				{Name: "Bob", CompletedCount: 10, AvgLateSeconds: 1800},
+				{Name: "Charlie", CompletedCount: 10, AvgLateSeconds: 0},
+				{Name: "Dave", CompletedCount: 8, AvgLateSeconds: 0},
+			},
+			expected: "Charlie",
+		},
 	}
-	winner := determineWinner(stats)
-	assert.NotNil(t, winner)
-	assert.Equal(t, "Bob", winner.Name)
 
-	stats2 := []*store.UserWeeklyStats{
-		{Name: "Alice", CompletedCount: 5, AvgLateSeconds: 0},
-		{Name: "Bob", CompletedCount: 5, AvgLateSeconds: 0}, // Alice wins (first in list)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			winner := determineWinner(tt.stats)
+			if tt.expected == "" {
+				assert.Nil(t, winner)
+			} else {
+				assert.NotNil(t, winner)
+				assert.Equal(t, tt.expected, winner.Name)
+			}
+		})
 	}
-	winner2 := determineWinner(stats2)
-	assert.NotNil(t, winner2)
-	assert.Equal(t, "Alice", winner2.Name)
-
-	assert.Nil(t, determineWinner([]*store.UserWeeklyStats{}))
 }
 
 func TestSendWeeklyChoreStats(t *testing.T) {
