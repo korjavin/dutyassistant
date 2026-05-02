@@ -229,6 +229,21 @@ func (s *SQLiteStore) CreateUser(ctx context.Context, user *store.User) error {
 	return nil
 }
 
+// GetUserByID retrieves a user by their internal database ID.
+func (s *SQLiteStore) GetUserByID(ctx context.Context, id int64) (*store.User, error) {
+	query := `SELECT id, telegram_user_id, first_name, is_admin, is_active, volunteer_queue_days, admin_queue_days, off_duty_start, off_duty_end
+	          FROM users WHERE id = ?`
+	row := s.db.QueryRowContext(ctx, query, id)
+	user, err := scanUser(row)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil // Not found is not an error
+		}
+		return nil, fmt.Errorf("could not query user by ID: %w", err)
+	}
+	return user, nil
+}
+
 // GetUserByTelegramID retrieves a user by their Telegram ID.
 func (s *SQLiteStore) GetUserByTelegramID(ctx context.Context, id int64) (*store.User, error) {
 	query := `SELECT id, telegram_user_id, first_name, is_admin, is_active, volunteer_queue_days, admin_queue_days, off_duty_start, off_duty_end

@@ -594,3 +594,12 @@ func (m *mockStore) RecordSviniyaMonthlyGrant(ctx context.Context, year int, mon
 func (m *mockStore) GrantSviniyaForMonth(ctx context.Context, year int, month time.Month, userID int64) error {
 	return nil
 }
+
+func (m *mockStore) GetUserByID(ctx context.Context, id int64) (*store.User, error) {
+	for _, u := range m.users {
+		if u.ID == id {
+			return u, nil
+		}
+	}
+	return nil, nil
+}
