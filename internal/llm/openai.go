@@ -88,9 +88,9 @@ type chatResponse struct {
 	} `json:"choices"`
 }
 
-// SanitizeTelegramHTML ensures that only permitted Telegram HTML tags remain
-// and that any raw `<` or `&` inside text nodes are properly escaped.
-func SanitizeTelegramHTML(input string) string {
+var allowedTelegramTagsRegex *regexp.Regexp
+
+func init() {
 	// Telegram supported tags list
 	allowedTags := []string{
 		"b", "strong", "i", "em", "u", "ins", "s", "strike", "del", "code", "pre",
@@ -109,11 +109,15 @@ func SanitizeTelegramHTML(input string) string {
 	allowRegexParts = append(allowRegexParts, `</tg-spoiler>`)
 
 	allowPattern := strings.Join(allowRegexParts, "|")
-	reAllowed := regexp.MustCompile("(?i)(" + allowPattern + ")")
+	allowedTelegramTagsRegex = regexp.MustCompile("(?i)(" + allowPattern + ")")
+}
 
+// SanitizeTelegramHTML ensures that only permitted Telegram HTML tags remain
+// and that any raw `<` or `&` inside text nodes are properly escaped.
+func SanitizeTelegramHTML(input string) string {
 	// Split input by allowed tags
-	parts := reAllowed.Split(input, -1)
-	tags := reAllowed.FindAllString(input, -1)
+	parts := allowedTelegramTagsRegex.Split(input, -1)
+	tags := allowedTelegramTagsRegex.FindAllString(input, -1)
 
 	var result strings.Builder
 	for i, part := range parts {

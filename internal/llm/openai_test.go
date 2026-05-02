@@ -328,3 +328,10 @@ func TestNewClient_ZeroTemperature(t *testing.T) {
 		t.Errorf("Expected custom temperature 0.0, got: %f", client.temperature)
 	}
 }
+
+func BenchmarkSanitizeTelegramHTML(b *testing.B) {
+	input := "<b>Hello</b> <i>World</i> & <script>alert(1)</script> <a href=\"http://example.com\">Link</a>"
+	for i := 0; i < b.N; i++ {
+		SanitizeTelegramHTML(input)
+	}
+}
