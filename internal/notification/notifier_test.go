@@ -689,3 +689,12 @@ func setupBotAPI(t *testing.T, checkReq func(url.Values)) *tgbotapi.BotAPI {
 	assert.NoError(t, err)
 	return bot
 }
+
+// GetUserByID mocks the GetUserByID method.
+func (m *MockStore) GetUserByID(ctx context.Context, id int64) (*store.User, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*store.User), args.Error(1)
+}

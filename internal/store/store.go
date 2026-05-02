@@ -128,14 +128,15 @@ type RecurringChore struct {
 
 // SviniyaBalance represents a user's sviniya award balance.
 type SviniyaBalance struct {
-	UserID  int64
+	UserID   int64
 	UserName string
-	Balance int
+	Balance  int
 }
 
 // Store defines the interface for all data operations.
 type Store interface {
 	// User methods
+	GetUserByID(ctx context.Context, id int64) (*User, error)
 	GetUserByTelegramID(ctx context.Context, id int64) (*User, error)
 	GetUserByName(ctx context.Context, name string) (*User, error)
 	ListActiveUsers(ctx context.Context) ([]*User, error)
