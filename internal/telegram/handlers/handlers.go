@@ -62,6 +62,7 @@ func NewWithAdminID(s store.Store, sch scheduler.SchedulerInterface, groupID, ad
 		LLMClient:      llmClient,
 	}
 }
+
 func hasNonLatinCharacters(text string) bool {
 	for _, r := range text {
 		if unicode.IsLetter(r) && !unicode.Is(unicode.Latin, r) {

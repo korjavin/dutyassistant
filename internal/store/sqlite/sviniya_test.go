@@ -328,4 +328,3 @@ func TestGrantSviniyaForMonth_AddsToExistingBalance(t *testing.T) {
 	require.NotNil(t, balance)
 	assert.Equal(t, 6, balance.Balance, "Balance should be 6 after adding grant to existing balance")
 }
-

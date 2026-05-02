@@ -99,8 +99,8 @@ func TestHandleSetSviniyaBalance_Admin_Success(t *testing.T) {
 	h := handlers.NewWithAdminID(mockStore, nil, 0, adminID, nil)
 
 	message := &tgbotapi.Message{
-		Chat: &tgbotapi.Chat{ID: 123},
-		From: &tgbotapi.User{ID: adminID, FirstName: "AdminUser"},
+		Chat:     &tgbotapi.Chat{ID: 123},
+		From:     &tgbotapi.User{ID: adminID, FirstName: "AdminUser"},
 		Text:     "/set_sviniya_balance Ivan 3",
 		Entities: []tgbotapi.MessageEntity{{Type: "bot_command", Offset: 0, Length: 20}},
 	}
@@ -121,8 +121,8 @@ func TestHandleSetSviniyaBalance_NotAdmin(t *testing.T) {
 	h := handlers.NewWithAdminID(mockStore, nil, 0, adminID, nil)
 
 	message := &tgbotapi.Message{
-		Chat: &tgbotapi.Chat{ID: 123},
-		From: &tgbotapi.User{ID: 123, FirstName: "RegularUser"},
+		Chat:     &tgbotapi.Chat{ID: 123},
+		From:     &tgbotapi.User{ID: 123, FirstName: "RegularUser"},
 		Text:     "/set_sviniya_balance Ivan 3",
 		Entities: []tgbotapi.MessageEntity{{Type: "bot_command", Offset: 0, Length: 20}},
 	}
@@ -140,8 +140,8 @@ func TestHandleSetSviniyaBalance_NoArguments(t *testing.T) {
 	h := handlers.NewWithAdminID(mockStore, nil, 0, adminID, nil)
 
 	message := &tgbotapi.Message{
-		Chat: &tgbotapi.Chat{ID: 123},
-		From: &tgbotapi.User{ID: adminID, FirstName: "AdminUser"},
+		Chat:     &tgbotapi.Chat{ID: 123},
+		From:     &tgbotapi.User{ID: adminID, FirstName: "AdminUser"},
 		Text:     "/set_sviniya_balance",
 		Entities: []tgbotapi.MessageEntity{{Type: "bot_command", Offset: 0, Length: 20}},
 	}
@@ -158,8 +158,8 @@ func TestHandleSetSviniyaBalance_InvalidBalance(t *testing.T) {
 	h := handlers.NewWithAdminID(mockStore, nil, 0, adminID, nil)
 
 	message := &tgbotapi.Message{
-		Chat: &tgbotapi.Chat{ID: 123},
-		From: &tgbotapi.User{ID: adminID, FirstName: "AdminUser"},
+		Chat:     &tgbotapi.Chat{ID: 123},
+		From:     &tgbotapi.User{ID: adminID, FirstName: "AdminUser"},
 		Text:     "/set_sviniya_balance Ivan abc",
 		Entities: []tgbotapi.MessageEntity{{Type: "bot_command", Offset: 0, Length: 20}},
 	}
@@ -176,8 +176,8 @@ func TestHandleSetSviniyaBalance_UserNotFound(t *testing.T) {
 	h := handlers.NewWithAdminID(mockStore, nil, 0, adminID, nil)
 
 	message := &tgbotapi.Message{
-		Chat: &tgbotapi.Chat{ID: 123},
-		From: &tgbotapi.User{ID: adminID, FirstName: "AdminUser"},
+		Chat:     &tgbotapi.Chat{ID: 123},
+		From:     &tgbotapi.User{ID: adminID, FirstName: "AdminUser"},
 		Text:     "/set_sviniya_balance NonExistent 3",
 		Entities: []tgbotapi.MessageEntity{{Type: "bot_command", Offset: 0, Length: 20}},
 	}
@@ -196,8 +196,8 @@ func TestHandleSetSviniyaBalance_StoreError(t *testing.T) {
 	h := handlers.NewWithAdminID(mockStore, nil, 0, adminID, nil)
 
 	message := &tgbotapi.Message{
-		Chat: &tgbotapi.Chat{ID: 123},
-		From: &tgbotapi.User{ID: adminID, FirstName: "AdminUser"},
+		Chat:     &tgbotapi.Chat{ID: 123},
+		From:     &tgbotapi.User{ID: adminID, FirstName: "AdminUser"},
 		Text:     "/set_sviniya_balance Ivan 3",
 		Entities: []tgbotapi.MessageEntity{{Type: "bot_command", Offset: 0, Length: 20}},
 	}
@@ -217,8 +217,8 @@ func TestHandleSetSviniyaBalance_AdminIDNotConfigured(t *testing.T) {
 	h := handlers.New(mockStore, nil, 0, nil)
 
 	message := &tgbotapi.Message{
-		Chat: &tgbotapi.Chat{ID: 123},
-		From: &tgbotapi.User{ID: 456, FirstName: "RegularUser"},
+		Chat:     &tgbotapi.Chat{ID: 123},
+		From:     &tgbotapi.User{ID: 456, FirstName: "RegularUser"},
 		Text:     "/set_sviniya_balance Ivan 3",
 		Entities: []tgbotapi.MessageEntity{{Type: "bot_command", Offset: 0, Length: 20}},
 	}
@@ -284,8 +284,8 @@ func TestHandleSpend_WithInlineDescription(t *testing.T) {
 	h := handlers.New(mockStore, nil, 0, nil) // nil LLM client tests fallback
 
 	message := &tgbotapi.Message{
-		Chat: &tgbotapi.Chat{ID: 123},
-		From: &tgbotapi.User{ID: 456, FirstName: "TestUser"},
+		Chat:     &tgbotapi.Chat{ID: 123},
+		From:     &tgbotapi.User{ID: 456, FirstName: "TestUser"},
 		Text:     "/spend coffee for everyone",
 		Entities: []tgbotapi.MessageEntity{{Type: "bot_command", Offset: 0, Length: 6}},
 	}
@@ -397,8 +397,8 @@ func TestHandleSpend_NoLLMFallback(t *testing.T) {
 	h := handlers.New(mockStore, nil, 0, nil) // No LLM client
 
 	message := &tgbotapi.Message{
-		Chat: &tgbotapi.Chat{ID: 123},
-		From: &tgbotapi.User{ID: 456, FirstName: "TestUser"},
+		Chat:     &tgbotapi.Chat{ID: 123},
+		From:     &tgbotapi.User{ID: 456, FirstName: "TestUser"},
 		Text:     "/spend pizza party",
 		Entities: []tgbotapi.MessageEntity{{Type: "bot_command", Offset: 0, Length: 6}},
 	}

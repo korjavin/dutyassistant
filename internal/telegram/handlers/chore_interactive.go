@@ -274,4 +274,3 @@ func (h *Handlers) handleChoreCompleteInteractive(q *tgbotapi.CallbackQuery) (tg
 	editMsg.ReplyMarkup = &markup
 	return editMsg, nil
 }
-
