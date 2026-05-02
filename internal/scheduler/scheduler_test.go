@@ -594,3 +594,8 @@ func (m *mockStore) RecordSviniyaMonthlyGrant(ctx context.Context, year int, mon
 func (m *mockStore) GrantSviniyaForMonth(ctx context.Context, year int, month time.Month, userID int64) error {
 	return nil
 }
+
+// GetUserByID mocks the GetUserByID method.
+func (m *mockStore) GetUserByID(ctx context.Context, id int64) (*store.User, error) {
+	return nil, nil
+}

@@ -533,13 +533,7 @@ func (h *Handlers) HandleAssignUserCallback(q *tgbotapi.CallbackQuery) (tgbotapi
 	user, err := h.Store.GetUserByTelegramID(context.Background(), id)
 	if err != nil || user == nil {
 		// Try by ID directly
-		users, _ := h.Store.ListAllUsers(context.Background())
-		for _, u := range users {
-			if u.ID == id {
-				user = u
-				break
-			}
-		}
+		user, _ = h.Store.GetUserByID(context.Background(), id)
 	}
 
 	if user == nil {
@@ -588,14 +582,7 @@ func (h *Handlers) HandleAssignDaysCallback(q *tgbotapi.CallbackQuery) (tgbotapi
 	_, _ = fmt.Sscanf(parts[2], "%d", &days)
 
 	// Get user
-	users, _ := h.Store.ListAllUsers(context.Background())
-	var user *store.User
-	for _, u := range users {
-		if u.ID == userID {
-			user = u
-			break
-		}
-	}
+	user, _ := h.Store.GetUserByID(context.Background(), userID)
 
 	if user == nil {
 		edit := tgbotapi.NewEditMessageText(q.Message.Chat.ID, q.Message.MessageID, "❌ User not found")
@@ -633,14 +620,7 @@ func (h *Handlers) HandleAssignCustomCallback(q *tgbotapi.CallbackQuery) (tgbota
 	_, _ = fmt.Sscanf(parts[1], "%d", &userID)
 
 	// Get user
-	users, _ := h.Store.ListAllUsers(context.Background())
-	var user *store.User
-	for _, u := range users {
-		if u.ID == userID {
-			user = u
-			break
-		}
-	}
+	user, _ := h.Store.GetUserByID(context.Background(), userID)
 
 	userName := "user"
 	if user != nil {
@@ -739,14 +719,7 @@ func (h *Handlers) HandleUnassignDaysCallback(q *tgbotapi.CallbackQuery) (tgbota
 	_, _ = fmt.Sscanf(parts[2], "%d", &days)
 
 	// Get user
-	users, _ := h.Store.ListAllUsers(context.Background())
-	var user *store.User
-	for _, u := range users {
-		if u.ID == userID {
-			user = u
-			break
-		}
-	}
+	user, _ := h.Store.GetUserByID(context.Background(), userID)
 
 	if user == nil {
 		edit := tgbotapi.NewEditMessageText(q.Message.Chat.ID, q.Message.MessageID, "❌ User not found")
@@ -833,14 +806,7 @@ func (h *Handlers) HandleModifyUserCallback(q *tgbotapi.CallbackQuery) (tgbotapi
 		return edit, nil
 	}
 
-	users, _ := h.Store.ListAllUsers(context.Background())
-	var user *store.User
-	for _, u := range users {
-		if u.ID == userID {
-			user = u
-			break
-		}
-	}
+	user, _ := h.Store.GetUserByID(context.Background(), userID)
 
 	if user == nil {
 		edit := tgbotapi.NewEditMessageText(q.Message.Chat.ID, q.Message.MessageID, "❌ User not found")
@@ -877,14 +843,7 @@ func (h *Handlers) HandleToggleUserCallback(q *tgbotapi.CallbackQuery) (tgbotapi
 		return tgbotapi.EditMessageTextConfig{}, fmt.Errorf("invalid user ID: %v", err)
 	}
 
-	users, _ := h.Store.ListAllUsers(context.Background())
-	var user *store.User
-	for _, u := range users {
-		if u.ID == userID {
-			user = u
-			break
-		}
-	}
+	user, _ := h.Store.GetUserByID(context.Background(), userID)
 
 	if user == nil {
 		edit := tgbotapi.NewEditMessageText(q.Message.Chat.ID, q.Message.MessageID, "❌ User not found")
