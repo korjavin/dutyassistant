@@ -152,21 +152,33 @@ export async function getActiveChores() {
 }
 
 /**
- * Allows the current user to volunteer for a specific duty.
- * @param {number} dutyId - The ID of the duty.
- * @returns {Promise<any>} The result of the operation.
+ * Allows the current user to volunteer for duty on a given date.
+ * @param {string} date - YYYY-MM-DD.
+ * @returns {Promise<any>}
  */
-export async function volunteerForDuty(dutyId) {
-    return postData(`/api/v1/duties/${dutyId}/volunteer`);
+export async function volunteerForDuty(date) {
+    const response = await fetch('/api/v1/duties/volunteer', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ date }),
+    });
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
+    }
+    if (response.status === 204) return null;
+    const text = await response.text();
+    return text ? JSON.parse(text) : null;
 }
 
 /**
- * Allows the current user to withdraw from a specific duty.
- * @param {number} dutyId - The ID of the duty.
- * @returns {Promise<any>} The result of the operation.
+ * Withdraw from a duty on a given date. Backend endpoint is not implemented today;
+ * this call will surface an error in the modal, which is the desired UX.
+ * @param {string} date - YYYY-MM-DD.
+ * @returns {Promise<any>}
  */
-export async function withdrawFromDuty(dutyId) {
-    return postData(`/api/v1/duties/${dutyId}/withdraw`);
+export async function withdrawFromDuty(date) {
+    return postData(`/api/v1/duties/${encodeURIComponent(date)}/withdraw`);
 }
 
 /**

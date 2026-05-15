@@ -1,25 +1,16 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { createModal } from '../web/js/ui/components.js';
+import { describe, it, expect, afterEach } from 'vitest';
+import { openModal, escapeHtml } from '../web/js/ui/components.js';
 
-describe('Calendar and Components XSS fixes', () => {
-    beforeEach(() => {
+describe('Modal XSS safety', () => {
+    afterEach(() => {
         document.body.innerHTML = '';
     });
 
-    it('should create a modal safely without executing script tags', () => {
+    it('escapes the title to neutralize injected scripts', () => {
         const title = 'Test Title <script>alert(1)</script>';
-        const content = 'Test Content <img src=x onerror=alert(1)>';
+        const { root } = openModal({ title, bodyHtml: '<div class="probe">safe</div>' });
 
-        // This simulates calendar.js creating a modal using its own safe templating
-        // calendar.js now calls escapeHtml on the duty fields before inserting to `content`
-        const safeContent = `<div>${content}</div>`;
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = createModal(title, safeContent, 'test-modal');
-        const modalNode = tempDiv.firstElementChild;
-        document.body.appendChild(modalNode);
-
-        const modalEl = document.getElementById('test-modal');
-        expect(modalEl).not.toBeNull();
-        expect(document.body.innerHTML).toContain('Test Content');
+        expect(root.querySelector('script')).toBeNull();
+        expect(root.querySelector('.title').innerHTML).toContain(escapeHtml(title));
     });
 });

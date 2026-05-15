@@ -35,7 +35,7 @@ func NewServer(s store.Store, botToken, dutySecret string) *gin.Engine {
 		// Only cache CSS for a long time since we use cache-busting in index.html for it.
 		// ES6 modules without fingerprints should not be cached.
 		path := c.Request.URL.Path
-		if len(path) > 4 && path[:4] == "/css" {
+		if (len(path) > 4 && path[:4] == "/css") || (len(path) > 6 && path[:6] == "/fonts") {
 			c.Header("Cache-Control", "public, max-age=86400")
 		} else {
 			c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
@@ -49,7 +49,7 @@ func NewServer(s store.Store, botToken, dutySecret string) *gin.Engine {
 	{
 		staticRoutes.Static("/css", "./web/css")
 		staticRoutes.Static("/js", "./web/js")
-		staticRoutes.Static("/vendor", "./web/vendor")
+		staticRoutes.Static("/fonts", "./web/fonts")
 	}
 
 	// Serve index.html without caching

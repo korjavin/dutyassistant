@@ -1,339 +1,344 @@
-import VanillaCalendar from '/vendor/vanilla-calendar/vanilla-calendar.min.js';
 import { getSchedule, getPrognosis, volunteerForDuty, withdrawFromDuty } from '../api.js';
 import { getState, setState } from '../store.js';
-import { createDutyCard, createModal, showModal, createLoadingSpinner, createErrorMessage, hideModal, escapeHtml } from './components.js';
+import { escapeHtml, pad2, openModal, createLoadingSpinner, createErrorMessage } from './components.js';
 
-const calendarContainer = document.getElementById('calendar-container');
-let calendar;
+const MONTHS = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+];
+const DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+const calendarContainer = () => document.getElementById('calendar-container');
 let scheduleLoadSeq = 0;
-const calendarElementId = 'calendar';
-
-function ensureCalendarElement() {
-    let element = document.getElementById(calendarElementId);
-    if (!element) {
-        calendarContainer.innerHTML = `<div id="${calendarElementId}"></div>`;
-        element = document.getElementById(calendarElementId);
-    }
-    return element;
-}
+let currentDuties = {}; // dateKey -> array of duty objects (mixed real + prognosis)
 
 function isCalendarDebugEnabled() {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('debugCalendar') === '1') {
-        return true;
-    }
-    try {
-        return window.localStorage?.getItem('debugCalendar') === '1';
-    } catch {
-        return false;
-    }
+    if (params.get('debugCalendar') === '1') return true;
+    try { return window.localStorage?.getItem('debugCalendar') === '1'; } catch { return false; }
 }
 
 function calendarDebug(...args) {
-    if (isCalendarDebugEnabled()) {
-        console.log('[CalendarDebug]', ...args);
-    }
+    if (isCalendarDebugEnabled()) console.log('[CalendarDebug]', ...args);
 }
 
-/**
- * Normalizes incoming date values to YYYY-MM-DD keys used in calendar maps.
- * @param {string} value
- * @returns {string}
- */
 function normalizeDateKey(value) {
-    if (!value) {
-        return '';
-    }
-
+    if (!value) return '';
     const raw = String(value);
-    const directMatch = raw.match(/^(\d{4}-\d{2}-\d{2})/);
-    if (directMatch) {
-        return directMatch[1];
-    }
-
+    const m = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (m) return m[1];
     const parsed = new Date(raw);
-    if (Number.isNaN(parsed.getTime())) {
-        return '';
-    }
-
-    return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
+    if (Number.isNaN(parsed.getTime())) return '';
+    return `${parsed.getFullYear()}-${pad2(parsed.getMonth() + 1)}-${pad2(parsed.getDate())}`;
 }
 
-/**
- * Fetches and displays the schedule for the current month.
- */
+function buildMonthCells(year, monthIdx /* 0-11 */) {
+    const first = new Date(year, monthIdx, 1);
+    const dow = (first.getDay() + 6) % 7; // 0 = Monday
+    const daysInMonth = new Date(year, monthIdx + 1, 0).getDate();
+    const prevDays = new Date(year, monthIdx, 0).getDate();
+    const cells = [];
+    for (let i = 0; i < dow; i++) {
+        cells.push({ day: prevDays - dow + 1 + i, inMonth: false, monthIdx: monthIdx - 1, yearOffset: monthIdx === 0 ? -1 : 0 });
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+        cells.push({ day: d, inMonth: true, monthIdx, yearOffset: 0, weekend: ((dow + d - 1) % 7) >= 5 });
+    }
+    let next = 1;
+    while (cells.length < 42) {
+        cells.push({ day: next++, inMonth: false, monthIdx: monthIdx + 1, yearOffset: monthIdx === 11 ? 1 : 0 });
+    }
+    return cells;
+}
+
+function dutyClass(kind) {
+    if (kind === 'voluntary') return 'vol';
+    if (kind === 'admin') return 'admin';
+    return 'prog';
+}
+
+function dutyKindLabel(kind) {
+    if (kind === 'voluntary') return 'Volunteered';
+    if (kind === 'admin') return 'Admin Assigned';
+    return 'Prognosis · Round-Robin';
+}
+
+function dutyLabel(duty) {
+    const name = duty.user_name || '';
+    return name.slice(0, 5).toUpperCase();
+}
+
+function countDutiesThisWeek(dutiesByDate, today) {
+    const day = (today.getDay() + 6) % 7;
+    const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - day);
+    const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6);
+    let count = 0;
+    Object.entries(dutiesByDate).forEach(([key, duties]) => {
+        const d = new Date(`${key}T00:00:00`);
+        if (Number.isNaN(d.getTime())) return;
+        if (d >= monday && d <= sunday) {
+            count += duties.filter((x) => x.kind !== 'prognosis').length;
+        }
+    });
+    return count;
+}
+
 async function loadAndDisplaySchedule() {
     const { currentYear, currentMonth } = getState();
     const loadSeq = ++scheduleLoadSeq;
-    const hasCalendarInstance = Boolean(calendar);
+    const container = calendarContainer();
+    const hasGrid = container?.querySelector('.cal-grid');
 
-    // Keep previous calendar visible while next month loads.
-    if (!hasCalendarInstance) {
-        calendarContainer.innerHTML = createLoadingSpinner();
+    if (!hasGrid && container) {
+        container.innerHTML = createLoadingSpinner();
     }
     calendarDebug('Loading month', { currentYear, currentMonth });
 
     try {
         const [scheduleData, prognosisData] = await Promise.all([
             getSchedule(currentYear, currentMonth),
-            getPrognosis(currentYear, currentMonth)
+            getPrognosis(currentYear, currentMonth),
         ]);
 
-        // Ignore stale async responses from older month loads.
         if (loadSeq !== scheduleLoadSeq) {
-            calendarDebug('Skip stale load result', { loadSeq, scheduleLoadSeq, currentYear, currentMonth });
+            calendarDebug('Skip stale load result', { loadSeq, scheduleLoadSeq });
             return;
         }
 
-        if (scheduleData) {
-            calendarDebug('Month payload ready', {
-                currentYear,
-                currentMonth,
-                dutiesCount: Array.isArray(scheduleData?.duties) ? scheduleData.duties.length : 0,
-                prognosisCount: Array.isArray(prognosisData?.prognosis) ? prognosisData.prognosis.length : 0,
-            });
-            setState({ schedule: { [`${currentYear}-${currentMonth}`]: scheduleData } });
-            renderCalendar(scheduleData, prognosisData);
-        } else {
-            if (!hasCalendarInstance) {
-                calendarContainer.innerHTML = createErrorMessage('Could not load schedule.');
-            }
+        if (!scheduleData && !prognosisData) {
+            if (container && !hasGrid) container.innerHTML = createErrorMessage('Could not load schedule.');
+            return;
         }
+
+        setState({ schedule: { [`${currentYear}-${currentMonth}`]: scheduleData } });
+        renderCalendar(scheduleData || {}, prognosisData || {});
     } catch (error) {
         console.error('Error loading schedule:', error);
-        if (!hasCalendarInstance) {
-            calendarContainer.innerHTML = createErrorMessage('Error loading schedule. Please try again later.');
-        }
+        if (container && !hasGrid) container.innerHTML = createErrorMessage('Error loading schedule. Please try again later.');
     }
 }
 
-/**
- * Renders the calendar with the given schedule data.
- * @param {object} scheduleData - The schedule data for the current month.
- * @param {object} prognosisData - The prognosis data for unassigned days.
- */
-function renderCalendar(scheduleData = {}, prognosisData = {}) {
-    const { currentYear, currentMonth, currentUser } = getState();
+function renderCalendar(scheduleData, prognosisData) {
+    const { currentYear, currentMonth } = getState();
+    const monthIdx = currentMonth - 1;
+    const today = new Date();
+
     const dutiesByDate = {};
-
-    // Add actual duties
-    if (scheduleData.duties) {
-        scheduleData.duties.forEach(duty => {
+    if (Array.isArray(scheduleData.duties)) {
+        scheduleData.duties.forEach((duty) => {
             const date = normalizeDateKey(duty.date);
-            if (!date) {
-                return;
-            }
-            if (!dutiesByDate[date]) {
-                dutiesByDate[date] = [];
-            }
-            // Add user name and assignment type style
-            let displayName = duty.user_name || 'Unassigned';
-
-            // Add queue counts to display name if present
-            const queueParts = [];
-            if (duty.volunteer_queue_days > 0) {
-                queueParts.push(`V:${duty.volunteer_queue_days}`);
-            }
-            if (duty.admin_queue_days > 0) {
-                queueParts.push(`A:${duty.admin_queue_days}`);
-            }
-            if (queueParts.length > 0) {
-                displayName += ` (${queueParts.join(' ')})`;
-            }
-
-            duty.displayName = displayName;
-            duty.typeClass = duty.assignment_type === 'voluntary' ? 'text-green-600' :
-                            duty.assignment_type === 'admin' ? 'text-blue-600' : 'text-gray-600';
-            duty.isPrognosis = false;
-            dutiesByDate[date].push(duty);
-        });
-    }
-
-    // Add prognosis for unassigned days
-    if (prognosisData.prognosis) {
-        prognosisData.prognosis.forEach(prog => {
-            const date = normalizeDateKey(prog.date);
-            if (!date) {
-                return;
-            }
-            if (!dutiesByDate[date]) {
-                dutiesByDate[date] = [];
-            }
+            if (!date) return;
+            if (!dutiesByDate[date]) dutiesByDate[date] = [];
             dutiesByDate[date].push({
-                displayName: prog.user_name,
-                typeClass: 'text-gray-400 italic',
-                assignment_type: 'prognosis (round-robin)',
-                isPrognosis: true,
-                date
+                ...duty,
+                kind: duty.assignment_type === 'voluntary' ? 'voluntary'
+                    : duty.assignment_type === 'admin' ? 'admin'
+                    : 'prognosis',
+                vq: duty.volunteer_queue_days || 0,
+                aq: duty.admin_queue_days || 0,
             });
         });
     }
+    if (Array.isArray(prognosisData.prognosis)) {
+        prognosisData.prognosis.forEach((prog) => {
+            const date = normalizeDateKey(prog.date);
+            if (!date) return;
+            if (!dutiesByDate[date]) dutiesByDate[date] = [];
+            dutiesByDate[date].push({
+                ...prog,
+                kind: 'prognosis',
+                vq: 0,
+                aq: 0,
+            });
+        });
+    }
+    currentDuties = dutiesByDate;
 
-    const dates = Object.keys(dutiesByDate).map(dateStr => ({
-        date: dateStr,
-        CSSClasses: ['has-duty'],
-    }));
-    const monthPrefix = `${currentYear}-${String(currentMonth).padStart(2, '0')}-`;
-    const datesInCurrentMonth = dates.map(d => d.date).filter(d => d.startsWith(monthPrefix));
-    calendarDebug('Render month', {
-        currentYear,
-        currentMonth,
-        mappedDatesTotal: dates.length,
-        mappedDatesInCurrentMonth: datesInCurrentMonth.length,
-        sampleInCurrentMonth: datesInCurrentMonth.slice(0, 10),
-        sampleAllDates: dates.map(d => d.date).slice(0, 10),
+    const dutiesThisWeek = countDutiesThisWeek(dutiesByDate, today);
+    const statWeek = document.getElementById('stat-week');
+    if (statWeek) statWeek.textContent = pad2(dutiesThisWeek);
+
+    const cells = buildMonthCells(currentYear, monthIdx);
+
+    const dowRow = DOW.map((d) => `<div class="cal-dow">${d}</div>`).join('');
+
+    const cellsHtml = cells.map((cell) => {
+        const cellYear = currentYear + (cell.yearOffset || 0);
+        const cellMonthIdx = ((cell.monthIdx % 12) + 12) % 12;
+        const dateKey = `${cellYear}-${pad2(cellMonthIdx + 1)}-${pad2(cell.day)}`;
+        const duties = dutiesByDate[dateKey] || [];
+
+        const isToday = cell.inMonth
+            && today.getFullYear() === cellYear
+            && today.getMonth() === cellMonthIdx
+            && today.getDate() === cell.day;
+
+        const classList = ['cal-day'];
+        if (!cell.inMonth) classList.push('other');
+        if (cell.weekend) classList.push('weekend');
+        if (isToday) classList.push('today');
+        if (cell.inMonth && duties.length === 0) classList.push('no-duty');
+
+        const queueSum = duties.reduce((s, d) => s + (d.vq || 0) + (d.aq || 0), 0);
+        const shown = duties.slice(0, 2);
+        const overflow = duties.length - shown.length;
+
+        const pills = cell.inMonth ? `
+            <div class="pill-list">
+                ${shown.map((d) => `<span class="pill ${dutyClass(d.kind)}">${escapeHtml(dutyLabel(d))}</span>`).join('')}
+                ${overflow > 0 ? `<span class="pill more">+${overflow}</span>` : ''}
+            </div>
+        ` : '';
+
+        const badge = cell.inMonth && queueSum > 0 ? `<span class="badge-q">·${queueSum}</span>` : '';
+
+        return `
+            <div class="${classList.join(' ')}" data-date="${dateKey}" data-clickable="${cell.inMonth && duties.length > 0 ? '1' : '0'}">
+                <div class="num"><span>${pad2(cell.day)}</span>${badge}</div>
+                ${pills}
+            </div>
+        `;
+    }).join('');
+
+    const html = `
+        <div class="cal">
+            <div class="cal-nav">
+                <div class="month">${MONTHS[monthIdx]}<span class="yr">${currentYear}</span></div>
+                <div class="arrows">
+                    <button type="button" data-nav="prev" aria-label="Previous month">‹</button>
+                    <button type="button" data-nav="today" class="today">Today</button>
+                    <button type="button" data-nav="next" aria-label="Next month">›</button>
+                </div>
+            </div>
+            <div class="cal-grid">${dowRow}${cellsHtml}</div>
+        </div>
+    `;
+
+    const container = calendarContainer();
+    if (!container) return;
+    container.innerHTML = html;
+
+    container.querySelectorAll('button[data-nav]').forEach((btn) => {
+        btn.addEventListener('click', () => handleNav(btn.dataset.nav));
     });
 
-    const options = {
-        type: 'default',
-        settings: {
-            lang: 'en',
-            iso8601: true,
-            selection: { day: 'single' },
-            visibility: { theme: 'light', weekend: true, today: true },
-            selected: {
-                dates: dates.map(d => d.date),
-                month: currentMonth - 1,
-                year: currentYear
-            },
-        },
-        actions: {
-            clickDay(event, self) {
-                const date = normalizeDateKey(self.selectedDates?.[0]);
-                if (!date) {
-                    return;
-                }
-                if (dutiesByDate[date]) {
-                    const duties = dutiesByDate[date];
-                    const content = duties.map(duty => `
-                        <div class="p-3 mb-2 border rounded ${escapeHtml(duty.typeClass)}">
-                            <div class="font-bold">${escapeHtml(duty.displayName)}</div>
-                            <div class="text-sm text-gray-600">${escapeHtml(duty.assignment_type)}</div>
-                        </div>
-                    `).join('');
-                    const modalId = 'duty-details-modal';
-
-                    const existingModal = document.getElementById(modalId);
-                    if (existingModal) existingModal.remove();
-
-                    const tempDiv = document.createElement('div');
-                    tempDiv.innerHTML = createModal(`Duties for ${date}`, content, modalId);
-                    const modalNode = tempDiv.firstElementChild;
-                    document.body.appendChild(modalNode);
-                    showModal(modalId);
-
-                    const modalElement = document.getElementById(modalId);
-                    modalElement.addEventListener('click', async (e) => {
-                        const target = e.target;
-                        if (target.tagName === 'BUTTON' && target.dataset.dutyId) {
-                            const dutyId = target.dataset.dutyId;
-                            const action = target.dataset.action;
-
-                            const errorContainer = modalElement.querySelector('.error-container');
-                            if(errorContainer) errorContainer.remove();
-
-                            try {
-                                target.disabled = true;
-                                target.textContent = 'Processing...';
-
-                                if (action === 'volunteer') {
-                                    await volunteerForDuty(dutyId);
-                                } else if (action === 'withdraw') {
-                                    await withdrawFromDuty(dutyId);
-                                }
-
-                                hideModal(modalId);
-                                loadAndDisplaySchedule();
-                            } catch (error) {
-                                console.error(`Failed to ${action}:`, error);
-                                target.disabled = false;
-                                target.textContent = action.charAt(0).toUpperCase() + action.slice(1);
-
-                                const msg = createErrorMessage(`Failed to ${action}. Please try again.`);
-                                const errDiv = document.createElement('div');
-                                errDiv.className = 'error-container mt-2';
-                                errDiv.innerHTML = msg;
-                                target.parentNode.insertBefore(errDiv, target.nextSibling);
-                            }
-                        }
-                    });
-                }
-            },
-            clickArrow(event, self) {
-                // VanillaCalendar updates selectedMonth/selectedYear first, then calls this callback.
-                const { currentYear, currentMonth } = getState();
-                const nextYear = self.selectedYear;
-                const nextMonth = self.selectedMonth + 1;
-                if (currentYear === nextYear && currentMonth === nextMonth) {
-                    // Prevent duplicate reload when calendar emits duplicate arrow callbacks.
-                    return;
-                }
-                setState({
-                    currentYear: nextYear,
-                    currentMonth: nextMonth,
-                });
-                loadAndDisplaySchedule();
-            },
-            getDays(day, date, HTMLElement, HTMLButtonElement, self) {
-                const dateStr = normalizeDateKey(date) || `${self.selectedYear}-${String(self.selectedMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                if (dutiesByDate[dateStr]) {
-                    const duties = dutiesByDate[dateStr];
-
-                    const daySpan = document.createElement('span');
-                    daySpan.textContent = day;
-
-                    const namesContainer = document.createElement('div');
-                    namesContainer.style.fontSize = '10px';
-                    namesContainer.style.marginTop = '2px';
-
-                    duties.forEach(duty => {
-                        const bgColor = duty.isPrognosis ? 'bg-gray-200' :
-                                       duty.assignment_type === 'voluntary' ? 'bg-green-100' :
-                                       duty.assignment_type === 'admin' ? 'bg-blue-100' : 'bg-gray-100';
-                        const textColor = duty.isPrognosis ? 'text-gray-500' : 'text-gray-800';
-                        const shortName = duty.displayName.substring(0, 3);
-
-                        const nameSpan = document.createElement('span');
-                        nameSpan.className = `${bgColor} ${textColor} px-1 rounded text-[10px] mr-1 inline-block`;
-                        nameSpan.textContent = shortName;
-                        namesContainer.appendChild(nameSpan);
-                    });
-
-                    HTMLButtonElement.innerHTML = '';
-                    HTMLButtonElement.appendChild(daySpan);
-                    HTMLButtonElement.appendChild(namesContainer);
-                }
-            },
-        },
-    };
-
-    // Recreate calendar instance on every render to avoid stale closures
-    // and duplicated internal handlers from month-to-month updates.
-    if (calendar) {
-        calendar.destroy();
-        calendar = null;
-    }
-
-    const calendarElement = ensureCalendarElement();
-    calendar = new VanillaCalendar(calendarElement, options);
-    calendar.init();
+    container.querySelectorAll('.cal-day[data-clickable="1"]').forEach((cell) => {
+        cell.addEventListener('click', () => openDutyModal(cell.dataset.date));
+    });
 }
 
-/**
- * Displays the queue summary for all users with pending queues.
- * @param {Array} users - Array of user objects with queue information
- */
-/**
- * Initializes the calendar view.
- */
+function handleNav(action) {
+    const { currentYear, currentMonth } = getState();
+    if (action === 'today') {
+        const t = new Date();
+        setState({ currentYear: t.getFullYear(), currentMonth: t.getMonth() + 1 });
+    } else if (action === 'prev') {
+        if (currentMonth === 1) setState({ currentYear: currentYear - 1, currentMonth: 12 });
+        else setState({ currentMonth: currentMonth - 1 });
+    } else if (action === 'next') {
+        if (currentMonth === 12) setState({ currentYear: currentYear + 1, currentMonth: 1 });
+        else setState({ currentMonth: currentMonth + 1 });
+    }
+    loadAndDisplaySchedule();
+}
+
+function openDutyModal(dateKey) {
+    const duties = currentDuties[dateKey] || [];
+    const [y, m, d] = dateKey.split('-').map((n) => parseInt(n, 10));
+    const date = new Date(y, m - 1, d);
+    const weekday = WEEKDAY_LABELS[date.getDay()];
+    const dateLabel = `${weekday} · ${MONTHS[date.getMonth()]} ${pad2(date.getDate())} · ${date.getFullYear()}`;
+    const { currentUser } = getState();
+    const currentUserId = currentUser?.id;
+    const currentFirstName = currentUser?.first_name || currentUser?.FirstName || '';
+
+    function isMine(duty) {
+        if (duty.user_id != null && currentUserId != null) {
+            return Number(duty.user_id) === Number(currentUserId);
+        }
+        if (duty.user_name && currentFirstName) {
+            return String(duty.user_name).toLowerCase() === String(currentFirstName).toLowerCase();
+        }
+        return false;
+    }
+
+    const userOnDuty = duties.some((d) => d.kind !== 'prognosis' && isMine(d));
+
+    const bodyDuties = duties.length === 0
+        ? `<div class="empty">// no duties on this day</div>`
+        : duties.map((duty, idx) => {
+            const cls = dutyClass(duty.kind);
+            const name = escapeHtml((duty.user_name || '').toLowerCase());
+            const me = isMine(duty) ? ' · you' : '';
+            const kindLabel = escapeHtml(dutyKindLabel(duty.kind));
+            const qChip = (duty.vq > 0 || duty.aq > 0)
+                ? `<div class="qchip">${duty.vq > 0 ? `V·${duty.vq}` : ''}${duty.vq > 0 && duty.aq > 0 ? ' / ' : ''}${duty.aq > 0 ? `A·${duty.aq}` : ''}</div>`
+                : '';
+            return `
+                <div class="duty ${cls}" data-duty-index="${idx}">
+                    <div>
+                        <div class="name">@${name}${me}</div>
+                        <div class="kind">${kindLabel}</div>
+                    </div>
+                    ${qChip}
+                </div>
+            `;
+        }).join('');
+
+    let actionsHtml = '';
+    if (currentUser) {
+        if (userOnDuty) {
+            actionsHtml = `<button class="btn" data-action="withdraw">Withdraw</button>`;
+        } else {
+            actionsHtml = `<button class="btn primary" data-action="volunteer">Volunteer</button>`;
+        }
+    }
+    actionsHtml += `<button class="btn ghost" data-action="close">Close</button>`;
+
+    const bodyHtml = `
+        ${bodyDuties}
+        <div class="modal-actions">${actionsHtml}</div>
+        <div class="error-container"></div>
+    `;
+
+    openModal({
+        title: 'Duties',
+        dateLabel,
+        bodyHtml,
+        onMount: (scrim, close) => {
+            scrim.addEventListener('click', async (e) => {
+                const target = e.target;
+                if (!(target instanceof HTMLElement)) return;
+                if (target.matches('button[data-action="close"]')) { close(); return; }
+
+                const action = target.dataset.action;
+                if (!action || (action !== 'volunteer' && action !== 'withdraw')) return;
+
+                target.disabled = true;
+                const originalText = target.textContent;
+                target.textContent = 'Processing…';
+                const errBox = scrim.querySelector('.error-container');
+                if (errBox) errBox.innerHTML = '';
+
+                try {
+                    if (action === 'volunteer') await volunteerForDuty(dateKey);
+                    else if (action === 'withdraw') await withdrawFromDuty(dateKey);
+                    close();
+                    loadAndDisplaySchedule();
+                } catch (err) {
+                    console.error(`Failed to ${action}:`, err);
+                    target.disabled = false;
+                    target.textContent = originalText;
+                    if (errBox) errBox.innerHTML = createErrorMessage(`Failed to ${action}. Please try again.`);
+                }
+            });
+        },
+    });
+}
+
 export function initializeCalendar() {
     const today = new Date();
-    setState({
-        currentYear: today.getFullYear(),
-        currentMonth: today.getMonth() + 1,
-    });
-
-    ensureCalendarElement();
-
+    setState({ currentYear: today.getFullYear(), currentMonth: today.getMonth() + 1 });
     loadAndDisplaySchedule();
 }
