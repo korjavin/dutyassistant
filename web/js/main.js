@@ -2,8 +2,18 @@ import { initializeCalendar } from './ui/calendar.js';
 import { displayQueueSummary } from './ui/queue.js';
 import { displayPendingChores } from './ui/chores.js';
 import { getUsers, getActiveChores } from './api.js';
-import { setState } from './store.js';
+import { getState, setState } from './store.js';
 import { pad2 } from './ui/components.js';
+
+function resolveInternalUserId(users) {
+    const { currentUser } = getState();
+    const telegramId = currentUser?.id;
+    if (!Array.isArray(users) || telegramId == null) return;
+    const match = users.find((u) => Number(u?.TelegramUserID) === Number(telegramId));
+    if (match?.ID != null) {
+        setState({ currentUserInternalId: match.ID });
+    }
+}
 
 function setHeaderUser(user) {
     const el = document.getElementById('hdr-user-name');
@@ -47,7 +57,10 @@ function initializeApp() {
     initializeCalendar();
 
     getUsers()
-        .then((users) => displayQueueSummary(users))
+        .then((users) => {
+            resolveInternalUserId(users);
+            displayQueueSummary(users);
+        })
         .catch((error) => console.error('Failed to fetch users:', error));
 
     getActiveChores()

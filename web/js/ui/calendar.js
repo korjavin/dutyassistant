@@ -52,15 +52,23 @@ function buildMonthCells(year, monthIdx /* 0-11 */) {
     return cells;
 }
 
+function classifyDuty(assignmentType) {
+    if (assignmentType === 'voluntary') return 'voluntary';
+    if (assignmentType === 'admin') return 'admin';
+    if (assignmentType === 'round_robin') return 'round_robin';
+    return 'prognosis';
+}
+
 function dutyClass(kind) {
     if (kind === 'voluntary') return 'vol';
-    if (kind === 'admin') return 'admin';
+    if (kind === 'admin' || kind === 'round_robin') return 'admin';
     return 'prog';
 }
 
 function dutyKindLabel(kind) {
     if (kind === 'voluntary') return 'Volunteered';
     if (kind === 'admin') return 'Admin Assigned';
+    if (kind === 'round_robin') return 'Round-Robin · Auto';
     return 'Prognosis · Round-Robin';
 }
 
@@ -106,13 +114,15 @@ async function loadAndDisplaySchedule() {
             return;
         }
 
-        if (!scheduleData && !prognosisData) {
+        if (!scheduleData) {
+            // Schedule is the primary data — if it fails, surface the error rather than
+            // rendering an empty calendar from prognosis-only data.
             if (container && !hasGrid) container.innerHTML = createErrorMessage('Could not load schedule.');
             return;
         }
 
         setState({ schedule: { [`${currentYear}-${currentMonth}`]: scheduleData } });
-        renderCalendar(scheduleData || {}, prognosisData || {});
+        renderCalendar(scheduleData, prognosisData || {});
     } catch (error) {
         console.error('Error loading schedule:', error);
         if (container && !hasGrid) container.innerHTML = createErrorMessage('Error loading schedule. Please try again later.');
@@ -132,9 +142,7 @@ function renderCalendar(scheduleData, prognosisData) {
             if (!dutiesByDate[date]) dutiesByDate[date] = [];
             dutiesByDate[date].push({
                 ...duty,
-                kind: duty.assignment_type === 'voluntary' ? 'voluntary'
-                    : duty.assignment_type === 'admin' ? 'admin'
-                    : 'prognosis',
+                kind: classifyDuty(duty.assignment_type),
                 vq: duty.volunteer_queue_days || 0,
                 aq: duty.admin_queue_days || 0,
             });
@@ -249,13 +257,15 @@ function openDutyModal(dateKey) {
     const date = new Date(y, m - 1, d);
     const weekday = WEEKDAY_LABELS[date.getDay()];
     const dateLabel = `${weekday} · ${MONTHS[date.getMonth()]} ${pad2(date.getDate())} · ${date.getFullYear()}`;
-    const { currentUser } = getState();
-    const currentUserId = currentUser?.id;
+    const { currentUser, currentUserInternalId } = getState();
     const currentFirstName = currentUser?.first_name || currentUser?.FirstName || '';
 
     function isMine(duty) {
-        if (duty.user_id != null && currentUserId != null) {
-            return Number(duty.user_id) === Number(currentUserId);
+        // currentUser.id is the Telegram user ID; duty.user_id is the internal store ID.
+        // They live in different namespaces — only compare against currentUserInternalId,
+        // resolved from /api/v1/users via TelegramUserID.
+        if (duty.user_id != null && currentUserInternalId != null) {
+            return Number(duty.user_id) === Number(currentUserInternalId);
         }
         if (duty.user_name && currentFirstName) {
             return String(duty.user_name).toLowerCase() === String(currentFirstName).toLowerCase();
