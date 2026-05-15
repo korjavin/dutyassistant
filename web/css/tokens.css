@@ -1,0 +1,117 @@
+/* ============================================================
+   Monospace Web — Foundations
+   Pure monochrome. JetBrains Mono everywhere. Light + dark.
+   ============================================================ */
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/JetBrainsMono-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/JetBrainsMono-400italic.woff2") format("woff2");
+}
+
+/* ---------- TOKENS: light (default) ---------- */
+:root {
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", "Menlo", "Consolas", monospace;
+
+  --bg-0: #f4f1ea;
+  --bg-1: #ece8de;
+  --bg-2: #e2dccd;
+  --bg-elev: #fbf9f3;
+
+  --fg-0: #16140f;
+  --fg-1: #3a362d;
+  --fg-2: #6b6657;
+  --fg-3: #9a9482;
+
+  --line-1: #16140f;
+  --line-2: #c8c1ad;
+  --line-3: #d9d3c0;
+
+  --select-bg: #16140f;
+  --select-fg: #f4f1ea;
+
+  --fs-xxs: 11px;
+  --fs-xs:  12px;
+  --fs-sm:  13px;
+  --fs-md:  14px;
+  --fs-lg:  16px;
+  --fs-xl:  20px;
+  --fs-2xl: 24px;
+  --fs-3xl: 32px;
+
+  --lh-tight: 1.15;
+  --lh-snug:  1.35;
+  --lh-body:  1.55;
+
+  --tr-tight: -0.02em;
+  --tr-norm:   0em;
+  --tr-loose:  0.06em;
+
+  --wt-reg: 400;
+  --wt-med: 500;
+  --wt-bold: 700;
+
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+
+  --bw: 1px;
+  --bw-2: 2px;
+
+  --shadow-1: 2px 2px 0 0 var(--line-1);
+  --shadow-2: 4px 4px 0 0 var(--line-1);
+
+  --dur-1: 80ms;
+  --dur-2: 160ms;
+  --ease: cubic-bezier(.2, 0, 0, 1);
+}
+
+/* ---------- TOKENS: dark ---------- */
+:root[data-theme="dark"] {
+  --bg-0: #0e0e0c;
+  --bg-1: #161614;
+  --bg-2: #1f1f1c;
+  --bg-elev: #1a1a17;
+
+  --fg-0: #e8e4d6;
+  --fg-1: #b8b3a3;
+  --fg-2: #807c6f;
+  --fg-3: #56534a;
+
+  --line-1: #e8e4d6;
+  --line-2: #2e2d29;
+  --line-3: #232220;
+
+  --select-bg: #e8e4d6;
+  --select-fg: #0e0e0c;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg-0: #0e0e0c;
+    --bg-1: #161614;
+    --bg-2: #1f1f1c;
+    --bg-elev: #1a1a17;
+    --fg-0: #e8e4d6;
+    --fg-1: #b8b3a3;
+    --fg-2: #807c6f;
+    --fg-3: #56534a;
+    --line-1: #e8e4d6;
+    --line-2: #2e2d29;
+    --line-3: #232220;
+    --select-bg: #e8e4d6;
+    --select-fg: #0e0e0c;
+  }
+}

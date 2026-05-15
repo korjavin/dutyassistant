@@ -1,39 +1,64 @@
+import { escapeHtml, pad2 } from './components.js';
+
+function initials(name) {
+    if (!name) return '??';
+    const parts = String(name).trim().split(/\s+/);
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 /**
- * Displays the queue summary for all users with pending queues.
- * @param {Array} users - Array of user objects with queue information
+ * Renders the queue balance section for active users with pending queues.
+ * @param {Array} users - Array of user objects (PascalCase fields from backend).
  */
 export function displayQueueSummary(users) {
-    const queueList = document.getElementById('queue-list');
-    if (!queueList) return;
+    const list = document.getElementById('queue-list');
+    const counter = document.getElementById('queue-count');
+    if (!list) return;
 
-    if (!users || users.length === 0) {
-        queueList.innerHTML = '<p class="text-gray-500">No users found.</p>';
-        return;
-    }
-
-    // Filter active users with queues (API returns PascalCase)
-    const usersWithQueues = users.filter(u =>
-        u.IsActive && // Only show active users
-        ((u.VolunteerQueueDays && u.VolunteerQueueDays > 0) ||
-         (u.AdminQueueDays && u.AdminQueueDays > 0))
+    const active = (Array.isArray(users) ? users : []).filter((u) =>
+        u && u.IsActive && ((u.VolunteerQueueDays || 0) > 0 || (u.AdminQueueDays || 0) > 0)
     );
 
-    if (usersWithQueues.length === 0) {
-        queueList.innerHTML = '<p class="text-gray-500">No pending queues.</p>';
+    active.sort((a, b) =>
+        ((b.VolunteerQueueDays || 0) + (b.AdminQueueDays || 0)) -
+        ((a.VolunteerQueueDays || 0) + (a.AdminQueueDays || 0))
+    );
+
+    if (counter) counter.textContent = `[${pad2(active.length)}]`;
+
+    const queueTotal = active.reduce((s, u) => s + (u.VolunteerQueueDays || 0) + (u.AdminQueueDays || 0), 0);
+    const statQueue = document.getElementById('stat-queue');
+    if (statQueue) statQueue.textContent = pad2(queueTotal);
+
+    if (active.length === 0) {
+        list.innerHTML = `<div class="empty">// no pending queues</div>`;
         return;
     }
 
-    // Build queue list HTML
-    const queueHTML = usersWithQueues.map(user => {
-        const parts = [];
-        if (user.VolunteerQueueDays > 0) {
-            parts.push(`<span class="text-green-600 font-semibold">V:${user.VolunteerQueueDays}</span>`);
-        }
-        if (user.AdminQueueDays > 0) {
-            parts.push(`<span class="text-blue-600 font-semibold">A:${user.AdminQueueDays}</span>`);
-        }
-        return `<div class="mb-1">👤 <strong>${user.FirstName}</strong>: ${parts.join(', ')}</div>`;
-    }).join('');
+    const maxQ = active.reduce((m, u) => Math.max(m, (u.VolunteerQueueDays || 0) + (u.AdminQueueDays || 0)), 0);
+    const cap = Math.max(maxQ, 5);
 
-    queueList.innerHTML = queueHTML;
+    list.innerHTML = `<div class="queue">${active.map((u) => {
+        const v = u.VolunteerQueueDays || 0;
+        const a = u.AdminQueueDays || 0;
+        const padCount = Math.max(0, cap - (v + a));
+        const ini = escapeHtml(initials(u.FirstName || u.first_name || u.UserName || ''));
+        const name = escapeHtml(u.FirstName || u.first_name || u.UserName || 'Unknown');
+        const blocks =
+            Array.from({ length: v }).map(() => `<span class="blk"></span>`).join('') +
+            Array.from({ length: a }).map(() => `<span class="blk a"></span>`).join('') +
+            Array.from({ length: padCount }).map(() => `<span class="pad"></span>`).join('');
+        return `
+            <div class="queue-row">
+                <div class="who"><span class="pic">${ini}</span><span>${name}</span></div>
+                <div class="bar">${blocks}</div>
+                <div class="tally">
+                    <span class="v">V·${v}</span>
+                    <span class="sep">/</span>
+                    <span class="a">A·${a}</span>
+                </div>
+            </div>
+        `;
+    }).join('')}</div>`;
 }

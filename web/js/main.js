@@ -2,42 +2,70 @@ import { initializeCalendar } from './ui/calendar.js';
 import { displayQueueSummary } from './ui/queue.js';
 import { displayPendingChores } from './ui/chores.js';
 import { getUsers, getActiveChores } from './api.js';
-import { setState } from './store.js';
+import { getState, setState } from './store.js';
+import { pad2 } from './ui/components.js';
 
-// Main entry point for the frontend application.
-console.log("Roster Bot frontend script loaded.");
+function resolveInternalUserId(users) {
+    const { currentUser } = getState();
+    const telegramId = currentUser?.id;
+    if (!Array.isArray(users) || telegramId == null) return;
+    const match = users.find((u) => Number(u?.TelegramUserID) === Number(telegramId));
+    if (match?.ID != null) {
+        setState({ currentUserInternalId: match.ID });
+    }
+}
+
+function setHeaderUser(user) {
+    const el = document.getElementById('hdr-user-name');
+    if (!el) return;
+    const name = user?.username
+        || user?.first_name
+        || user?.FirstName
+        || 'guest';
+    el.textContent = `@${String(name).toLowerCase()}`;
+}
+
+function startClock() {
+    const el = document.getElementById('foot-clock');
+    if (!el) return;
+    function tick() {
+        const now = new Date();
+        el.textContent = `↻ ${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+    }
+    tick();
+    setInterval(tick, 30 * 1000);
+}
 
 function initializeApp() {
-    console.log("DOM fully loaded and parsed.");
-
-    // Initialize the Telegram Web App SDK
     if (window.Telegram && window.Telegram.WebApp) {
         window.Telegram.WebApp.ready();
-        console.log("Telegram Web App SDK is ready.");
-
-        // You can get user info from the SDK
         const user = window.Telegram.WebApp.initDataUnsafe?.user;
         if (user) {
             setState({ currentUser: user });
+            setHeaderUser(user);
+        } else {
+            setHeaderUser(null);
         }
     } else {
-        console.warn("Telegram Web App SDK not found. Running in standalone mode.");
-        // For local development, you can set a mock user
-        setState({ currentUser: { id: 123, first_name: 'Dev', last_name: 'User', username: 'devuser' } });
+        console.warn('Telegram Web App SDK not found. Running in standalone mode.');
+        const devUser = { id: 123, first_name: 'Dev', last_name: 'User', username: 'devuser' };
+        setState({ currentUser: devUser });
+        setHeaderUser(devUser);
     }
 
-    // Initialize the calendar
+    startClock();
     initializeCalendar();
 
-    // Fetch and display queue and chores independently
     getUsers()
-        .then(users => displayQueueSummary(users))
-        .catch(error => console.error("Failed to fetch users:", error));
+        .then((users) => {
+            resolveInternalUserId(users);
+            displayQueueSummary(users);
+        })
+        .catch((error) => console.error('Failed to fetch users:', error));
 
     getActiveChores()
-        .then(chores => displayPendingChores(chores))
-        .catch(error => console.error("Failed to fetch chores:", error));
+        .then((chores) => displayPendingChores(chores))
+        .catch((error) => console.error('Failed to fetch chores:', error));
 }
 
-// This is where the application will be initialized.
 document.addEventListener('DOMContentLoaded', initializeApp);

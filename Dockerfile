@@ -39,7 +39,7 @@ COPY --from=builder /roster-bot /roster-bot
 COPY --from=builder /app/web/index.html ./web/index.html
 COPY --from=builder /app/web/js ./web/js
 COPY --from=builder /app/web/css ./web/css
-COPY --from=builder /app/web/vendor ./web/vendor
+COPY --from=builder /app/web/fonts ./web/fonts
 
 # The application will store its persistent data (e.g., SQLite database) in /app/data.
 # This path will be targeted by a volume mount defined in docker-compose.yml.
