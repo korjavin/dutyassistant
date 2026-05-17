@@ -20,6 +20,20 @@ Key files:
 - `internal/store/sqlite/ratings.go` - DB queries for saving/loading ratings
 - `internal/store/store.go` - `ParticipantDailyRating` (HasEar bool) and `ParticipantMonthlyTotal` (EarCount int) structs
 
+## Bot Commands & Scopes
+
+The bot calls Telegram's `setMyCommands` API at startup to publish autocomplete suggestions. Registration happens in `internal/telegram/bot.go` (`NewBot`), which calls `registerCommands` defined in `internal/telegram/commands.go`. Per-scope failures are logged via `slog.Warn` and do not block startup — autocomplete is a nice-to-have.
+
+Three scopes are registered:
+
+- **All private chats** (`BotCommandScopeAllPrivateChats`) — user commands shown to any user in DM (`userCommands`).
+- **Admin's private chat** (`BotCommandScopeChat(adminID)`) — full union of user + admin-only commands (`adminCommands`). Skipped when `adminID == 0`.
+- **Main group chat** (`BotCommandScopeChat(groupID)`) — narrow read-only subset (`groupCommands`) to keep group autocomplete clean. Skipped when `groupID == 0`.
+
+Important Telegram rule: scope precedence **replaces** rather than merges. `BotCommandScopeChat(adminID)` overrides `BotCommandScopeAllPrivateChats` for that user, so the admin scope must include user commands too — otherwise the admin would lose autocomplete for `/schedule`, `/volunteer`, etc.
+
+When adding or removing a command, update both the dispatch switch in `internal/telegram/bot.go` (`handleCommand`) and the relevant slice in `internal/telegram/commands.go`. Keep `userHelpMessage` / `adminHelpMessageSection` in `internal/telegram/handlers/commands.go` in sync so `/help` output and Telegram autocomplete agree.
+
 ## Sviniya Award System
 
 The bot includes a "sviniya" award system where:

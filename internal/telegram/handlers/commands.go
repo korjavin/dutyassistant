@@ -28,21 +28,26 @@ const (
 		"/volunteer <days> - Add days to your volunteer queue.\n" +
 		"/explain - Explain how the last assignment was made.\n" +
 		"/chore - View your currently assigned chores.\n" +
-		"/takechore - Volunteer to take an available chore assigned to someone else."
+		"/takechore - Volunteer to take an available chore assigned to someone else.\n" +
+		"/sviniya - View all sviniya balances.\n" +
+		"/spend - Spend a sviniya."
 
 	adminHelpMessageSection = "\n\n*Admin Commands:*\n" +
-		"/chore - Manage and assign chores interactively.\n" +
-		"/list - View all active periodic chores or regular tasks.\n" +
-		"/cancel - Cancel a duty, active chore, or recurring chore.\n" +
 		"/assign - Add days to user's admin queue.\n" +
 		"/unassign - Remove days from user's admin queue.\n" +
-		"/change - Change assigned user for a date.\n" +
-		"/offduty - Set off-duty period.\n" +
-		"/vacation - Toggle vacation mode.\n" +
+		"/modify - Change the assigned user for a date.\n" +
+		"/cancel - Cancel a duty, active chore, or recurring chore.\n" +
+		"/edit - Edit an active chore.\n" +
+		"/offduty - Set off-duty period for a user.\n" +
+		"/vacation - Toggle vacation mode for a user.\n" +
 		"/users - List all users and their status.\n" +
-		"/ratings - Show the current month's participant rating calendar.\n" +
 		"/toggle\\_active - Toggle a user's participation in the rotation.\n" +
-		"/complete - Mark any active chore as completed."
+		"/ratings - Show the current month's participant rating calendar.\n" +
+		"/chore\\_stats - Show top overdue chores and top completions.\n" +
+		"/list - View all active periodic chores or regular tasks.\n" +
+		"/complete - Mark any active chore as completed.\n" +
+		"/overdue - Send the overdue chores report.\n" +
+		"/set\\_sviniya\\_balance - Set sviniya balance for a user."
 
 	statusMessage = "<b>Duty Status for %s:</b>\n\n" +
 		"📊 <b>Statistics:</b>\n" +
