@@ -55,15 +55,16 @@ var adminCommands = func() []tgbotapi.BotCommand {
 
 // groupCommands is the read-only / informational subset registered against
 // the main DISH_GROUP chat. Action commands like /volunteer or /spend are
-// intentionally omitted to keep group-chat autocomplete clean.
+// intentionally omitted to keep group-chat autocomplete clean. Admin-gated
+// commands (/ratings, /chore_stats, /overdue) are also omitted: scope-level
+// autocomplete is per-chat, not per-user, so listing them would surface
+// suggestions to non-admin members who would only get an "admin only"
+// rejection. Admins still see those in their DM via adminCommands.
 var groupCommands = []tgbotapi.BotCommand{
 	{Command: "help", Description: "Show available commands"},
 	{Command: "status", Description: "Show your current duty statistics"},
 	{Command: "schedule", Description: "View the duty schedule for the current month"},
-	{Command: "ratings", Description: "Show this month's participant ratings"},
 	{Command: "sviniya", Description: "View all sviniya balances"},
-	{Command: "chore_stats", Description: "Show top overdue chores and top completions"},
-	{Command: "overdue", Description: "Send the overdue chores report"},
 }
 
 // registerCommands publishes the per-scope command catalog to Telegram via
