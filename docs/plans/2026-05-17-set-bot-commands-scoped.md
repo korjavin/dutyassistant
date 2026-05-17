@@ -127,12 +127,12 @@ This is a pure additive Telegram-side change. It does not modify command dispatc
 
 ### Task 5: Verify acceptance criteria
 
-- [ ] Verify three scopes are registered when both `ADMIN_ID` and `DISH_GROUP` are set.
-- [ ] Verify only `all_private_chats` is registered when both are zero.
-- [ ] Verify `setMyCommands` failure does not block bot startup (the failure-path test from Task 2 covers this; also confirm no panic by inspecting the registration helper return type).
-- [ ] Verify command descriptions are within Telegram limits (32 chars for command name, 256 chars for description — though we already aim for ≤ 80).
-- [ ] Run `go test ./...` — full suite passes.
-- [ ] Run `go vet ./...` — clean.
+- [x] Verify three scopes are registered when both `ADMIN_ID` and `DISH_GROUP` are set. (covered by `TestRegisterCommands_AllScopes` and `TestNewBotFlow_RegistersCommands`)
+- [x] Verify only `all_private_chats` is registered when both are zero. (covered by `TestRegisterCommands_NoAdminOrGroup`)
+- [x] Verify `setMyCommands` failure does not block bot startup (the failure-path test from Task 2 covers this; also confirm no panic by inspecting the registration helper return type). (`TestRegisterCommands_AdminScopeFails` confirms nil return; `bot.go:31` discards return via `_ =`)
+- [x] Verify command descriptions are within Telegram limits (32 chars for command name, 256 chars for description — though we already aim for ≤ 80). (`assertCommandList` enforces both limits across all three catalogs)
+- [x] Run `go test ./...` — full suite passes.
+- [x] Run `go vet ./...` — clean.
 
 ### Task 6: [Final] Build verification
 
