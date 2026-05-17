@@ -1,6 +1,8 @@
 package telegram
 
 import (
+	"log/slog"
+
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
@@ -56,4 +58,43 @@ var groupCommands = []tgbotapi.BotCommand{
 	{Command: "sviniya", Description: "View all sviniya balances"},
 	{Command: "chore_stats", Description: "Show top overdue chores and top completions"},
 	{Command: "overdue", Description: "Send the overdue chores report"},
+}
+
+// registerCommands publishes the per-scope command catalog to Telegram via
+// setMyCommands. Up to three calls are issued: all_private_chats (always),
+// admin chat (when adminID != 0), and group chat (when groupID != 0).
+//
+// Per-scope failures are logged via slog.Warn and the function continues to
+// the next scope. The return value is always nil — autocomplete is a
+// nice-to-have UX, not a startup precondition.
+func registerCommands(api *tgbotapi.BotAPI, adminID, groupID int64) error {
+	privateCfg := tgbotapi.NewSetMyCommandsWithScope(
+		tgbotapi.NewBotCommandScopeAllPrivateChats(),
+		userCommands...,
+	)
+	if _, err := api.Request(privateCfg); err != nil {
+		slog.Warn("failed to register bot commands", "scope", "all_private_chats", "error", err)
+	}
+
+	if adminID != 0 {
+		adminCfg := tgbotapi.NewSetMyCommandsWithScope(
+			tgbotapi.NewBotCommandScopeChat(adminID),
+			adminCommands...,
+		)
+		if _, err := api.Request(adminCfg); err != nil {
+			slog.Warn("failed to register bot commands", "scope", "admin_chat", "chat_id", adminID, "error", err)
+		}
+	}
+
+	if groupID != 0 {
+		groupCfg := tgbotapi.NewSetMyCommandsWithScope(
+			tgbotapi.NewBotCommandScopeChat(groupID),
+			groupCommands...,
+		)
+		if _, err := api.Request(groupCfg); err != nil {
+			slog.Warn("failed to register bot commands", "scope", "group_chat", "chat_id", groupID, "error", err)
+		}
+	}
+
+	return nil
 }

@@ -99,16 +99,16 @@ This is a pure additive Telegram-side change. It does not modify command dispatc
 
 ### Task 2: Implement `registerCommands` helper
 
-- [ ] In `internal/telegram/commands.go`, add `func registerCommands(api *tgbotapi.BotAPI, adminID, groupID int64) error` that issues up to three `setMyCommands` requests via `api.Request(...)`:
+- [x] In `internal/telegram/commands.go`, add `func registerCommands(api *tgbotapi.BotAPI, adminID, groupID int64) error` that issues up to three `setMyCommands` requests via `api.Request(...)`:
   - Always: `tgbotapi.NewSetMyCommandsWithScope(tgbotapi.NewBotCommandScopeAllPrivateChats(), userCommands...)`
   - If `adminID != 0`: `tgbotapi.NewSetMyCommandsWithScope(tgbotapi.NewBotCommandScopeChat(adminID), adminCommands...)`
   - If `groupID != 0`: `tgbotapi.NewSetMyCommandsWithScope(tgbotapi.NewBotCommandScopeChat(groupID), groupCommands...)`
-- [ ] On each individual call's error, log `slog.Warn` with the scope label and error, and continue to the next call. Return `nil` (collected errors are best-effort; failures are non-fatal per design decision).
-- [ ] Write a unit test that uses `NewTestClient` to capture all `setMyCommands` HTTP requests when both `adminID` and `groupID` are non-zero. Decode each request's `scope` and `commands` form fields and assert the expected three payloads (one per scope) with correct command lists.
-- [ ] Write a unit test for `adminID == 0, groupID == 0`: assert only the `all_private_chats` request is made.
-- [ ] Write a unit test for `adminID != 0, groupID == 0`: assert two requests (private chats + admin chat); no group chat request.
-- [ ] Write a unit test for the failure path: configure `NewTestClient` to return HTTP 500 for the admin-scope call; assert the function still returns `nil` and the other scope calls still happen.
-- [ ] Run `go test ./internal/telegram/...` — must pass before next task.
+- [x] On each individual call's error, log `slog.Warn` with the scope label and error, and continue to the next call. Return `nil` (collected errors are best-effort; failures are non-fatal per design decision).
+- [x] Write a unit test that uses `NewTestClient` to capture all `setMyCommands` HTTP requests when both `adminID` and `groupID` are non-zero. Decode each request's `scope` and `commands` form fields and assert the expected three payloads (one per scope) with correct command lists.
+- [x] Write a unit test for `adminID == 0, groupID == 0`: assert only the `all_private_chats` request is made.
+- [x] Write a unit test for `adminID != 0, groupID == 0`: assert two requests (private chats + admin chat); no group chat request.
+- [x] Write a unit test for the failure path: configure `NewTestClient` to return HTTP 500 for the admin-scope call; assert the function still returns `nil` and the other scope calls still happen.
+- [x] Run `go test ./internal/telegram/...` — must pass before next task.
 
 ### Task 3: Wire `registerCommands` into `NewBot`
 
