@@ -136,8 +136,8 @@ This is a pure additive Telegram-side change. It does not modify command dispatc
 
 ### Task 6: [Final] Build verification
 
-- [ ] `go build -o /tmp/roster-bot ./cmd/roster-bot/` — clean build.
-- [ ] Remove `/tmp/roster-bot` after verification.
+- [x] `go build -o /tmp/roster-bot ./cmd/roster-bot/` — clean build.
+- [x] Remove `/tmp/roster-bot` after verification.
 
 *Note: ralphex automatically moves completed plans to `docs/plans/completed/`*
 
