@@ -260,6 +260,48 @@ func TestRegisterCommands_AdminScopeFails(t *testing.T) {
 	}
 }
 
+// TestNewBotFlow_RegistersCommands exercises the same getMe + setMyCommands
+// sequence NewBot triggers at startup. NewBot itself takes a bot token (not
+// an *http.Client), so we drive the side effect through the factored helper
+// using NewBotAPIWithClient — exactly the pattern recommended in the plan
+// for testability.
+func TestNewBotFlow_RegistersCommands(t *testing.T) {
+	api, captured := captureSetMyCommands(t, nil)
+
+	// The captureSetMyCommands helper already wires a roundtripper that
+	// services getMe — confirm the API instance authorized cleanly.
+	if api.Self.UserName == "" {
+		t.Fatalf("expected getMe to populate api.Self via captured roundtripper")
+	}
+
+	if err := registerCommands(api, 555, -100123); err != nil {
+		t.Fatalf("registerCommands returned error: %v", err)
+	}
+
+	if len(*captured) != 3 {
+		t.Fatalf("expected 3 setMyCommands requests during NewBot flow, got %d", len(*captured))
+	}
+
+	// Expected order: all_private_chats, admin chat, group chat.
+	wantScopes := []struct {
+		scopeType string
+		chatID    int64
+	}{
+		{"all_private_chats", 0},
+		{"chat", 555},
+		{"chat", -100123},
+	}
+	for i, want := range wantScopes {
+		got := (*captured)[i].scope
+		if got.Type != want.scopeType {
+			t.Errorf("captured[%d] scope type = %q, want %q", i, got.Type, want.scopeType)
+		}
+		if got.ChatID != want.chatID {
+			t.Errorf("captured[%d] scope chat_id = %d, want %d", i, got.ChatID, want.chatID)
+		}
+	}
+}
+
 func assertCommandsEqual(t *testing.T, label string, got, want []tgbotapi.BotCommand) {
 	t.Helper()
 	if len(got) != len(want) {

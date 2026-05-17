@@ -28,6 +28,9 @@ func NewBot(apiToken string, h *handlers.Handlers, groupID, ownerID int64) (*Bot
 	api.Debug = false // Set to true for verbose logging
 	slog.Info(fmt.Sprintf("Authorized on account %s", api.Self.UserName))
 
+	_ = registerCommands(api, ownerID, groupID)
+	slog.Info("registered bot commands", "admin_id", ownerID, "group_id", groupID)
+
 	// Inject bot API into handlers for notifications
 	h.SetBot(api)
 

@@ -112,11 +112,11 @@ This is a pure additive Telegram-side change. It does not modify command dispatc
 
 ### Task 3: Wire `registerCommands` into `NewBot`
 
-- [ ] In `internal/telegram/bot.go`, after the `slog.Info("Authorized on account ...")` line (currently line 29), call `registerCommands(api, ownerID, groupID)`. The result is intentionally discarded; per-scope failures are already logged inside the helper.
-- [ ] Add an `slog.Info("registered bot commands", ...)` log after the call for observability.
-- [ ] Add a unit test for `NewBot` flow: use `NewTestClient` that handles `getMe` + all three `setMyCommands` calls; instantiate via `tgbotapi.NewBotAPIWithClient` and call the registration helper directly (since `NewBot` itself takes a token, not a client — see the pattern of factoring the side-effect into a helper for testability). Assert the three Telegram requests happened in expected order.
-- [ ] Verify existing `internal/telegram` and `internal/telegram/handlers` tests still pass: `go test ./internal/telegram/...`
-- [ ] Run tests — must pass before next task.
+- [x] In `internal/telegram/bot.go`, after the `slog.Info("Authorized on account ...")` line (currently line 29), call `registerCommands(api, ownerID, groupID)`. The result is intentionally discarded; per-scope failures are already logged inside the helper.
+- [x] Add an `slog.Info("registered bot commands", ...)` log after the call for observability.
+- [x] Add a unit test for `NewBot` flow: use `NewTestClient` that handles `getMe` + all three `setMyCommands` calls; instantiate via `tgbotapi.NewBotAPIWithClient` and call the registration helper directly (since `NewBot` itself takes a token, not a client — see the pattern of factoring the side-effect into a helper for testability). Assert the three Telegram requests happened in expected order.
+- [x] Verify existing `internal/telegram` and `internal/telegram/handlers` tests still pass: `go test ./internal/telegram/...`
+- [x] Run tests — must pass before next task.
 
 ### Task 4: Update help text + CLAUDE.md project knowledge
 
