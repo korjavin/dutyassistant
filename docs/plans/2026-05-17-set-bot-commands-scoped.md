@@ -120,10 +120,10 @@ This is a pure additive Telegram-side change. It does not modify command dispatc
 
 ### Task 4: Update help text + CLAUDE.md project knowledge
 
-- [ ] Verify the `userHelpMessage` / `adminHelpMessageSection` strings in `internal/telegram/handlers/commands.go:23-45` still match the registered command lists. If any discrepancy (e.g., `/sviniya` and `/spend` are missing from `userHelpMessage`), update the help strings so `/help` and Telegram autocomplete stay in sync.
-- [ ] Add a short section to `CLAUDE.md` under a new heading "Bot Commands & Scopes" documenting: where `setMyCommands` is registered, the three-scope split, and the rule "admin scope contains user commands too (Telegram scope precedence replaces, not merges)".
-- [ ] No new tests required for this task (docs/strings only); existing tests must still pass.
-- [ ] Run `go test ./...` and `go vet ./...` — must pass before next task.
+- [x] Verify the `userHelpMessage` / `adminHelpMessageSection` strings in `internal/telegram/handlers/commands.go:23-45` still match the registered command lists. If any discrepancy (e.g., `/sviniya` and `/spend` are missing from `userHelpMessage`), update the help strings so `/help` and Telegram autocomplete stay in sync.
+- [x] Add a short section to `CLAUDE.md` under a new heading "Bot Commands & Scopes" documenting: where `setMyCommands` is registered, the three-scope split, and the rule "admin scope contains user commands too (Telegram scope precedence replaces, not merges)".
+- [x] No new tests required for this task (docs/strings only); existing tests must still pass.
+- [x] Run `go test ./...` and `go vet ./...` — must pass before next task.
 
 ### Task 5: Verify acceptance criteria
 
