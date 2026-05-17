@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -85,10 +84,7 @@ type capturedRequest struct {
 func captureSetMyCommands(t *testing.T, forceStatus func(scopeType string, chatID int64) int) (*tgbotapi.BotAPI, *[]capturedRequest) {
 	t.Helper()
 
-	var (
-		mu       sync.Mutex
-		captured []capturedRequest
-	)
+	var captured []capturedRequest
 
 	rt := commandsRoundTripFunc(func(req *http.Request) *http.Response {
 		reqURL := req.URL.String()
@@ -122,9 +118,7 @@ func captureSetMyCommands(t *testing.T, forceStatus func(scopeType string, chatI
 				}
 			}
 
-			mu.Lock()
 			captured = append(captured, capturedRequest{scope: scope, commands: cmds})
-			mu.Unlock()
 
 			status := 200
 			if forceStatus != nil {
@@ -160,9 +154,7 @@ func captureSetMyCommands(t *testing.T, forceStatus func(scopeType string, chatI
 func TestRegisterCommands_AllScopes(t *testing.T) {
 	api, captured := captureSetMyCommands(t, nil)
 
-	if err := registerCommands(api, 555, -100123); err != nil {
-		t.Fatalf("registerCommands returned error: %v", err)
-	}
+	registerCommands(api, 555, -100123)
 
 	if len(*captured) != 3 {
 		t.Fatalf("expected 3 setMyCommands requests, got %d", len(*captured))
@@ -196,9 +188,7 @@ func TestRegisterCommands_AllScopes(t *testing.T) {
 func TestRegisterCommands_NoAdminOrGroup(t *testing.T) {
 	api, captured := captureSetMyCommands(t, nil)
 
-	if err := registerCommands(api, 0, 0); err != nil {
-		t.Fatalf("registerCommands returned error: %v", err)
-	}
+	registerCommands(api, 0, 0)
 
 	if len(*captured) != 1 {
 		t.Fatalf("expected 1 setMyCommands request, got %d", len(*captured))
@@ -212,9 +202,7 @@ func TestRegisterCommands_NoAdminOrGroup(t *testing.T) {
 func TestRegisterCommands_AdminOnly(t *testing.T) {
 	api, captured := captureSetMyCommands(t, nil)
 
-	if err := registerCommands(api, 555, 0); err != nil {
-		t.Fatalf("registerCommands returned error: %v", err)
-	}
+	registerCommands(api, 555, 0)
 
 	if len(*captured) != 2 {
 		t.Fatalf("expected 2 setMyCommands requests, got %d", len(*captured))
@@ -240,9 +228,7 @@ func TestRegisterCommands_AdminScopeFails(t *testing.T) {
 		return 0
 	})
 
-	if err := registerCommands(api, 555, -100123); err != nil {
-		t.Fatalf("registerCommands returned error despite per-scope tolerance: %v", err)
-	}
+	registerCommands(api, 555, -100123)
 
 	// All three calls must have still been attempted even though the
 	// middle one failed — the helper logs and continues.
@@ -257,48 +243,6 @@ func TestRegisterCommands_AdminScopeFails(t *testing.T) {
 	}
 	if (*captured)[2].scope.Type != "chat" || (*captured)[2].scope.ChatID != -100123 {
 		t.Errorf("captured[2] scope = %+v, want chat/-100123 (group call after admin failure)", (*captured)[2].scope)
-	}
-}
-
-// TestNewBotFlow_RegistersCommands exercises the same getMe + setMyCommands
-// sequence NewBot triggers at startup. NewBot itself takes a bot token (not
-// an *http.Client), so we drive the side effect through the factored helper
-// using NewBotAPIWithClient — exactly the pattern recommended in the plan
-// for testability.
-func TestNewBotFlow_RegistersCommands(t *testing.T) {
-	api, captured := captureSetMyCommands(t, nil)
-
-	// The captureSetMyCommands helper already wires a roundtripper that
-	// services getMe — confirm the API instance authorized cleanly.
-	if api.Self.UserName == "" {
-		t.Fatalf("expected getMe to populate api.Self via captured roundtripper")
-	}
-
-	if err := registerCommands(api, 555, -100123); err != nil {
-		t.Fatalf("registerCommands returned error: %v", err)
-	}
-
-	if len(*captured) != 3 {
-		t.Fatalf("expected 3 setMyCommands requests during NewBot flow, got %d", len(*captured))
-	}
-
-	// Expected order: all_private_chats, admin chat, group chat.
-	wantScopes := []struct {
-		scopeType string
-		chatID    int64
-	}{
-		{"all_private_chats", 0},
-		{"chat", 555},
-		{"chat", -100123},
-	}
-	for i, want := range wantScopes {
-		got := (*captured)[i].scope
-		if got.Type != want.scopeType {
-			t.Errorf("captured[%d] scope type = %q, want %q", i, got.Type, want.scopeType)
-		}
-		if got.ChatID != want.chatID {
-			t.Errorf("captured[%d] scope chat_id = %d, want %d", i, got.ChatID, want.chatID)
-		}
 	}
 }
 

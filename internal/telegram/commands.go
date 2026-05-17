@@ -44,8 +44,14 @@ var adminOnlyCommands = []tgbotapi.BotCommand{
 }
 
 // adminCommands is the full list registered against the admin's private chat:
-// user commands plus admin-only commands.
-var adminCommands = append(append([]tgbotapi.BotCommand{}, userCommands...), adminOnlyCommands...)
+// user commands plus admin-only commands. Built into a fresh backing array so
+// future mutations cannot bleed into userCommands or adminOnlyCommands.
+var adminCommands = func() []tgbotapi.BotCommand {
+	out := make([]tgbotapi.BotCommand, 0, len(userCommands)+len(adminOnlyCommands))
+	out = append(out, userCommands...)
+	out = append(out, adminOnlyCommands...)
+	return out
+}()
 
 // groupCommands is the read-only / informational subset registered against
 // the main DISH_GROUP chat. Action commands like /volunteer or /spend are
@@ -65,9 +71,9 @@ var groupCommands = []tgbotapi.BotCommand{
 // admin chat (when adminID != 0), and group chat (when groupID != 0).
 //
 // Per-scope failures are logged via slog.Warn and the function continues to
-// the next scope. The return value is always nil — autocomplete is a
-// nice-to-have UX, not a startup precondition.
-func registerCommands(api *tgbotapi.BotAPI, adminID, groupID int64) error {
+// the next scope. Autocomplete is a nice-to-have UX, not a startup
+// precondition, so callers cannot react to per-scope failures.
+func registerCommands(api *tgbotapi.BotAPI, adminID, groupID int64) {
 	privateCfg := tgbotapi.NewSetMyCommandsWithScope(
 		tgbotapi.NewBotCommandScopeAllPrivateChats(),
 		userCommands...,
@@ -95,6 +101,4 @@ func registerCommands(api *tgbotapi.BotAPI, adminID, groupID int64) error {
 			slog.Warn("failed to register bot commands", "scope", "group_chat", "chat_id", groupID, "error", err)
 		}
 	}
-
-	return nil
 }
