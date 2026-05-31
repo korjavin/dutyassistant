@@ -27,6 +27,23 @@ func New(ctx context.Context, dataSourceName string) (*SQLiteStore, error) {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
+	// SQLite permits only one writer at a time. Without these settings a
+	// concurrent write (e.g. the month-end ratings and daily-completion cron
+	// jobs both firing at 21:00 Berlin) fails immediately with SQLITE_BUSY.
+	// Serialize all access through a single connection, enable WAL, and add a
+	// busy timeout as a backstop for any out-of-process access.
+	db.SetMaxOpenConns(1)
+	for _, pragma := range []string{
+		"PRAGMA journal_mode = WAL",
+		"PRAGMA busy_timeout = 5000",
+		"PRAGMA foreign_keys = ON",
+	} {
+		if _, err := db.ExecContext(ctx, pragma); err != nil {
+			_ = db.Close()
+			return nil, fmt.Errorf("failed to set %q: %w", pragma, err)
+		}
+	}
+
 	s := &SQLiteStore{db: db}
 
 	if err := s.migrate(ctx); err != nil {
