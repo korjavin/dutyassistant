@@ -25,7 +25,7 @@ const (
 		"/help - Show this help message.\n" +
 		"/status - Show your current duty statistics.\n" +
 		"/schedule - View the duty schedule for the current month.\n" +
-		"/volunteer <days> - Add days to your volunteer queue.\n" +
+		"/volunteer <days> - Add days to your volunteer queue (max 7 in total).\n" +
 		"/explain - Explain how the last assignment was made.\n" +
 		"/chore - View your currently assigned chores.\n" +
 		"/takechore - Volunteer to take an available chore assigned to someone else.\n" +
@@ -47,6 +47,7 @@ const (
 		"/list - View all active periodic chores or regular tasks.\n" +
 		"/complete - Mark any active chore as completed.\n" +
 		"/overdue - Send the overdue chores report.\n" +
+		"/set\\_volunteer <name> <days> - Set a user's volunteer queue (0-7).\n" +
 		"/set\\_sviniya\\_balance - Set sviniya balance for a user."
 
 	statusMessage = "<b>Duty Status for %s:</b>\n\n" +

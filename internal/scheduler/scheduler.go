@@ -20,10 +20,25 @@ func NewScheduler(s store.Store) *Scheduler {
 	return &Scheduler{store: s}
 }
 
-// AddToVolunteerQueue adds days to a user's volunteer queue.
+// MaxVolunteerQueueDays caps how many days a user may hold in the volunteer queue.
+const MaxVolunteerQueueDays = 7
+
+// AddToVolunteerQueue adds days to a user's volunteer queue, capped at
+// MaxVolunteerQueueDays in total (not per call).
 func (s *Scheduler) AddToVolunteerQueue(ctx context.Context, userID int64, days int) error {
 	if days <= 0 {
 		return fmt.Errorf("days must be positive")
+	}
+	user, err := s.store.GetUserByID(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("failed to load user: %w", err)
+	}
+	if user == nil {
+		return fmt.Errorf("user not found")
+	}
+	if user.VolunteerQueueDays+days > MaxVolunteerQueueDays {
+		return fmt.Errorf("volunteer queue is capped at %d days (you already have %d)",
+			MaxVolunteerQueueDays, user.VolunteerQueueDays)
 	}
 	return s.store.AddToVolunteerQueue(ctx, userID, days)
 }

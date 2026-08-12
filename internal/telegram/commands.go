@@ -40,6 +40,7 @@ var adminOnlyCommands = []tgbotapi.BotCommand{
 	{Command: "list", Description: "List active periodic chores or tasks"},
 	{Command: "complete", Description: "Mark any active chore as completed"},
 	{Command: "overdue", Description: "Send the overdue chores report"},
+	{Command: "set_volunteer", Description: "Set a user's volunteer queue days"},
 	{Command: "set_sviniya_balance", Description: "Set sviniya balance for a user"},
 }
 
