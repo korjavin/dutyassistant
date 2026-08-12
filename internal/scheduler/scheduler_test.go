@@ -352,6 +352,17 @@ func TestScheduler_AddToVolunteerQueue(t *testing.T) {
 	if mock.users[0].VolunteerQueueDays != 3 {
 		t.Errorf("Expected 3 volunteer queue days, got %d", mock.users[0].VolunteerQueueDays)
 	}
+
+	// Total is capped at MaxVolunteerQueueDays, not per call.
+	if err := scheduler.AddToVolunteerQueue(ctx, 1, 4); err != nil {
+		t.Fatalf("Expected 3+4 days to fit the cap, got %v", err)
+	}
+	if err := scheduler.AddToVolunteerQueue(ctx, 1, 1); err == nil {
+		t.Error("Expected an error when exceeding the cap")
+	}
+	if mock.users[0].VolunteerQueueDays != MaxVolunteerQueueDays {
+		t.Errorf("Expected %d volunteer queue days, got %d", MaxVolunteerQueueDays, mock.users[0].VolunteerQueueDays)
+	}
 }
 
 func TestScheduler_AddToAdminQueue(t *testing.T) {
@@ -597,5 +608,10 @@ func (m *mockStore) GrantSviniyaForMonth(ctx context.Context, year int, month ti
 
 // GetUserByID mocks the GetUserByID method.
 func (m *mockStore) GetUserByID(ctx context.Context, id int64) (*store.User, error) {
+	for _, u := range m.users {
+		if u.ID == id {
+			return u, nil
+		}
+	}
 	return nil, nil
 }

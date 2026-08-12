@@ -3,9 +3,11 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/korjavin/dutyassistant/internal/scheduler"
 )
 
 const (
@@ -102,6 +104,42 @@ func (h *Handlers) HandleVolunteerDaysCallback(q *tgbotapi.CallbackQuery) (tgbot
 		fmt.Sprintf("✅ "+volunteerSuccessMessage, days),
 	)
 	return edit, nil
+}
+
+// HandleSetVolunteer lets an admin set a participant's volunteer queue directly.
+// Format: /set_volunteer <name> <days>
+func (h *Handlers) HandleSetVolunteer(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
+	isAdmin, err := h.checkAdmin(m.From.ID)
+	if err != nil || !isAdmin {
+		return tgbotapi.NewMessage(m.Chat.ID, adminOnlyMessage), nil
+	}
+
+	usage := fmt.Sprintf("Usage: /set_volunteer <name> <days>\nExample: <code>/set_volunteer Ivan 3</code> (0-%d)", scheduler.MaxVolunteerQueueDays)
+	args := strings.Fields(m.CommandArguments())
+	if len(args) != 2 {
+		msg := tgbotapi.NewMessage(m.Chat.ID, usage)
+		msg.ParseMode = tgbotapi.ModeHTML
+		return msg, nil
+	}
+
+	days, err := strconv.Atoi(args[1])
+	if err != nil || days < 0 || days > scheduler.MaxVolunteerQueueDays {
+		msg := tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("⚠️ Days must be a number between 0 and %d.\n\n%s", scheduler.MaxVolunteerQueueDays, usage))
+		msg.ParseMode = tgbotapi.ModeHTML
+		return msg, nil
+	}
+
+	user, err := h.Store.GetUserByName(context.Background(), args[0])
+	if err != nil || user == nil {
+		return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("❌ "+userNotFoundMessage, args[0])), nil
+	}
+
+	user.VolunteerQueueDays = days
+	if err := h.Store.UpdateUser(context.Background(), user); err != nil {
+		return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("❌ Failed to update volunteer queue: %v", err)), nil
+	}
+
+	return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("✅ Volunteer queue for %s set to %d day(s).", user.FirstName, days)), nil
 }
 
 // HandleVolunteerCustomCallback handles the custom day input request

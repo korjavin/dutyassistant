@@ -242,6 +242,8 @@ func (b *Bot) handleCommand(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 		return b.handlers.HandleComplete(m)
 	case "sviniya":
 		return b.handlers.HandleSviniya(m)
+	case "set_volunteer":
+		return b.handlers.HandleSetVolunteer(m)
 	case "set_sviniya_balance":
 		return b.handlers.HandleSetSviniyaBalance(m)
 	case "spend":
