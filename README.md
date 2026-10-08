@@ -7,7 +7,7 @@ Duty Assistant Bot is a Telegram bot designed to help manage on-call duty roster
 *   **Queue-Based Assignment System**: Three-tier priority system (Volunteer → Admin → Round-Robin)
 *   **Security Best Practices**: Includes HTTP timeout protections, rate-limiting, comprehensive security headers (CSP, X-Frame-Options), and safe DOM rendering.
 *   **Interactive UI**: All commands use inline keyboard buttons for easy interaction
-*   **Automated Daily Assignments**: Automatic duty assignment at 11:00 AM Berlin time
+*   **Automated Daily Assignments**: Automatic duty assignment at 07:30 AM Berlin time
 *   **Duty Completion Tracking**: Automatic completion marking at 21:00 PM Berlin time
 *   **Volunteer System**: Users can volunteer for duty days using interactive buttons
 *   **Admin Commands**: Full duty management with button-based UX
@@ -88,7 +88,7 @@ Channel announcements use concise one-liner formats to reduce noise:
 
 - Chore assignments: `🎯 <b>User</b>: <i>Description</i>`
 - Chore completions: `✅ <b>User</b> completed: <i>Description</i>`
-- Daily summaries: `⚠️ Overdue chores:` with compact category headers
+- Overdue report (admin `/overdue` on demand): `⚠️ Overdue chores:` with compact category headers
 - Weekly stats: `N. Name — X done` (one line per user)
 
 DM messages remain verbose and friendly with full sentences.
@@ -139,7 +139,7 @@ All commands use **inline keyboard buttons** for a friendly user experience:
 
 ## Duty Assignment Logic
 
-The system manages duty assignments through a queue-based system with three priority levels: **Voluntary**, **Admin**, and **Round-Robin**. Assignments are finalized daily at 11:00 AM Berlin time.
+The system manages duty assignments through a queue-based system with three priority levels: **Voluntary**, **Admin**, and **Round-Robin**. Assignments are finalized daily at 07:30 AM Berlin time.
 
 ### 1. Voluntary Queue
 Users volunteer for a specific number of days using the `/volunteer` command.
@@ -193,8 +193,8 @@ Automatic assignment when no volunteer or admin queue entries exist.
 
 ## Daily Assignment Process
 
-### 11:00 AM Daily Finalization (Berlin Time)
-Every day at 11:00 AM, the bot:
+### 07:30 AM Daily Finalization (Berlin Time)
+Every day at 07:30 AM, the bot:
 
 1. **Determines today's assignee** using priority order:
    - **Priority 1:** Check volunteer queues - select from user(s) with volunteer queue entries

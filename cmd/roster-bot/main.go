@@ -110,10 +110,10 @@ func main() {
 	}
 	c := cron.New(cron.WithLocation(berlinLoc))
 
-	// Daily at 11:00 AM Berlin - Assign today's duty and Process Recurring Chores
-	_, err = c.AddFunc("0 11 * * *", func() {
+	// Daily at 07:30 AM Berlin - Assign today's duty and Process Recurring Chores
+	_, err = c.AddFunc("30 7 * * *", func() {
 		slog.Info("═══════════════════════════════════════════════════════════")
-		slog.Info("Running daily duty assignment and recurring chores (11:00 AM Berlin)", slog.String("component", "cron"))
+		slog.Info("Running daily duty assignment and recurring chores (07:30 AM Berlin)", slog.String("component", "cron"))
 		slog.Info(fmt.Sprintf("Current time: %s", time.Now().In(berlinLoc).Format("2006-01-02 15:04:05 MST")), slog.String("component", "cron"))
 
 		// Process Recurring Chores
@@ -291,22 +291,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Daily at 16:00 Berlin - Send daily chore summary
-	tz := getEnv("CHORE_TIMEZONE", "Europe/Berlin")
-	_, err = c.AddFunc("CRON_TZ="+tz+" 0 16 * * *", func() {
-		slog.Info(fmt.Sprintf("Running daily chore summary (16:00 %s)", tz), slog.String("component", "cron"))
-		err := notification.SendDailyChoreSummary(context.Background(), bot.API(), store, dishGroupID, true, getEnv("CHORE_TIMEZONE", "Europe/Berlin"))
-		if err != nil {
-			slog.Error(fmt.Sprintf("Error sending daily chore summary: %v", err), slog.String("component", "cron"))
-		} else {
-			slog.Info("Successfully sent daily chore summary", slog.String("component", "cron"))
-		}
-	})
-	if err != nil {
-		slog.Error(fmt.Sprintf("Failed to schedule daily chore summary job: %v", err))
-		os.Exit(1)
-	}
-
 	// Sunday at 21:10 PM Berlin - Send weekly stats
 	_, err = c.AddFunc("10 21 * * 0", func() {
 		slog.Info("Running weekly stats (Sunday 21:10 PM Berlin)", slog.String("component", "cron"))
@@ -326,13 +310,12 @@ func main() {
 	// Start cron scheduler
 	c.Start()
 	slog.Info("═══════════════════════════════════════════════════════════")
-	slog.Info("Cron scheduler started with 6 jobs:")
-	slog.Info("  1. Daily at 11:00 AM Berlin - Assign today's duty and send notifications")
+	slog.Info("Cron scheduler started with 5 jobs:")
+	slog.Info("  1. Daily at 07:30 AM Berlin - Assign today's duty and send notifications")
 	slog.Info("  2. Daily at 21:00 PM Berlin - Mark today's duty as completed")
 	slog.Info("  3. Daily at 20:50 PM Berlin - Send participant rating reminder to the admin")
 	slog.Info("  4. Daily at 21:00 PM Berlin - Publish month-end participant rating winners on the last calendar day")
-	slog.Info("  5. Daily at 16:00 Europe/Berlin - Send daily chore summary")
-	slog.Info("  6. Sunday at 21:10 PM Berlin - Send weekly stats")
+	slog.Info("  5. Sunday at 21:10 PM Berlin - Send weekly stats")
 	slog.Info(fmt.Sprintf("Current Berlin time: %s", time.Now().In(berlinLoc).Format("2006-01-02 15:04:05 MST")))
 	slog.Info("═══════════════════════════════════════════════════════════")
 

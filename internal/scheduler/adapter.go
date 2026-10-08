@@ -19,7 +19,7 @@ type SchedulerInterface interface {
 	// VolunteerForDuty adds days to a user's volunteer queue.
 	VolunteerForDuty(ctx context.Context, user *store.User, days int) error
 
-	// AutoAssignDuty automatically assigns today's duty (runs at 11AM).
+	// AutoAssignDuty automatically assigns today's duty (runs at 07:30 AM).
 	AutoAssignDuty(ctx context.Context, date time.Time) (*store.Duty, error)
 
 	// ChangeDutyUser changes the assigned user for today or a future duty.
