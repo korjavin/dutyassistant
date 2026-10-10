@@ -152,7 +152,7 @@ The bot uses SQLite with the following key tables:
 ## Timezone Handling
 
 All scheduled operations use Europe/Berlin timezone:
-- Daily assignment: 11:00 AM
+- Daily assignment: 07:30 AM
 - Daily completion: 21:00 PM
 - Weekly stats: Sunday 21:10 PM
 - Rating prompts: Daily 20:50 PM

@@ -73,7 +73,7 @@ func (s *Scheduler) ClearOffDuty(ctx context.Context, userID int64) error {
 	return s.store.ClearOffDuty(ctx, userID)
 }
 
-// AssignTodaysDuty performs the daily assignment at 11:00 AM Berlin time.
+// AssignTodaysDuty performs the daily assignment at 07:30 AM Berlin time.
 // Priority: Volunteer queue > Admin queue > Round-robin (with balancing).
 func (s *Scheduler) AssignTodaysDuty(ctx context.Context) (*store.Duty, error) {
 	// Check if vacation mode is enabled
@@ -89,9 +89,9 @@ func (s *Scheduler) AssignTodaysDuty(ctx context.Context) (*store.Duty, error) {
 	berlinLoc, _ := time.LoadLocation("Europe/Berlin")
 	berlinNow := now.In(berlinLoc)
 
-	// Check if it's past 11 AM in Berlin
-	if berlinNow.Hour() < 11 {
-		return nil, fmt.Errorf("too early to assign today's duty (before 11:00 AM Berlin time)")
+	// Check if it's past 07:30 AM in Berlin
+	if berlinNow.Hour()*60+berlinNow.Minute() < 7*60+30 {
+		return nil, fmt.Errorf("too early to assign today's duty (before 07:30 AM Berlin time)")
 	}
 
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
