@@ -20,8 +20,9 @@ import (
 
 // HandleChore handles the /chore command.
 // For non-admins: Shows their active chores.
-// For admins: Format: /chore [description] [/<N>d]
-// It assigns a random active user to the described chore.
+// For admins: Format: /chore [description] [/<name>] [/<N>d]
+// It assigns a random active user to the described chore,
+// or the named user if the /<name> suffix is provided (one-off chores only).
 // If the /<N>d suffix is provided, it sets up a recurring chore.
 // If no description is provided, it enters interactive mode.
 func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
@@ -108,21 +109,21 @@ func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.Chattable, error) 
 		// Could be "translate the document" - treat as regular chore creation
 	}
 
-	// 4. Parse for recurring chore suffix /<N>d
-	recurringRe := regexp.MustCompile(`(?i)\s+/([1-9][0-9]*)d$`)
-	match := recurringRe.FindStringSubmatch(args)
+	// 4. Parse trailing /<N>d (recurring interval) and /<name> (assignee) suffixes
+	description, intervalStr, assigneeName := parseChoreArgs(args)
+	if description == "" {
+		return tgbotapi.NewMessage(m.Chat.ID, "❌ Chore description cannot be empty."), nil
+	}
 
-	if len(match) > 1 {
+	if intervalStr != "" {
 		// It's a recurring chore
-		intervalDays, err := strconv.Atoi(match[1])
+		intervalDays, err := strconv.Atoi(intervalStr)
 		if err != nil || intervalDays < 1 {
 			return tgbotapi.NewMessage(m.Chat.ID, "❌ Invalid interval for recurring chore. Must be a positive integer, e.g., /3d."), nil
 		}
 
-		// Remove the suffix from the description
-		description := strings.TrimSpace(args[:len(args)-len(match[0])])
-		if description == "" {
-			return tgbotapi.NewMessage(m.Chat.ID, "❌ Chore description cannot be empty."), nil
+		if assigneeName != "" {
+			return tgbotapi.NewMessage(m.Chat.ID, "❌ Recurring chores are always assigned to a random user; a specific assignee (/<name>) can only be used with one-off chores."), nil
 		}
 
 		description = h.translateIfNonLatin(context.Background(), description)
@@ -177,7 +178,7 @@ func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.Chattable, error) 
 		if executeImmediately {
 			// Execute the first assignment immediately
 			var err error
-			msgConfig, err = h.assignChore(m.Chat.ID, m.From.ID, description)
+			msgConfig, err = h.assignChore(m.Chat.ID, m.From.ID, description, "")
 			if err != nil {
 				slog.Error(fmt.Sprintf("Failed to assign initial recurring chore: %v", err))
 				return tgbotapi.NewMessage(m.Chat.ID, "❌ Recurring chore created, but failed to assign immediately."), nil
@@ -206,13 +207,48 @@ func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.Chattable, error) 
 		return msgConfig, nil
 	}
 
-	// 4. One-off chore
-	description := args
-
+	// 5. One-off chore
 	description = h.translateIfNonLatin(context.Background(), description)
 
 	// Perform the actual chore assignment
-	return h.assignChore(m.Chat.ID, m.From.ID, description)
+	return h.assignChore(m.Chat.ID, m.From.ID, description, assigneeName)
+}
+
+var (
+	// choreSuffixRe matches a trailing " /<token>" suffix of a chore command.
+	choreSuffixRe = regexp.MustCompile(`(?:^|\s+)/([^\s/]+)$`)
+	// choreIntervalRe matches a recurring interval token such as "3d".
+	choreIntervalRe = regexp.MustCompile(`(?i)^([1-9][0-9]*)d$`)
+)
+
+// parseChoreArgs splits the trailing suffixes off a chore command, in any order:
+//   - /<N>d   - recurring interval in days (returned as the digit string)
+//   - /<name> - first name of the user to assign the chore to
+//
+// e.g. "Fix the door /Alice" -> ("Fix the door", "", "Alice").
+// Each suffix kind is consumed at most once; anything else stays in the description.
+func parseChoreArgs(args string) (description, interval, assignee string) {
+	description = strings.TrimSpace(args)
+	for {
+		match := choreSuffixRe.FindStringSubmatch(description)
+		if match == nil {
+			break
+		}
+		token := match[1]
+		if m := choreIntervalRe.FindStringSubmatch(token); m != nil {
+			if interval != "" {
+				break
+			}
+			interval = m[1]
+		} else {
+			if assignee != "" {
+				break
+			}
+			assignee = token
+		}
+		description = strings.TrimSpace(description[:len(description)-len(match[0])])
+	}
+	return description, interval, assignee
 }
 
 // HandleChoreInteractive handles messages in interactive chore creation mode
@@ -234,10 +270,15 @@ func (h *Handlers) HandleChoreInteractive(m *tgbotapi.Message) (tgbotapi.Chattab
 	// End the session
 	h.SessionManager.EndSession(m.Chat.ID)
 
-	// Use the message text as the chore description
-	description := strings.TrimSpace(m.Text)
+	// Use the message text as the chore description, with an optional /<name> assignee suffix
+	description, intervalStr, assigneeName := parseChoreArgs(m.Text)
 	if description == "" {
 		msg := tgbotapi.NewMessage(m.Chat.ID, "❌ Chore description cannot be empty. Please use <code>/chore</code> to try again.")
+		msg.ParseMode = tgbotapi.ModeHTML
+		return msg, nil
+	}
+	if intervalStr != "" {
+		msg := tgbotapi.NewMessage(m.Chat.ID, "❌ Recurring chores can't be created in interactive mode. Please use <code>/chore &lt;description&gt; /&lt;N&gt;d</code> instead.")
 		msg.ParseMode = tgbotapi.ModeHTML
 		return msg, nil
 	}
@@ -245,13 +286,22 @@ func (h *Handlers) HandleChoreInteractive(m *tgbotapi.Message) (tgbotapi.Chattab
 	description = h.translateIfNonLatin(context.Background(), description)
 
 	// Perform the chore assignment
-	return h.assignChore(m.Chat.ID, m.From.ID, description)
+	return h.assignChore(m.Chat.ID, m.From.ID, description, assigneeName)
 }
 
-// assignChore performs the actual chore assignment logic
-func (h *Handlers) assignChore(chatID int64, fromUserID int64, description string) (tgbotapi.MessageConfig, error) {
+// assignChore performs the actual chore assignment logic.
+// If assigneeName is non-empty, the chore goes to that active user instead of a random one.
+func (h *Handlers) assignChore(chatID int64, fromUserID int64, description string, assigneeName string) (tgbotapi.MessageConfig, error) {
 	// Note: Description is stored unescaped and will be escaped at display time
 	// This prevents double-escaping when showing in multiple places
+
+	if assigneeName != "" {
+		selectedUser, msgConfig := h.findChoreAssignee(chatID, assigneeName)
+		if msgConfig != nil {
+			return *msgConfig, nil
+		}
+		return h.notifyAndScheduleChore(chatID, selectedUser, description), nil
+	}
 
 	candidates, msgConfig := h.getCandidatesForChore(chatID)
 	if msgConfig != nil {
@@ -264,6 +314,44 @@ func (h *Handlers) assignChore(chatID int64, fromUserID int64, description strin
 	}
 
 	return h.notifyAndScheduleChore(chatID, selectedUser, description), nil
+}
+
+// findChoreAssignee looks up the active user an admin explicitly named for a chore.
+// Matching is case-insensitive on first name; "_" matches a space ("/Anna_Maria").
+// The off-duty filter is deliberately skipped: an explicit admin choice wins.
+func (h *Handlers) findChoreAssignee(chatID int64, name string) (*store.User, *tgbotapi.MessageConfig) {
+	users, err := h.Store.ListActiveUsers(context.Background())
+	if err != nil {
+		msg := tgbotapi.NewMessage(chatID, "Failed to retrieve user list.")
+		return nil, &msg
+	}
+
+	wanted := strings.ReplaceAll(name, "_", " ")
+	var matches []*store.User
+	names := make([]string, 0, len(users))
+	for _, u := range users {
+		names = append(names, html.EscapeString(u.FirstName))
+		if strings.EqualFold(u.FirstName, wanted) {
+			matches = append(matches, u)
+		}
+	}
+
+	switch len(matches) {
+	case 1:
+		return matches[0], nil
+	case 0:
+		text := fmt.Sprintf("❌ No active user named <b>%s</b>.", html.EscapeString(name))
+		if len(names) > 0 {
+			text += "\n\nActive users: " + strings.Join(names, ", ")
+		}
+		msg := tgbotapi.NewMessage(chatID, text)
+		msg.ParseMode = tgbotapi.ModeHTML
+		return nil, &msg
+	default:
+		msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("❌ More than one active user is named <b>%s</b>; can't pick one.", html.EscapeString(name)))
+		msg.ParseMode = tgbotapi.ModeHTML
+		return nil, &msg
+	}
 }
 
 // getCandidatesForChore fetches active users and filters out those on off-duty.

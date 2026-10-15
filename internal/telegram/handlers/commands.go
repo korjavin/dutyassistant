@@ -33,6 +33,7 @@ const (
 		"/spend - Spend a sviniya."
 
 	adminHelpMessageSection = "\n\n*Admin Commands:*\n" +
+		"/chore <description> - Assign a chore to a random user; end with /<name> to pick the person or /<N>d to repeat every N days.\n" +
 		"/assign - Add days to user's admin queue.\n" +
 		"/unassign - Remove days from user's admin queue.\n" +
 		"/modify - Change the assigned user for a date.\n" +
