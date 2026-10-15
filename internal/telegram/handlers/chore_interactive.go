@@ -32,7 +32,7 @@ func (h *Handlers) HandleChoreActionCallback(q *tgbotapi.CallbackQuery) (tgbotap
 		return h.handleChoreListInteractive(q)
 	case "create":
 		h.SessionManager.StartSession(q.Message.Chat.ID, q.From.ID, SessionTypeChoreCreation)
-		editMsg := tgbotapi.NewEditMessageText(q.Message.Chat.ID, q.Message.MessageID, "📝 <b>Interactive Chore Mode</b>\n\nWhat chore do you want to create?\n\nJust send me the description in your next message.")
+		editMsg := tgbotapi.NewEditMessageText(q.Message.Chat.ID, q.Message.MessageID, "📝 <b>Interactive Chore Mode</b>\n\nWhat chore do you want to create?\n\nJust send me the description in your next message. Add <code>/Name</code> at the end to assign it to a specific person.")
 		editMsg.ParseMode = tgbotapi.ModeHTML
 		editMsg.ReplyMarkup = nil
 		return editMsg, nil
@@ -274,4 +274,3 @@ func (h *Handlers) handleChoreCompleteInteractive(q *tgbotapi.CallbackQuery) (tg
 	editMsg.ReplyMarkup = &markup
 	return editMsg, nil
 }
-

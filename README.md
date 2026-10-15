@@ -106,7 +106,7 @@ DM messages remain verbose and friendly with full sentences.
 
 ### Admin Commands
 - `/assign` - Assign days to a user's admin queue (interactive user + days selection)
-- `/chore <description> [/<N>d]` - Assign a one-off chore to a random user or make it periodic every `N` days.
+- `/chore <description> [/<name>] [/<N>d]` - Assign a one-off chore to a random user, or to a specific active user with a trailing `/<name>` (first name, case-insensitive; use `_` for spaces, e.g. `/chore Fix the door /Anna_Maria`). Add `/<N>d` to make it periodic every `N` days (periodic chores are always assigned randomly, so `/<name>` can't be combined with `/<N>d`). Interactive mode (`/chore` → Create) accepts the same `/<name>` suffix.
 - `/chore translate <id>` - Translate a recurring chore's description to English (admin only).
 - `/list` - View all active periodic chores or regular tasks (interactive list type selection, or `/list chore` / `/list task`).
 - `/cancel` - Cancel a duty, active chore, or recurring chore (interactive item selection).
