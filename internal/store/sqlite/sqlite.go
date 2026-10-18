@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -130,6 +131,11 @@ func (s *SQLiteStore) migrate(ctx context.Context) error {
 		CREATE TABLE IF NOT EXISTS sviniya_balances (
 			user_id INTEGER PRIMARY KEY,
 			balance INTEGER NOT NULL DEFAULT 0 CHECK(balance >= 0),
+			FOREIGN KEY(user_id) REFERENCES users(id)
+		);
+
+		CREATE TABLE IF NOT EXISTS extended_volunteers (
+			user_id INTEGER PRIMARY KEY,
 			FOREIGN KEY(user_id) REFERENCES users(id)
 		);
 
@@ -634,6 +640,31 @@ func (s *SQLiteStore) AddToVolunteerQueue(ctx context.Context, userID int64, day
 		return fmt.Errorf("could not add to volunteer queue: %w", err)
 	}
 	return nil
+}
+
+// SetExtendedVolunteer allows or disallows a user to hold the extended volunteer queue.
+func (s *SQLiteStore) SetExtendedVolunteer(ctx context.Context, userID int64, enabled bool) error {
+	query := `DELETE FROM extended_volunteers WHERE user_id = ?`
+	if enabled {
+		query = `INSERT OR IGNORE INTO extended_volunteers (user_id) VALUES (?)`
+	}
+	if _, err := s.db.ExecContext(ctx, query, userID); err != nil {
+		return fmt.Errorf("could not set extended volunteer: %w", err)
+	}
+	return nil
+}
+
+// IsExtendedVolunteer reports whether a user may hold the extended volunteer queue.
+func (s *SQLiteStore) IsExtendedVolunteer(ctx context.Context, userID int64) (bool, error) {
+	var one int
+	err := s.db.QueryRowContext(ctx, `SELECT 1 FROM extended_volunteers WHERE user_id = ?`, userID).Scan(&one)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("could not check extended volunteer: %w", err)
+	}
+	return true, nil
 }
 
 // AddToAdminQueue adds days to a user's admin assignment queue.

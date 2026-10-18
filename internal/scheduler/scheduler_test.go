@@ -17,6 +17,7 @@ type mockStore struct {
 	roundRobinError      error
 	assignmentCountError error
 	findUserError        error
+	extended             map[int64]bool
 }
 
 // newMockStore initializes a new mockStore with some default data.
@@ -365,6 +366,27 @@ func TestScheduler_AddToVolunteerQueue(t *testing.T) {
 	}
 }
 
+func TestScheduler_AddToVolunteerQueue_Extended(t *testing.T) {
+	mock := newMockStore()
+	scheduler := NewScheduler(mock)
+	ctx := context.Background()
+
+	if err := scheduler.AddToVolunteerQueue(ctx, 1, 30); err == nil {
+		t.Error("Expected an error: 30 days exceeds the default cap")
+	}
+
+	_ = mock.SetExtendedVolunteer(ctx, 1, true)
+	if err := scheduler.AddToVolunteerQueue(ctx, 1, 30); err != nil {
+		t.Fatalf("Expected 30 days to fit the extended cap, got %v", err)
+	}
+	if err := scheduler.AddToVolunteerQueue(ctx, 1, ExtendedMaxVolunteerQueueDays-30); err != nil {
+		t.Fatalf("Expected to reach the extended cap exactly, got %v", err)
+	}
+	if err := scheduler.AddToVolunteerQueue(ctx, 1, 1); err == nil {
+		t.Error("Expected an error when exceeding the extended cap")
+	}
+}
+
 func TestScheduler_AddToAdminQueue(t *testing.T) {
 	mock := newMockStore()
 	scheduler := NewScheduler(mock)
@@ -580,6 +602,18 @@ func (m *mockStore) GetAllSviniyaBalances(ctx context.Context) ([]*store.Sviniya
 
 func (m *mockStore) GetSviniyaBalance(ctx context.Context, userID int64) (*store.SviniyaBalance, error) {
 	return nil, nil
+}
+
+func (m *mockStore) SetExtendedVolunteer(ctx context.Context, userID int64, enabled bool) error {
+	if m.extended == nil {
+		m.extended = map[int64]bool{}
+	}
+	m.extended[userID] = enabled
+	return nil
+}
+
+func (m *mockStore) IsExtendedVolunteer(ctx context.Context, userID int64) (bool, error) {
+	return m.extended[userID], nil
 }
 
 func (m *mockStore) AddSviniyaBalance(ctx context.Context, userID int64, amount int) error {

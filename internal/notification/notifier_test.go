@@ -400,6 +400,14 @@ func (m *MockStore) GetSviniyaBalance(ctx context.Context, userID int64) (*store
 	return nil, nil
 }
 
+func (m *MockStore) SetExtendedVolunteer(ctx context.Context, userID int64, enabled bool) error {
+	return nil
+}
+
+func (m *MockStore) IsExtendedVolunteer(ctx context.Context, userID int64) (bool, error) {
+	return false, nil
+}
+
 func (m *MockStore) AddSviniyaBalance(ctx context.Context, userID int64, amount int) error {
 	return nil
 }

@@ -118,6 +118,7 @@ DM messages remain verbose and friendly with full sentences.
 - `/vacation [on|off]` - Toggle vacation mode to pause all duty assignments (interactive button UI when no argument provided)
 - `/users` - List all users with their queues and status
 - `/ratings` - Show the current month's participant rating calendar
+- `/set_volunteer_limit <name> [on|off]` - Allow a user to hold up to 6 months (183 days) in the volunteer queue instead of the default 7; without `on|off` it shows the user's current limit (admin only)
 - `/set_sviniya_balance <name> <num>` - Set a user's sviniya balance to a specific number (admin only)
 
 ### Participant Rating Flow

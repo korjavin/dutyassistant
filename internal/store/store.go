@@ -189,6 +189,10 @@ type Store interface {
 	GetUsersWithVolunteerQueue(ctx context.Context) ([]*User, error)
 	GetUsersWithAdminQueue(ctx context.Context) ([]*User, error)
 
+	// Extended volunteer limit methods (users an admin allowed to volunteer for ~6 months)
+	SetExtendedVolunteer(ctx context.Context, userID int64, enabled bool) error
+	IsExtendedVolunteer(ctx context.Context, userID int64) (bool, error)
+
 	// Off-duty management methods
 	SetOffDuty(ctx context.Context, userID int64, start, end time.Time) error
 	ClearOffDuty(ctx context.Context, userID int64) error

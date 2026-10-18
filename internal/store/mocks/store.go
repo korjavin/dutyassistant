@@ -156,6 +156,16 @@ func (m *MockStore) AddToVolunteerQueue(ctx context.Context, userID int64, days 
 }
 
 // AddToAdminQueue mocks the AddToAdminQueue method.
+func (m *MockStore) SetExtendedVolunteer(ctx context.Context, userID int64, enabled bool) error {
+	args := m.Called(ctx, userID, enabled)
+	return args.Error(0)
+}
+
+func (m *MockStore) IsExtendedVolunteer(ctx context.Context, userID int64) (bool, error) {
+	args := m.Called(ctx, userID)
+	return args.Bool(0), args.Error(1)
+}
+
 func (m *MockStore) AddToAdminQueue(ctx context.Context, userID int64, days int) error {
 	args := m.Called(ctx, userID, days)
 	return args.Error(0)
