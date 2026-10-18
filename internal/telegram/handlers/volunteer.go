@@ -114,7 +114,8 @@ func (h *Handlers) HandleSetVolunteer(m *tgbotapi.Message) (tgbotapi.MessageConf
 		return tgbotapi.NewMessage(m.Chat.ID, adminOnlyMessage), nil
 	}
 
-	usage := fmt.Sprintf("Usage: /set_volunteer <name> <days>\nExample: <code>/set_volunteer Ivan 3</code> (0-%d)", scheduler.MaxVolunteerQueueDays)
+	usage := fmt.Sprintf("Usage: /set_volunteer <name> <days>\nExample: <code>/set_volunteer Ivan 3</code> (0-%d, or 0-%d for users allowed by /set_volunteer_limit)",
+		scheduler.MaxVolunteerQueueDays, scheduler.ExtendedMaxVolunteerQueueDays)
 	args := strings.Fields(m.CommandArguments())
 	if len(args) != 2 {
 		msg := tgbotapi.NewMessage(m.Chat.ID, usage)
@@ -123,8 +124,8 @@ func (h *Handlers) HandleSetVolunteer(m *tgbotapi.Message) (tgbotapi.MessageConf
 	}
 
 	days, err := strconv.Atoi(args[1])
-	if err != nil || days < 0 || days > scheduler.MaxVolunteerQueueDays {
-		msg := tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("⚠️ Days must be a number between 0 and %d.\n\n%s", scheduler.MaxVolunteerQueueDays, usage))
+	if err != nil || days < 0 || days > scheduler.ExtendedMaxVolunteerQueueDays {
+		msg := tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("⚠️ Days must be a number between 0 and %d.\n\n%s", scheduler.ExtendedMaxVolunteerQueueDays, usage))
 		msg.ParseMode = tgbotapi.ModeHTML
 		return msg, nil
 	}
@@ -134,12 +135,71 @@ func (h *Handlers) HandleSetVolunteer(m *tgbotapi.Message) (tgbotapi.MessageConf
 		return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("❌ "+userNotFoundMessage, args[0])), nil
 	}
 
+	extended, err := h.Store.IsExtendedVolunteer(context.Background(), user.ID)
+	if err != nil {
+		return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("❌ Failed to load volunteer limit: %v", err)), nil
+	}
+	if limit := scheduler.VolunteerQueueLimit(extended); days > limit {
+		return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("⚠️ %s may have at most %d volunteer day(s). Use /set_volunteer_limit to change that.", user.FirstName, limit)), nil
+	}
+
 	user.VolunteerQueueDays = days
 	if err := h.Store.UpdateUser(context.Background(), user); err != nil {
 		return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("❌ Failed to update volunteer queue: %v", err)), nil
 	}
 
 	return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("✅ Volunteer queue for %s set to %d day(s).", user.FirstName, days)), nil
+}
+
+// HandleSetVolunteerLimit lets an admin allow a participant to volunteer for up
+// to ExtendedMaxVolunteerQueueDays (~6 months) instead of MaxVolunteerQueueDays.
+// Format: /set_volunteer_limit <name> [on|off]  (no on/off shows the current state)
+func (h *Handlers) HandleSetVolunteerLimit(m *tgbotapi.Message) (tgbotapi.MessageConfig, error) {
+	isAdmin, err := h.checkAdmin(m.From.ID)
+	if err != nil || !isAdmin {
+		return tgbotapi.NewMessage(m.Chat.ID, adminOnlyMessage), nil
+	}
+
+	usage := fmt.Sprintf("Usage: /set_volunteer_limit <name> [on|off]\nExample: <code>/set_volunteer_limit Ivan on</code> allows up to %d days (default %d).",
+		scheduler.ExtendedMaxVolunteerQueueDays, scheduler.MaxVolunteerQueueDays)
+	args := strings.Fields(m.CommandArguments())
+	if len(args) < 1 || len(args) > 2 {
+		msg := tgbotapi.NewMessage(m.Chat.ID, usage)
+		msg.ParseMode = tgbotapi.ModeHTML
+		return msg, nil
+	}
+
+	var enable bool
+	if len(args) == 2 {
+		switch strings.ToLower(args[1]) {
+		case "on":
+			enable = true
+		case "off":
+			enable = false
+		default:
+			msg := tgbotapi.NewMessage(m.Chat.ID, "⚠️ Second argument must be on or off.\n\n"+usage)
+			msg.ParseMode = tgbotapi.ModeHTML
+			return msg, nil
+		}
+	}
+
+	user, err := h.Store.GetUserByName(context.Background(), args[0])
+	if err != nil || user == nil {
+		return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("❌ "+userNotFoundMessage, args[0])), nil
+	}
+
+	if len(args) == 1 {
+		current, err := h.Store.IsExtendedVolunteer(context.Background(), user.ID)
+		if err != nil {
+			return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("❌ Failed to load volunteer limit: %v", err)), nil
+		}
+		return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("%s may volunteer for up to %d day(s).", user.FirstName, scheduler.VolunteerQueueLimit(current))), nil
+	}
+
+	if err := h.Store.SetExtendedVolunteer(context.Background(), user.ID, enable); err != nil {
+		return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("❌ Failed to update volunteer limit: %v", err)), nil
+	}
+	return tgbotapi.NewMessage(m.Chat.ID, fmt.Sprintf("✅ %s may now volunteer for up to %d day(s).", user.FirstName, scheduler.VolunteerQueueLimit(enable))), nil
 }
 
 // HandleVolunteerCustomCallback handles the custom day input request

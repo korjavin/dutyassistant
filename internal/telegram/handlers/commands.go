@@ -49,6 +49,7 @@ const (
 		"/complete - Mark any active chore as completed.\n" +
 		"/overdue - Send the overdue chores report.\n" +
 		"/set\\_volunteer <name> <days> - Set a user's volunteer queue (0-7).\n" +
+		"/set\\_volunteer\\_limit <name> [on|off] - Allow a user to volunteer for up to 6 months (default 7 days).\n" +
 		"/set\\_sviniya\\_balance - Set sviniya balance for a user."
 
 	statusMessage = "<b>Duty Status for %s:</b>\n\n" +

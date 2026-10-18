@@ -23,8 +23,21 @@ func NewScheduler(s store.Store) *Scheduler {
 // MaxVolunteerQueueDays caps how many days a user may hold in the volunteer queue.
 const MaxVolunteerQueueDays = 7
 
-// AddToVolunteerQueue adds days to a user's volunteer queue, capped at
-// MaxVolunteerQueueDays in total (not per call).
+// ExtendedMaxVolunteerQueueDays (~6 months) is the cap for users an admin has
+// allowed to volunteer for longer via /set_volunteer_limit.
+const ExtendedMaxVolunteerQueueDays = 183
+
+// VolunteerQueueLimit returns the volunteer queue cap for a user.
+func VolunteerQueueLimit(extended bool) int {
+	if extended {
+		return ExtendedMaxVolunteerQueueDays
+	}
+	return MaxVolunteerQueueDays
+}
+
+// AddToVolunteerQueue adds days to a user's volunteer queue, capped in total
+// (not per call) at MaxVolunteerQueueDays, or ExtendedMaxVolunteerQueueDays for
+// users an admin has allowed to volunteer for longer.
 func (s *Scheduler) AddToVolunteerQueue(ctx context.Context, userID int64, days int) error {
 	if days <= 0 {
 		return fmt.Errorf("days must be positive")
@@ -36,9 +49,14 @@ func (s *Scheduler) AddToVolunteerQueue(ctx context.Context, userID int64, days 
 	if user == nil {
 		return fmt.Errorf("user not found")
 	}
-	if user.VolunteerQueueDays+days > MaxVolunteerQueueDays {
+	extended, err := s.store.IsExtendedVolunteer(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("failed to load volunteer limit: %w", err)
+	}
+	limit := VolunteerQueueLimit(extended)
+	if user.VolunteerQueueDays+days > limit {
 		return fmt.Errorf("volunteer queue is capped at %d days (you already have %d)",
-			MaxVolunteerQueueDays, user.VolunteerQueueDays)
+			limit, user.VolunteerQueueDays)
 	}
 	return s.store.AddToVolunteerQueue(ctx, userID, days)
 }
