@@ -56,6 +56,16 @@ Key files:
 
 **Chore nudges:** the periodic 16:00–19:00 chore reminder (`internal/notification/periodic_chore_reminder.go`) asks `ChoreNudge` for a funny carrot-and-stick message (small vague rewards vs. "telling the admin" / extra duties) built from `DescribeChoreDelays` (time since assignment, overdue time). The factual chore list is always appended deterministically. `notification.ComposeChoreReminder` builds the message (and returns the LLM error alongside the static fallback). Admins can preview it with `/text_candidate_chore <name>` (`internal/telegram/handlers/chore_nudge_preview.go`), which runs the same code path and replies to the admin only, plus the LLM context and provider/model used.
 
+## Admin Assistant (free-text admin requests)
+
+When the Anthropic provider is configured, the admin can write to the bot in free text (any language) in a private chat instead of using /commands. Claude parses the intent and acts through tools.
+
+- `internal/assistant/agent.go` — `Agent`: manual Messages API tool-use loop, one conversation per chat (kept 30 min), at most 8 model calls per message. Thinking blocks are preserved by appending `resp.ToParam()` (append-only history).
+- `internal/assistant/tools.go` — tool registry. **Read tools** (`list_users`, `list_active_chores`, `list_recurring_chores`, `list_upcoming_duties`, `get_sviniya_balances`, `get_chore_stats`, `get_ratings`) run immediately. **Data-changing tools** only *prepare* an action (validate input, resolve user names case-insensitively); the admin gets a summary with the exact command plus ✅ Confirm / ❌ Cancel buttons (callback data `aa:y:<id>` / `aa:n:<id>`, valid 15 min). Nothing changes until Confirm.
+- Data-changing tools run the bot's **own admin commands** (e.g. `/chore desc /Ivan /3d`, `/assign`, `/modify`, `/offduty`, `/vacation on`) or the existing button callbacks (`complete_chore:<reminderID>`, `cancel_assignment_confirm:A<id>`) through `internal/telegram/assistant.go` (`assistantExecutor`), so validation, DMs and group announcements are identical to manual use. To add a capability: add a `toolDef` that builds a command line, and make sure the command accepts all its arguments non-interactively.
+- Routing (`internal/telegram/bot.go`): non-command text from the admin's private chat with no active interactive session goes to the assistant (in a goroutine; the update loop is not blocked). Sessions keep priority. Without Anthropic, the admin gets a hint instead.
+- Env: `ANTHROPIC_ASSISTANT_EFFORT` (default `medium`).
+
 ## Message Formatting Patterns
 
 ### Channel Messages vs DM Messages

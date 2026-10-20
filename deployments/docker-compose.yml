@@ -59,6 +59,8 @@ services:
       - ANTHROPIC_TIMEOUT_SECONDS=${ANTHROPIC_TIMEOUT_SECONDS:-30}
       - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-opus-5-5}
       - ANTHROPIC_EFFORT=${ANTHROPIC_EFFORT:-low}
+      # Effort for the free-text admin assistant (tool use), separate from short texts.
+      - ANTHROPIC_ASSISTANT_EFFORT=${ANTHROPIC_ASSISTANT_EFFORT:-medium}
       # OpenAI keys
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_URL=${OPENAI_URL:-}

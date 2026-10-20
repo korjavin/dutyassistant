@@ -36,11 +36,16 @@ To run the Duty Assistant Bot, you need to set the following environment variabl
 | `ANTHROPIC_TIMEOUT_SECONDS` | Timeout in seconds for Anthropic API calls. | No  | `30`                 |
 | `ANTHROPIC_MODEL`    | The Claude model to use for LLM requests.     | No       | `claude-opus-5-5`    |
 | `ANTHROPIC_EFFORT`   | Claude effort level: `low`, `medium`, `high`, `xhigh`, `max`. Temperature is not used for Anthropic. | No | `low` |
+| `ANTHROPIC_ASSISTANT_EFFORT` | Effort for the free-text admin assistant (tool use): `low`..`max`. | No | `medium` |
 | `OPENAI_API_KEY`     | The OpenAI API key for LLM-refined messages.  | No       |                      |
 | `OPENAI_URL`         | The OpenAI API base URL (can be customized).  | No       | `https://api.openai.com/v1` |
 | `OPENAI_TIMEOUT_SECONDS` | Timeout in seconds for LLM API calls.     | No       | `10`                 |
 | `OPENAI_MODEL`       | The OpenAI model to use for LLM requests.     | No       | `gpt-4o-mini`        |
 | `OPENAI_TEMPERATURE` | The temperature parameter for LLM requests.   | No       | `0.7`                |
+
+## Admin Assistant (free text)
+
+With the Anthropic provider configured (`ANTHROPIC_API_KEY`), the admin can simply write to the bot in a private chat, in any language, instead of using commands, e.g. *"Пусть Ваня завтра дежурит, а Маше дай 2 свиньи"*. The bot (Claude with tool use) looks up users, chores and duties itself, then shows the planned actions with the exact commands and ✅ Confirm / ❌ Cancel buttons. Nothing is changed until Confirm. Interactive command flows keep working as before.
 
 ## Running with Docker
 

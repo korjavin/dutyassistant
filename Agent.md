@@ -26,6 +26,7 @@ To run the Duty Assistant Bot, you need to set the following environment variabl
 | `ANTHROPIC_TIMEOUT_SECONDS` | Timeout in seconds for Anthropic API calls. | No  | `30`                 |
 | `ANTHROPIC_MODEL`    | The Claude model to use for LLM requests.     | No       | `claude-opus-5-5`    |
 | `ANTHROPIC_EFFORT`   | Claude effort level: `low`, `medium`, `high`, `xhigh`, `max`. Temperature is not used for Anthropic. | No | `low` |
+| `ANTHROPIC_ASSISTANT_EFFORT` | Effort for the free-text admin assistant (tool use): `low`..`max`. | No | `medium` |
 | `OPENAI_API_KEY`     | The OpenAI API key for LLM-refined messages.  | No       |                      |
 | `OPENAI_URL`         | The OpenAI API base URL (can be customized).  | No       | `https://api.openai.com/v1` |
 | `OPENAI_TIMEOUT_SECONDS` | Timeout in seconds for LLM API calls.     | No       | `10`                 |
@@ -677,6 +678,7 @@ The LLM client is configured via environment variables:
 | `ANTHROPIC_BASE_URL` | Anthropic API base URL | No | `https://api.anthropic.com` |
 | `ANTHROPIC_MODEL` | Claude model | No | `claude-opus-5-5` |
 | `ANTHROPIC_EFFORT` | Effort level (`low`..`max`); temperature is not sent to Anthropic | No | `low` |
+| `ANTHROPIC_ASSISTANT_EFFORT` | Effort for the free-text admin assistant | No | `medium` |
 | `ANTHROPIC_TIMEOUT_SECONDS` | Timeout in seconds for Anthropic API calls | No | `30` |
 | `OPENAI_API_KEY` | The API key for the LLM service | No (optional feature) | |
 | `OPENAI_URL` | The API base URL | No | `https://api.openai.com/v1` |

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/korjavin/dutyassistant/internal/assistant"
 	"github.com/korjavin/dutyassistant/internal/telegram/handlers"
 	"github.com/korjavin/dutyassistant/internal/telegram/keyboard"
 )
@@ -17,6 +18,9 @@ type Bot struct {
 	handlers *handlers.Handlers
 	groupID  int64 // DISH_GROUP ID for access control
 	ownerID  int64 // Owner ID for access control
+
+	// assistant handles the admin's free-text requests; nil when disabled.
+	assistant *assistant.Agent
 }
 
 // NewBot creates a new Bot instance.
@@ -264,6 +268,10 @@ func (b *Bot) handleCallbackQuery(q *tgbotapi.CallbackQuery) (tgbotapi.Chattable
 		slog.Error(fmt.Sprintf("failed to answer callback query: %v", err))
 	}
 
+	if assistant.IsCallback(q.Data) {
+		return b.handleAssistantCallback(q)
+	}
+
 	action := strings.Split(q.Data, ":")[0]
 
 	switch action {
@@ -340,7 +348,11 @@ func (b *Bot) handleMessage(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 	// Check if user is in an interactive session
 	session, exists := b.handlers.SessionManager.GetSession(m.Chat.ID)
 	if !exists {
-		// No active session, ignore the message
+		// No active session: free text from the admin goes to the assistant,
+		// anything else is ignored.
+		if resp, handled := b.handleAssistantMessage(m); handled {
+			return resp, nil
+		}
 		return nil, nil
 	}
 
