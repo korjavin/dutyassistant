@@ -155,6 +155,7 @@ func (s *SQLiteStore) migrate(ctx context.Context) error {
 		`ALTER TABLE duties ADD COLUMN completed_at TEXT`,
 		`ALTER TABLE chores ADD COLUMN cancelled_at TEXT`,
 		`ALTER TABLE participant_ratings ADD COLUMN has_ear INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE recurring_chores ADD COLUMN assignee_user_id INTEGER`,
 	}
 
 	for _, alteration := range alterations {

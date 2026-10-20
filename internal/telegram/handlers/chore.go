@@ -22,8 +22,9 @@ import (
 // For non-admins: Shows their active chores.
 // For admins: Format: /chore [description] [/<name>] [/<N>d]
 // It assigns a random active user to the described chore,
-// or the named user if the /<name> suffix is provided (one-off chores only).
-// If the /<N>d suffix is provided, it sets up a recurring chore.
+// or the named user if the /<name> suffix is provided.
+// If the /<N>d suffix is provided, it sets up a recurring chore
+// (with /<name>, every occurrence goes to that user).
 // If no description is provided, it enters interactive mode.
 func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 	// 1. Admin check
@@ -116,95 +117,7 @@ func (h *Handlers) HandleChore(m *tgbotapi.Message) (tgbotapi.Chattable, error) 
 	}
 
 	if intervalStr != "" {
-		// It's a recurring chore
-		intervalDays, err := strconv.Atoi(intervalStr)
-		if err != nil || intervalDays < 1 {
-			return tgbotapi.NewMessage(m.Chat.ID, "❌ Invalid interval for recurring chore. Must be a positive integer, e.g., /3d."), nil
-		}
-
-		if assigneeName != "" {
-			return tgbotapi.NewMessage(m.Chat.ID, "❌ Recurring chores are always assigned to a random user; a specific assignee (/<name>) can only be used with one-off chores."), nil
-		}
-
-		description = h.translateIfNonLatin(context.Background(), description)
-
-		// Load configured timezone
-		tz := os.Getenv("CHORE_TIMEZONE")
-		if tz == "" {
-			tz = "Europe/Berlin"
-		}
-		loc, err := time.LoadLocation(tz)
-		if err != nil {
-			slog.Error("Failed to load location", "tz", tz, "error", err) //nolint:gosec // G706 - structured logging is safe, tz is from env var
-			loc = time.Local
-		}
-
-		now := TimeNow().In(loc)
-		hour := now.Hour()
-
-		var nextRun time.Time
-		executeImmediately := false
-
-		// Allowed assignment interval is 10:00 to 18:00
-		if hour >= 10 && hour < 18 {
-			// Within interval: execute immediately, schedule next run exactly N days from now at 10:00 AM
-			executeImmediately = true
-			targetDate := now.AddDate(0, 0, intervalDays)
-			nextRun = time.Date(targetDate.Year(), targetDate.Month(), targetDate.Day(), 10, 0, 0, 0, loc)
-		} else if hour < 10 {
-			// Before 10:00: do not execute immediately, schedule first run at 10:00 today
-			executeImmediately = false
-			nextRun = time.Date(now.Year(), now.Month(), now.Day(), 10, 0, 0, 0, loc)
-		} else {
-			// After 18:00: do not execute immediately, schedule first run at 10:00 tomorrow
-			executeImmediately = false
-			tomorrow := now.AddDate(0, 0, 1)
-			nextRun = time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), 10, 0, 0, 0, loc)
-		}
-
-		chore := &store.RecurringChore{
-			Description: description,
-			Interval:    intervalDays,
-			NextRunAt:   nextRun,
-			CreatedAt:   now,
-		}
-
-		if err := h.Store.CreateRecurringChore(context.Background(), chore); err != nil {
-			slog.Error(fmt.Sprintf("Failed to create recurring chore: %v", err))
-			return tgbotapi.NewMessage(m.Chat.ID, "❌ Failed to create recurring chore."), nil
-		}
-
-		var msgConfig tgbotapi.MessageConfig
-		if executeImmediately {
-			// Execute the first assignment immediately
-			var err error
-			msgConfig, err = h.assignChore(m.Chat.ID, m.From.ID, description, "")
-			if err != nil {
-				slog.Error(fmt.Sprintf("Failed to assign initial recurring chore: %v", err))
-				return tgbotapi.NewMessage(m.Chat.ID, "❌ Recurring chore created, but failed to assign immediately."), nil
-			}
-		} else {
-			// No immediate execution
-			msgConfig = tgbotapi.NewMessage(m.Chat.ID, "")
-			msgConfig.ParseMode = tgbotapi.ModeHTML
-		}
-
-		nextRunStr := nextRun.Format("2006-01-02 15:04 MST")
-
-		recurringInfo := fmt.Sprintf("✅ <b>Recurring chore scheduled!</b>\n\n"+
-			"<b>ID:</b> <code>%d</code>\n"+
-			"<b>Description:</b> <i>%s</i>\n"+
-			"<b>Interval:</b> every %d days\n"+
-			"<b>Next Run:</b> %s",
-			chore.ID, html.EscapeString(description), chore.Interval, nextRunStr)
-
-		if executeImmediately {
-			msgConfig.Text += "\n\n" + recurringInfo
-		} else {
-			msgConfig.Text = recurringInfo
-		}
-
-		return msgConfig, nil
+		return h.createRecurringChore(m.Chat.ID, m.From.ID, description, intervalStr, assigneeName)
 	}
 
 	// 5. One-off chore
@@ -251,6 +164,119 @@ func parseChoreArgs(args string) (description, interval, assignee string) {
 	return description, interval, assignee
 }
 
+// createRecurringChore validates and stores a recurring chore, assigning the first
+// occurrence right away when created within the 10:00-18:00 window.
+// If assigneeName is non-empty, every occurrence goes to that user instead of a random one.
+func (h *Handlers) createRecurringChore(chatID int64, fromUserID int64, description, intervalStr, assigneeName string) (tgbotapi.MessageConfig, error) {
+	intervalDays, err := strconv.Atoi(intervalStr)
+	if err != nil || intervalDays < 1 {
+		return tgbotapi.NewMessage(chatID, "❌ Invalid interval for recurring chore. Must be a positive integer, e.g., /3d."), nil
+	}
+
+	// Resolve the assignee before saving anything, so a typo doesn't leave a random-assignee chore behind
+	var assignee *store.User
+	if assigneeName != "" {
+		var msgConfig *tgbotapi.MessageConfig
+		assignee, msgConfig = h.findChoreAssignee(chatID, assigneeName)
+		if msgConfig != nil {
+			return *msgConfig, nil
+		}
+	}
+
+	description = h.translateIfNonLatin(context.Background(), description)
+
+	// Load configured timezone
+	tz := os.Getenv("CHORE_TIMEZONE")
+	if tz == "" {
+		tz = "Europe/Berlin"
+	}
+	loc, err := time.LoadLocation(tz)
+	if err != nil {
+		slog.Error("Failed to load location", "tz", tz, "error", err) //nolint:gosec // G706 - structured logging is safe, tz is from env var
+		loc = time.Local
+	}
+
+	now := TimeNow().In(loc)
+	hour := now.Hour()
+
+	var nextRun time.Time
+	executeImmediately := false
+
+	// Allowed assignment interval is 10:00 to 18:00
+	if hour >= 10 && hour < 18 {
+		// Within interval: execute immediately, schedule next run exactly N days from now at 10:00 AM
+		executeImmediately = true
+		targetDate := now.AddDate(0, 0, intervalDays)
+		nextRun = time.Date(targetDate.Year(), targetDate.Month(), targetDate.Day(), 10, 0, 0, 0, loc)
+	} else if hour < 10 {
+		// Before 10:00: do not execute immediately, schedule first run at 10:00 today
+		executeImmediately = false
+		nextRun = time.Date(now.Year(), now.Month(), now.Day(), 10, 0, 0, 0, loc)
+	} else {
+		// After 18:00: do not execute immediately, schedule first run at 10:00 tomorrow
+		executeImmediately = false
+		tomorrow := now.AddDate(0, 0, 1)
+		nextRun = time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), 10, 0, 0, 0, loc)
+	}
+
+	chore := &store.RecurringChore{
+		Description: description,
+		Interval:    intervalDays,
+		NextRunAt:   nextRun,
+		CreatedAt:   now,
+	}
+	if assignee != nil {
+		chore.AssigneeUserID = assignee.ID
+	}
+
+	if err := h.Store.CreateRecurringChore(context.Background(), chore); err != nil {
+		slog.Error(fmt.Sprintf("Failed to create recurring chore: %v", err))
+		return tgbotapi.NewMessage(chatID, "❌ Failed to create recurring chore."), nil
+	}
+
+	var msgConfig tgbotapi.MessageConfig
+	if executeImmediately {
+		// Execute the first assignment immediately
+		if assignee != nil {
+			msgConfig = h.notifyAndScheduleChore(chatID, assignee, description)
+		} else {
+			var err error
+			msgConfig, err = h.assignChore(chatID, fromUserID, description, "")
+			if err != nil {
+				slog.Error(fmt.Sprintf("Failed to assign initial recurring chore: %v", err))
+				return tgbotapi.NewMessage(chatID, "❌ Recurring chore created, but failed to assign immediately."), nil
+			}
+		}
+	} else {
+		// No immediate execution
+		msgConfig = tgbotapi.NewMessage(chatID, "")
+		msgConfig.ParseMode = tgbotapi.ModeHTML
+	}
+
+	nextRunStr := nextRun.Format("2006-01-02 15:04 MST")
+
+	assigneeStr := "random user"
+	if assignee != nil {
+		assigneeStr = "<b>" + html.EscapeString(assignee.FirstName) + "</b>"
+	}
+
+	recurringInfo := fmt.Sprintf("✅ <b>Recurring chore scheduled!</b>\n\n"+
+		"<b>ID:</b> <code>%d</code>\n"+
+		"<b>Description:</b> <i>%s</i>\n"+
+		"<b>Interval:</b> every %d days\n"+
+		"<b>Assignee:</b> %s\n"+
+		"<b>Next Run:</b> %s",
+		chore.ID, html.EscapeString(description), chore.Interval, assigneeStr, nextRunStr)
+
+	if executeImmediately {
+		msgConfig.Text += "\n\n" + recurringInfo
+	} else {
+		msgConfig.Text = recurringInfo
+	}
+
+	return msgConfig, nil
+}
+
 // HandleChoreInteractive handles messages in interactive chore creation mode
 // Returns nil if the message should be ignored (not from session creator)
 func (h *Handlers) HandleChoreInteractive(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
@@ -270,7 +296,7 @@ func (h *Handlers) HandleChoreInteractive(m *tgbotapi.Message) (tgbotapi.Chattab
 	// End the session
 	h.SessionManager.EndSession(m.Chat.ID)
 
-	// Use the message text as the chore description, with an optional /<name> assignee suffix
+	// Use the message text as the chore description, with optional /<name> and /<N>d suffixes
 	description, intervalStr, assigneeName := parseChoreArgs(m.Text)
 	if description == "" {
 		msg := tgbotapi.NewMessage(m.Chat.ID, "❌ Chore description cannot be empty. Please use <code>/chore</code> to try again.")
@@ -278,9 +304,7 @@ func (h *Handlers) HandleChoreInteractive(m *tgbotapi.Message) (tgbotapi.Chattab
 		return msg, nil
 	}
 	if intervalStr != "" {
-		msg := tgbotapi.NewMessage(m.Chat.ID, "❌ Recurring chores can't be created in interactive mode. Please use <code>/chore &lt;description&gt; /&lt;N&gt;d</code> instead.")
-		msg.ParseMode = tgbotapi.ModeHTML
-		return msg, nil
+		return h.createRecurringChore(m.Chat.ID, m.From.ID, description, intervalStr, assigneeName)
 	}
 
 	description = h.translateIfNonLatin(context.Background(), description)

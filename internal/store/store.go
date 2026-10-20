@@ -124,6 +124,10 @@ type RecurringChore struct {
 	NextRunAt   time.Time // Time when the chore is next due
 	IsActive    bool
 	CreatedAt   time.Time
+	// AssigneeUserID is the user every occurrence goes to; 0 means a random user each time.
+	AssigneeUserID int64
+	// AssigneeName is the assignee's first name, populated on reads (empty when random).
+	AssigneeName string
 }
 
 // SviniyaBalance represents a user's sviniya award balance.

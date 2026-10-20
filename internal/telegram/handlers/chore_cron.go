@@ -78,84 +78,25 @@ func (h *Handlers) assignRecurringChore(ctx context.Context, chore *store.Recurr
 		return fmt.Errorf("no active users found to assign the chore to")
 	}
 
-	// Filter candidates (exclude those on off-duty)
-	var candidates []*store.User
-	now := time.Now()
-	checkDate := time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, now.Location())
-
-	offDutyUsers, err := h.Store.GetOffDutyUsers(ctx, checkDate)
-	if err != nil {
-		return fmt.Errorf("failed to retrieve off-duty users: %v", err)
-	}
-	offDutyMap := make(map[int64]bool)
-	for _, u := range offDutyUsers {
-		offDutyMap[u.ID] = true
-	}
-
-	for _, u := range users {
-		if !offDutyMap[u.ID] {
-			candidates = append(candidates, u)
-		}
-	}
-
-	if len(candidates) == 0 {
-		return fmt.Errorf("all active users are currently off-duty")
-	}
-
-	// 4. Weighted random assignment
-	type weightedUser struct {
-		user   *store.User
-		weight float64
-	}
-
-	var weightedCandidates []weightedUser
-	var totalWeight float64
-
-	for _, u := range candidates {
-		weight := 1.0
-		if u.AdminQueueDays > 0 {
-			weight += float64(u.AdminQueueDays) * 0.02
-		}
-		weightedCandidates = append(weightedCandidates, weightedUser{user: u, weight: weight})
-		totalWeight += weight
-	}
-
-	// Select user
-	maxWeightInt := int64(totalWeight * 1000)
-	if maxWeightInt <= 0 {
-		maxWeightInt = 1
-	}
-
-	randomBigInt, err := rand.Int(rand.Reader, big.NewInt(maxWeightInt))
-	var target float64
-	if err != nil {
-		slog.Error(fmt.Sprintf("[CHORE-CRON] Error generating random number: %v", err))
-		target = 0
-	} else {
-		target = float64(randomBigInt.Int64()) / 1000.0
-	}
-
+	// A fixed assignee gets every occurrence (an explicit admin choice skips the
+	// off-duty filter, like one-off chores); if they're no longer active, fall back to random.
 	var selectedUser *store.User
-	currentWeight := 0.0
-	for _, wu := range weightedCandidates {
-		currentWeight += wu.weight
-		if target < currentWeight {
-			selectedUser = wu.user
-			break
+	if chore.AssigneeUserID != 0 {
+		for _, u := range users {
+			if u.ID == chore.AssigneeUserID {
+				selectedUser = u
+				break
+			}
+		}
+		if selectedUser == nil {
+			slog.Warn(fmt.Sprintf("[CHORE-CRON] Assignee %d of recurring chore %d is not an active user; picking a random user", chore.AssigneeUserID, chore.ID))
 		}
 	}
-
-	if selectedUser == nil && len(candidates) > 0 {
-		idx, err := rand.Int(rand.Reader, big.NewInt(int64(len(candidates))))
-		if err != nil {
-			selectedUser = candidates[0]
-		} else {
-			selectedUser = candidates[idx.Int64()]
-		}
-	}
-
 	if selectedUser == nil {
-		return fmt.Errorf("failed to select a user")
+		selectedUser, err = h.pickRandomRecurringChoreUser(ctx, users)
+		if err != nil {
+			return err
+		}
 	}
 
 	// 5. Notifications
@@ -231,4 +172,89 @@ func (h *Handlers) assignRecurringChore(ctx context.Context, chore *store.Recurr
 	}
 
 	return nil
+}
+
+// pickRandomRecurringChoreUser does a weighted random pick among active users who aren't off-duty.
+func (h *Handlers) pickRandomRecurringChoreUser(ctx context.Context, users []*store.User) (*store.User, error) {
+	// Filter candidates (exclude those on off-duty)
+	var candidates []*store.User
+	now := time.Now()
+	checkDate := time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, now.Location())
+
+	offDutyUsers, err := h.Store.GetOffDutyUsers(ctx, checkDate)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve off-duty users: %v", err)
+	}
+	offDutyMap := make(map[int64]bool)
+	for _, u := range offDutyUsers {
+		offDutyMap[u.ID] = true
+	}
+
+	for _, u := range users {
+		if !offDutyMap[u.ID] {
+			candidates = append(candidates, u)
+		}
+	}
+
+	if len(candidates) == 0 {
+		return nil, fmt.Errorf("all active users are currently off-duty")
+	}
+
+	// 4. Weighted random assignment
+	type weightedUser struct {
+		user   *store.User
+		weight float64
+	}
+
+	var weightedCandidates []weightedUser
+	var totalWeight float64
+
+	for _, u := range candidates {
+		weight := 1.0
+		if u.AdminQueueDays > 0 {
+			weight += float64(u.AdminQueueDays) * 0.02
+		}
+		weightedCandidates = append(weightedCandidates, weightedUser{user: u, weight: weight})
+		totalWeight += weight
+	}
+
+	// Select user
+	maxWeightInt := int64(totalWeight * 1000)
+	if maxWeightInt <= 0 {
+		maxWeightInt = 1
+	}
+
+	randomBigInt, err := rand.Int(rand.Reader, big.NewInt(maxWeightInt))
+	var target float64
+	if err != nil {
+		slog.Error(fmt.Sprintf("[CHORE-CRON] Error generating random number: %v", err))
+		target = 0
+	} else {
+		target = float64(randomBigInt.Int64()) / 1000.0
+	}
+
+	var selectedUser *store.User
+	currentWeight := 0.0
+	for _, wu := range weightedCandidates {
+		currentWeight += wu.weight
+		if target < currentWeight {
+			selectedUser = wu.user
+			break
+		}
+	}
+
+	if selectedUser == nil && len(candidates) > 0 {
+		idx, err := rand.Int(rand.Reader, big.NewInt(int64(len(candidates))))
+		if err != nil {
+			selectedUser = candidates[0]
+		} else {
+			selectedUser = candidates[idx.Int64()]
+		}
+	}
+
+	if selectedUser == nil {
+		return nil, fmt.Errorf("failed to select a user")
+	}
+
+	return selectedUser, nil
 }

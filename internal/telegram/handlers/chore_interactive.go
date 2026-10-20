@@ -32,7 +32,7 @@ func (h *Handlers) HandleChoreActionCallback(q *tgbotapi.CallbackQuery) (tgbotap
 		return h.handleChoreListInteractive(q)
 	case "create":
 		h.SessionManager.StartSession(q.Message.Chat.ID, q.From.ID, SessionTypeChoreCreation)
-		editMsg := tgbotapi.NewEditMessageText(q.Message.Chat.ID, q.Message.MessageID, "📝 <b>Interactive Chore Mode</b>\n\nWhat chore do you want to create?\n\nJust send me the description in your next message. Add <code>/Name</code> at the end to assign it to a specific person.")
+		editMsg := tgbotapi.NewEditMessageText(q.Message.Chat.ID, q.Message.MessageID, "📝 <b>Interactive Chore Mode</b>\n\nWhat chore do you want to create?\n\nJust send me the description in your next message. Add <code>/Name</code> at the end to assign it to a specific person, and/or <code>/3d</code> to repeat it every 3 days.")
 		editMsg.ParseMode = tgbotapi.ModeHTML
 		editMsg.ReplyMarkup = nil
 		return editMsg, nil
@@ -92,8 +92,12 @@ func (h *Handlers) handleChoreListInteractive(q *tgbotapi.CallbackQuery) (tgbota
 		sb.WriteString("🔁 <b>Recurring Chores:</b>\n\n")
 		for _, rc := range rChores {
 			nextRun := rc.NextRunAt.In(loc).Format("2006-01-02 15:04")
-			sb.WriteString(fmt.Sprintf("• <b>Every %d days</b>: <i>%s</i>\n  <span class=\"tg-spoiler\">ID: R%d, Next: %s</span>\n",
-				rc.Interval, html.EscapeString(rc.Description), rc.ID, nextRun))
+			assignee := ""
+			if rc.AssigneeName != "" {
+				assignee = " → " + html.EscapeString(rc.AssigneeName)
+			}
+			fmt.Fprintf(&sb, "• <b>Every %d days%s</b>: <i>%s</i>\n  <span class=\"tg-spoiler\">ID: R%d, Next: %s</span>\n",
+				rc.Interval, assignee, html.EscapeString(rc.Description), rc.ID, nextRun)
 		}
 	}
 
