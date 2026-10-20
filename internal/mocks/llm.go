@@ -27,5 +27,11 @@ func (m *MockLLMClient) RefineMessage(ctx context.Context, intent, vanilla strin
 	return args.String(0)
 }
 
+// ChoreNudge mocks the ChoreNudge method.
+func (m *MockLLMClient) ChoreNudge(ctx context.Context, userName, choresContext string) (string, error) {
+	args := m.Called(ctx, userName, choresContext)
+	return args.String(0), args.Error(1)
+}
+
 // Ensure MockLLMClient implements the llm.ClientInterface interface
 var _ llm.ClientInterface = (*MockLLMClient)(nil)

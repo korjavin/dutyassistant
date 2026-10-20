@@ -98,8 +98,13 @@ func main() {
 	defer botCancel()
 	go bot.Start(botCtx)
 
-	// Launch periodic chore reminders goroutine
-	go notification.StartPeriodicChoreReminders(botCtx, bot, store, getEnv("CHORE_TIMEZONE", "Europe/Berlin"))
+	// Launch periodic chore reminders goroutine.
+	// Avoid passing a typed-nil *llm.Client into the interface.
+	var choreNudger notification.ChoreNudger
+	if llmClient != nil {
+		choreNudger = llmClient
+	}
+	go notification.StartPeriodicChoreReminders(botCtx, bot, store, choreNudger, getEnv("CHORE_TIMEZONE", "Europe/Berlin"))
 
 	// Initialize cron scheduler for scheduled jobs (all times in Europe/Berlin)
 	slog.Info("Initializing cron scheduler...")

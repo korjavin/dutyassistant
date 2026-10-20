@@ -86,3 +86,54 @@ func TestFormatPeriodicChoreReminder_TimezoneShift(t *testing.T) {
 	assert.NotEmpty(t, msg)
 	assert.True(t, strings.Contains(msg, "1. <b>Timezone Test</b> (Due: Mar 14, 23:59)"))
 }
+
+func TestFormatNudgeChoreReminder(t *testing.T) {
+	assert.Empty(t, FormatNudgeChoreReminder("hi", nil, time.UTC))
+
+	chores := []*store.Chore{
+		{Description: "Feed <the> cat", DeadlineAt: time.Date(2026, 3, 14, 15, 30, 0, 0, time.UTC)},
+		{Description: "Vacuum"},
+	}
+	msg := FormatNudgeChoreReminder("🐱 The cat is filing a complaint!", chores, time.UTC)
+
+	assert.True(t, strings.HasPrefix(msg, "🐱 The cat is filing a complaint!\n\n"))
+	assert.Contains(t, msg, "1. <b>Feed &lt;the&gt; cat</b> (Due: Mar 14, 15:30)")
+	assert.Contains(t, msg, "2. <b>Vacuum</b> (Due: no deadline)")
+	assert.Contains(t, msg, "/chore menu")
+	assert.NotContains(t, msg, "Just a gentle reminder")
+}
+
+func TestDescribeChoreDelays(t *testing.T) {
+	now := time.Date(2026, 3, 14, 17, 0, 0, 0, time.UTC)
+	chores := []*store.Chore{
+		{Description: "Trash", AssignedAt: now.Add(-73 * time.Hour), DeadlineAt: now.Add(-50 * time.Hour)},
+		{Description: "Dishes", AssignedAt: now.Add(-5 * time.Hour), DeadlineAt: now.Add(3 * time.Hour)},
+		{Description: "Plants", AssignedAt: now.Add(-1 * time.Hour)},
+		{Description: "Laundry", AssignedAt: now.Add(-30 * time.Minute), DeadlineAt: now.Add(-1 * time.Minute)},
+	}
+
+	got := DescribeChoreDelays(chores, now)
+
+	assert.Contains(t, got, "1. \"Trash\" - assigned 3 days ago, OVERDUE by 2 days\n")
+	assert.Contains(t, got, "2. \"Dishes\" - assigned 5 hours ago, due in 3 hours\n")
+	assert.Contains(t, got, "3. \"Plants\" - assigned 1 hour ago, no deadline\n")
+	assert.Contains(t, got, "4. \"Laundry\" - assigned 30 minutes ago, OVERDUE by 1 minute\n")
+}
+
+func TestHumanizeDuration(t *testing.T) {
+	tests := []struct {
+		d    time.Duration
+		want string
+	}{
+		{0, "0 minutes"},
+		{time.Minute, "1 minute"},
+		{59 * time.Minute, "59 minutes"},
+		{time.Hour, "1 hour"},
+		{47 * time.Hour, "47 hours"},
+		{48 * time.Hour, "2 days"},
+		{-3 * time.Hour, "3 hours"},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, humanizeDuration(tt.d), tt.d.String())
+	}
+}

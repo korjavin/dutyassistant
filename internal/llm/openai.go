@@ -17,6 +17,7 @@ import (
 type ClientInterface interface {
 	TranslateToEnglish(ctx context.Context, text string) (string, error)
 	RefineMessage(ctx context.Context, intent, vanilla string) string
+	ChoreNudge(ctx context.Context, userName, choresContext string) (string, error)
 }
 
 // Client is an adapter for calling the OpenAI chat completion API.
@@ -277,4 +278,93 @@ If formatting text, ONLY use Telegram-supported HTML tags (<b>, <i>, <a>, <code>
 	}
 
 	return SanitizeTelegramHTML(refined)
+}
+
+// choreNudgeSystemPrompt instructs the LLM to write a carrot-and-stick reminder
+// for someone who is putting off their chores.
+const choreNudgeSystemPrompt = `You are a witty, warm, slightly dramatic household chore coach sending a private Telegram message to a family member who is putting off their chores.
+You will receive the person's name and a list of their pending chores, including how long ago each was assigned and whether it is overdue.
+
+Write a short (2-5 sentences), funny, motivating message urging them to finish the chores. Use a carrot-and-stick approach:
+- Carrot: playfully hint at a small reward for finishing soon (a little treat, a surprise, bragging rights, eternal glory). Keep promises small and vague - never promise money or anything specific and expensive.
+- Stick: jokingly threaten mild consequences for further delay, such as "reporting" them to the admin or getting extra duties assigned.
+Scale the tone with the delay: gentle and cheerful when nothing is overdue, more theatrical and insistent the longer chores are overdue. Mention the chores and delays specifically.
+Keep it kind and family-friendly - teasing, never insulting, scary or guilt-tripping. The recipient may be a child.
+
+Return ONLY the message text. Use emojis. Do NOT list the chores as a numbered list (the list is appended separately). Do NOT wrap the output in quotes or markdown code blocks.
+If formatting text, ONLY use Telegram-supported HTML tags (<b>, <i>, <u>, <s>). Do NOT use Markdown.`
+
+// ChoreNudge asks the LLM for a funny carrot-and-stick motivation message
+// for a person who is delaying their chores. choresContext is a plain-text
+// description of the pending chores and their delays. The result is sanitized
+// Telegram HTML. An error is returned if the client is nil or the call fails,
+// so callers can fall back to a static message.
+func (c *Client) ChoreNudge(ctx context.Context, userName, choresContext string) (string, error) {
+	if c == nil {
+		return "", fmt.Errorf("LLM client not configured")
+	}
+
+	userPrompt := fmt.Sprintf("Name: %s\n\nPending chores:\n%s", userName, choresContext)
+
+	content, err := c.chatCompletion(ctx, "ChoreNudge", []chatMessage{
+		{Role: "system", Content: choreNudgeSystemPrompt},
+		{Role: "user", Content: userPrompt},
+	}, c.temperature)
+	if err != nil {
+		return "", err
+	}
+
+	nudge := strings.TrimSpace(content)
+	if nudge == "" {
+		return "", fmt.Errorf("LLM ChoreNudge returned empty content")
+	}
+	return SanitizeTelegramHTML(nudge), nil
+}
+
+// chatCompletion performs a single chat completion request and returns the
+// content of the first choice. op is used to prefix log and error messages.
+func (c *Client) chatCompletion(ctx context.Context, op string, messages []chatMessage, temperature float64) (string, error) {
+	jsonBody, err := json.Marshal(chatRequest{
+		Model:       c.model,
+		Messages:    messages,
+		Temperature: temperature,
+	})
+	if err != nil {
+		return "", fmt.Errorf("LLM %s JSON marshal error: %w", op, err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/chat/completions", bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return "", fmt.Errorf("LLM %s NewRequest error: %w", op, err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("LLM %s Do error: %w", op, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		bodyStr := string(bodyBytes)
+		// Truncate body to avoid logging sensitive information
+		if len(bodyStr) > 200 {
+			bodyStr = bodyStr[:200] + "..."
+		}
+		return "", fmt.Errorf("LLM %s non-200 status: %d, body: %s", op, resp.StatusCode, bodyStr)
+	}
+
+	var chatResp chatResponse
+	if err := json.NewDecoder(resp.Body).Decode(&chatResp); err != nil {
+		return "", fmt.Errorf("LLM %s decode error: %w", op, err)
+	}
+
+	if len(chatResp.Choices) == 0 {
+		return "", fmt.Errorf("LLM %s no choices returned", op)
+	}
+
+	return chatResp.Choices[0].Message.Content, nil
 }
