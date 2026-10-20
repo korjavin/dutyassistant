@@ -24,6 +24,12 @@ const (
 	invalidDateMessage   = "Invalid date format. Please use YYYY-MM-DD."
 )
 
+// IsAdmin reports whether the Telegram user is the bot admin.
+func (h *Handlers) IsAdmin(telegramUserID int64) bool {
+	isAdmin, err := h.checkAdmin(telegramUserID)
+	return err == nil && isAdmin
+}
+
 // checkAdmin is a helper function to verify if a user is an admin.
 // Admin is determined by matching the Telegram user ID against the ADMIN_ID env var.
 func (h *Handlers) checkAdmin(telegramUserID int64) (bool, error) {

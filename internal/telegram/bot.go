@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/korjavin/dutyassistant/internal/assistant"
 	"github.com/korjavin/dutyassistant/internal/telegram/handlers"
 	"github.com/korjavin/dutyassistant/internal/telegram/keyboard"
 )
@@ -17,6 +18,10 @@ type Bot struct {
 	handlers *handlers.Handlers
 	groupID  int64 // DISH_GROUP ID for access control
 	ownerID  int64 // Owner ID for access control
+
+	// Free-text assistants for the admin and for participants; nil when disabled.
+	adminAssistant       *assistant.Agent
+	participantAssistant *assistant.Agent
 }
 
 // NewBot creates a new Bot instance.
@@ -264,6 +269,10 @@ func (b *Bot) handleCallbackQuery(q *tgbotapi.CallbackQuery) (tgbotapi.Chattable
 		slog.Error(fmt.Sprintf("failed to answer callback query: %v", err))
 	}
 
+	if b.adminAssistant.OwnsCallback(q.Data) || b.participantAssistant.OwnsCallback(q.Data) {
+		return b.handleAssistantCallback(q)
+	}
+
 	action := strings.Split(q.Data, ":")[0]
 
 	switch action {
@@ -329,6 +338,8 @@ func (b *Bot) handleCallbackQuery(q *tgbotapi.CallbackQuery) (tgbotapi.Chattable
 		return b.handlers.HandleListCallback(q)
 	case "cancel_flow":
 		return b.handlers.HandleCancelFlow(q)
+	case "reg_ok", "reg_no":
+		return b.handlers.HandleRegistrationCallback(q)
 	default:
 		slog.Info(fmt.Sprintf("Unknown callback action: %s", action))
 		return nil, nil
@@ -340,7 +351,11 @@ func (b *Bot) handleMessage(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 	// Check if user is in an interactive session
 	session, exists := b.handlers.SessionManager.GetSession(m.Chat.ID)
 	if !exists {
-		// No active session, ignore the message
+		// No active session: free text in a private chat goes to the
+		// assistant (admin or participant); anything else is ignored.
+		if resp, handled := b.handleAssistantMessage(m); handled {
+			return resp, nil
+		}
 		return nil, nil
 	}
 

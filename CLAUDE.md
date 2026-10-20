@@ -20,6 +20,13 @@ Key files:
 - `internal/store/sqlite/ratings.go` - DB queries for saving/loading ratings
 - `internal/store/store.go` - `ParticipantDailyRating` (HasEar bool) and `ParticipantMonthlyTotal` (EarCount int) structs
 
+## Registration (admin approval)
+
+Who can talk to the bot at all is decided by `checkAccess` in `internal/telegram/bot.go`: the owner (`ADMIN_ID`) and members of `DISH_GROUP` (everyone, if no group is configured). On top of that, `/start` from an unknown Telegram user does **not** create a user: `HandleStart` → `requestRegistration` (`internal/telegram/handlers/registration.go`) stores a `registration_requests` row (`pending`) and DMs the admin the person's name, @username and Telegram ID with ✅ Approve / ❌ Reject buttons (`reg_ok:<tgID>` / `reg_no:<tgID>`, admin-only).
+- Approve creates the user as an active participant and DMs them the welcome; reject marks the request `rejected` and the person is told so on later /start (the admin is not notified again).
+- Repeated /start while pending only re-notifies the admin after 1 hour.
+- The configured admin is created directly; with `ADMIN_ID` unset, users are created directly as before (nobody could approve).
+
 ## Bot Commands & Scopes
 
 The bot calls Telegram's `setMyCommands` API at startup to publish autocomplete suggestions. Registration happens in `internal/telegram/bot.go` (`NewBot`), which calls `registerCommands` defined in `internal/telegram/commands.go`. Per-scope failures are logged via `slog.Warn` and do not block startup — autocomplete is a nice-to-have.
@@ -55,6 +62,19 @@ Key files:
 `LLM_PROVIDER` picks one explicitly; when empty, `resolveLLMProvider` in `cmd/roster-bot/main.go` chooses Anthropic if `ANTHROPIC_API_KEY` is set, else OpenAI. All LLM calls go through `Client.complete`, so a new LLM feature only needs a prompt and a call to `complete`. Every LLM feature must degrade gracefully (fall back to static text) when the client is nil or the call fails.
 
 **Chore nudges:** the periodic 16:00–19:00 chore reminder (`internal/notification/periodic_chore_reminder.go`) asks `ChoreNudge` for a funny carrot-and-stick message (small vague rewards vs. "telling the admin" / extra duties) built from `DescribeChoreDelays` (time since assignment, overdue time). The factual chore list is always appended deterministically. `notification.ComposeChoreReminder` builds the message (and returns the LLM error alongside the static fallback). Admins can preview it with `/text_candidate_chore <name>` (`internal/telegram/handlers/chore_nudge_preview.go`), which runs the same code path and replies to the admin only, plus the LLM context and provider/model used.
+
+## Free-text Assistants (admin and participants)
+
+When the Anthropic provider is configured, people can write to the bot in free text (any language) in a private chat instead of using /commands. Claude parses the intent and acts through tools. There are two profiles (`assistant.AdminProfile()` / `assistant.ParticipantProfile()`), each with its own tools, system prompt and button prefix (`aa` / `ap`):
+
+- **Admin** (`adminTools` in `tools.go`): manages the whole household (see below).
+- **Participant** (`participantTools` in `participant_tools.go`): acts only as themselves — read own status/chores, chores they could take, upcoming duties, sviniya balances, explain last duty; with confirmation: complete own chore (`chore_done:<reminderID>`), take someone's chore (`vc_confirm:<id>`), `/volunteer N`, `/spend <desc>`. Tools run with the participant's Telegram ID, and the bot's handlers check ownership again. Never add admin data-changing tools here (a test enforces it). Limited by `PARTICIPANT_ASSISTANT_DAILY_LIMIT` messages per person per day (default 20; `0` disables participants). Unregistered users are asked to /start.
+
+- `internal/assistant/agent.go` — `Agent`: manual Messages API tool-use loop, one conversation per chat (kept 30 min), at most 8 model calls per message, optional daily message limit. Thinking blocks are preserved by appending `resp.ToParam()` (append-only history).
+- `internal/assistant/tools.go` — admin tool registry. **Read tools** (`list_users`, `list_active_chores`, `list_recurring_chores`, `list_upcoming_duties`, `get_sviniya_balances`, `get_chore_stats`, `get_ratings`) run immediately. **Data-changing tools** only *prepare* an action (validate input, resolve user names case-insensitively); the admin gets a summary with the exact command plus ✅ Confirm / ❌ Cancel buttons (callback data `aa:y:<id>` / `aa:n:<id>`, valid 15 min). Nothing changes until Confirm.
+- Data-changing tools run the bot's **own commands** (e.g. `/chore desc /Ivan /3d`, `/assign`, `/modify`, `/offduty`, `/vacation on`) or the existing button callbacks (`complete_chore:<reminderID>`, `cancel_assignment_confirm:A<id>`) through `internal/telegram/assistant.go` (`assistantExecutor`), so validation, DMs and group announcements are identical to manual use. To add a capability: add a `toolDef` that builds a command line, and make sure the command accepts all its arguments non-interactively.
+- Routing (`internal/telegram/bot.go` → `handleAssistantMessage`): non-command text in a private chat with no active interactive session goes to the admin or participant assistant (in a goroutine; the update loop is not blocked). Sessions keep priority. Without Anthropic, the admin gets a hint and participants are ignored as before.
+- Env: `ANTHROPIC_ASSISTANT_EFFORT` (default `medium`), `PARTICIPANT_ASSISTANT_DAILY_LIMIT` (default `20`).
 
 ## Message Formatting Patterns
 
@@ -158,6 +178,7 @@ The bot uses SQLite with the following key tables:
 - `chore_assignments` - Active chore assignments
 - `participant_ratings` - Daily participant scores with optional ear modifier (`has_ear` column)
 - `sviniya_balances` - Sviniya award balances (user_id PK, balance INTEGER DEFAULT 0)
+- `registration_requests` - Pending/rejected `/start` requests awaiting admin approval (telegram_user_id PK, names, status, requested_at)
 
 ## Timezone Handling
 

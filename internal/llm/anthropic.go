@@ -50,12 +50,27 @@ func NewAnthropicClient(apiKey, baseURL string, timeoutSeconds int, model, effor
 }
 
 func parseEffort(effort string) anthropic.OutputConfigEffort {
+	return ParseEffort(effort, defaultAnthropicEffort)
+}
+
+// AnthropicSDK returns the underlying Anthropic SDK client and model name,
+// or nil for non-Anthropic clients. Used by features that need tool use.
+func (c *Client) AnthropicSDK() (*anthropic.Client, string) {
+	if c == nil || c.anthropic == nil {
+		return nil, ""
+	}
+	return c.anthropic, c.model
+}
+
+// ParseEffort converts an effort name (low|medium|high|xhigh|max) to the SDK
+// value, falling back to def when the name is empty or unknown.
+func ParseEffort(effort string, def anthropic.OutputConfigEffort) anthropic.OutputConfigEffort {
 	switch e := anthropic.OutputConfigEffort(strings.ToLower(strings.TrimSpace(effort))); e {
 	case anthropic.OutputConfigEffortLow, anthropic.OutputConfigEffortMedium, anthropic.OutputConfigEffortHigh,
 		anthropic.OutputConfigEffortXhigh, anthropic.OutputConfigEffortMax:
 		return e
 	default:
-		return defaultAnthropicEffort
+		return def
 	}
 }
 

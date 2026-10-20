@@ -59,6 +59,10 @@ services:
       - ANTHROPIC_TIMEOUT_SECONDS=${ANTHROPIC_TIMEOUT_SECONDS:-30}
       - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-opus-5-5}
       - ANTHROPIC_EFFORT=${ANTHROPIC_EFFORT:-low}
+      # Effort for the free-text admin assistant (tool use), separate from short texts.
+      - ANTHROPIC_ASSISTANT_EFFORT=${ANTHROPIC_ASSISTANT_EFFORT:-medium}
+      # Free-text assistant for participants: max messages per person per day (0 = off).
+      - PARTICIPANT_ASSISTANT_DAILY_LIMIT=${PARTICIPANT_ASSISTANT_DAILY_LIMIT:-20}
       # OpenAI keys
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_URL=${OPENAI_URL:-}

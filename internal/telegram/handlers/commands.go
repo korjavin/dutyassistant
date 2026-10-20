@@ -21,7 +21,7 @@ const (
 		"Use /help to see all available commands."
 
 	userHelpMessage = "Here are the available commands:\n\n" +
-		"/start - Show the welcome message and register you.\n" +
+		"/start - Show the welcome message, or ask the admin to let you join.\n" +
 		"/help - Show this help message.\n" +
 		"/status - Show your current duty statistics.\n" +
 		"/schedule - View the duty schedule for the current month.\n" +
@@ -76,11 +76,18 @@ func (h *Handlers) HandleStart(m *tgbotapi.Message) (tgbotapi.MessageConfig, err
 	}
 
 	if user == nil {
-		// User doesn't exist, create them
-		slog.Info(fmt.Sprintf("[HandleStart] User %d not found, creating new user", m.From.ID))
-
 		// Check if this user is the admin
 		isAdmin := h.AdminID != 0 && m.From.ID == h.AdminID
+
+		// Everyone except the admin needs the admin's approval to join.
+		// Without a configured admin nobody could approve, so users are
+		// created directly as before.
+		if !isAdmin && h.AdminID != 0 {
+			return h.requestRegistration(m)
+		}
+
+		// User doesn't exist, create them
+		slog.Info(fmt.Sprintf("[HandleStart] User %d not found, creating new user", m.From.ID))
 
 		newUser := &store.User{
 			TelegramUserID: m.From.ID,

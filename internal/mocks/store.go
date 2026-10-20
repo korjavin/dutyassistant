@@ -466,3 +466,24 @@ func (m *MockStore) GetUserByID(ctx context.Context, id int64) (*store.User, err
 	}
 	return args.Get(0).(*store.User), args.Error(1)
 }
+
+// UpsertRegistrationRequest mocks the UpsertRegistrationRequest method.
+func (m *MockStore) UpsertRegistrationRequest(ctx context.Context, req *store.RegistrationRequest) error {
+	args := m.Called(ctx, req)
+	return args.Error(0)
+}
+
+// GetRegistrationRequest mocks the GetRegistrationRequest method.
+func (m *MockStore) GetRegistrationRequest(ctx context.Context, telegramUserID int64) (*store.RegistrationRequest, error) {
+	args := m.Called(ctx, telegramUserID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*store.RegistrationRequest), args.Error(1)
+}
+
+// DeleteRegistrationRequest mocks the DeleteRegistrationRequest method.
+func (m *MockStore) DeleteRegistrationRequest(ctx context.Context, telegramUserID int64) error {
+	args := m.Called(ctx, telegramUserID)
+	return args.Error(0)
+}
