@@ -622,6 +622,7 @@ The LLM integration has been implemented in `/internal/llm/openai.go` with a `Cl
 
 - `ChoreNudge(ctx, userName, choresContext) (string, error)`: Writes a funny carrot-and-stick message for the periodic chore reminder, given each pending chore's age and overdue time
   - Returns an error on failure so the caller falls back to the static reminder
+  - Admin preview: `/text_candidate_chore <name>` shows the reminder that user would get right now (not sent to them)
 
 - `RefineMessage(ctx, intent, vanilla) string`: Refines messages for fun/humorous formatting
   - Uses the configured temperature from `OPENAI_TEMPERATURE` (default 0.7)

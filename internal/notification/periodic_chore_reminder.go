@@ -108,12 +108,15 @@ func sendChoreReminders(ctx context.Context, now time.Time, bot BotSender, s sto
 	}
 
 	for telegramID, list := range userChores {
-		msg := buildChoreReminder(ctx, now, nudger, list, loc)
+		msg, err := ComposeChoreReminder(ctx, now, nudger, list, loc)
+		if err != nil {
+			slog.Error("[PeriodicReminders] LLM nudge failed, using static reminder", "error", err)
+		}
 		if msg == "" {
 			continue
 		}
 
-		err := bot.SendMessageHTML(telegramID, msg)
+		err = bot.SendMessageHTML(telegramID, msg)
 		if err != nil {
 			slog.Error("[PeriodicReminders] Failed to send reminder", "telegramID", telegramID, "error", err)
 		} else {
@@ -122,12 +125,14 @@ func sendChoreReminders(ctx context.Context, now time.Time, bot BotSender, s sto
 	}
 }
 
-// buildChoreReminder returns the reminder text for one user's pending chores.
+// ComposeChoreReminder returns the reminder text for one user's pending chores.
 // When an LLM nudger is available, its motivational message is followed by the
-// factual chore list; otherwise the static reminder is used.
-func buildChoreReminder(ctx context.Context, now time.Time, nudger ChoreNudger, chores []*store.Chore, loc *time.Location) string {
+// factual chore list. Without a nudger, or when the LLM call fails, the static
+// reminder is returned together with the LLM error (if any), so callers can
+// report it while still having a message to send.
+func ComposeChoreReminder(ctx context.Context, now time.Time, nudger ChoreNudger, chores []*store.Chore, loc *time.Location) (string, error) {
 	if nudger == nil || len(chores) == 0 {
-		return FormatPeriodicChoreReminder(chores, loc)
+		return FormatPeriodicChoreReminder(chores, loc), nil
 	}
 
 	userName := ""
@@ -137,9 +142,8 @@ func buildChoreReminder(ctx context.Context, now time.Time, nudger ChoreNudger, 
 
 	nudge, err := nudger.ChoreNudge(ctx, userName, DescribeChoreDelays(chores, now))
 	if err != nil {
-		slog.Error("[PeriodicReminders] LLM nudge failed, using static reminder", "error", err)
-		return FormatPeriodicChoreReminder(chores, loc)
+		return FormatPeriodicChoreReminder(chores, loc), err
 	}
 
-	return FormatNudgeChoreReminder(nudge, chores, loc)
+	return FormatNudgeChoreReminder(nudge, chores, loc), nil
 }

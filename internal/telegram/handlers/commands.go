@@ -49,7 +49,8 @@ const (
 		"/complete - Mark any active chore as completed.\n" +
 		"/overdue - Send the overdue chores report.\n" +
 		"/set\\_volunteer <name> <days> - Set a user's volunteer queue (0-7).\n" +
-		"/set\\_sviniya\\_balance - Set sviniya balance for a user."
+		"/set\\_sviniya\\_balance - Set sviniya balance for a user.\n" +
+		"/text\\_candidate\\_chore <name> - Preview the LLM chore reminder for a user (not sent to them)."
 
 	statusMessage = "<b>Duty Status for %s:</b>\n\n" +
 		"📊 <b>Statistics:</b>\n" +
