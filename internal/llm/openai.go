@@ -11,6 +11,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/anthropics/anthropic-sdk-go"
 )
 
 // ClientInterface defines the interface for LLM operations.
@@ -20,13 +22,25 @@ type ClientInterface interface {
 	ChoreNudge(ctx context.Context, userName, choresContext string) (string, error)
 }
 
-// Client is an adapter for calling the OpenAI chat completion API.
+// Provider names accepted by LLM_PROVIDER.
+const (
+	ProviderOpenAI    = "openai"
+	ProviderAnthropic = "anthropic"
+)
+
+// Client is an adapter for calling an LLM. It talks either to an
+// OpenAI-compatible chat completion API or to the Anthropic Messages API,
+// depending on how it was constructed (NewClient / NewAnthropicClient).
 type Client struct {
 	apiKey      string
 	baseURL     string
 	model       string
 	temperature float64
 	httpClient  *http.Client
+
+	// Set only for the Anthropic provider.
+	anthropic *anthropic.Client
+	effort    anthropic.OutputConfigEffort
 }
 
 // NewClient creates a new LLM client. If apiKey is empty, it returns nil,
@@ -65,6 +79,14 @@ func (c *Client) Config() (string, float64, string) {
 		return "", 0, ""
 	}
 	return c.model, c.temperature, c.baseURL
+}
+
+// Provider returns which LLM API the client talks to.
+func (c *Client) Provider() string {
+	if c != nil && c.anthropic != nil {
+		return ProviderAnthropic
+	}
+	return ProviderOpenAI
 }
 
 // chatMessage represents a single message in the chat API.
@@ -146,62 +168,13 @@ func (c *Client) TranslateToEnglish(ctx context.Context, text string) (string, e
 
 	systemPrompt := "You are a translator. Translate the given chore description to English. Be concise, do not be verbose. Return ONLY the translated text. Preserve emojis. If translation is not possible or text is already English, return original."
 
-	reqBody := chatRequest{
-		Model: c.model,
-		Messages: []chatMessage{
-			{Role: "system", Content: systemPrompt},
-			{Role: "user", Content: text},
-		},
-		Temperature: 0.3, // Lower temperature for translation
-	}
-
-	jsonBody, err := json.Marshal(reqBody)
+	// Lower temperature for translation
+	translated, err := c.complete(ctx, "TranslateToEnglish", systemPrompt, text, 0.3)
 	if err != nil {
-		slog.Error(fmt.Sprintf("LLM TranslateToEnglish JSON marshal error: %v", err))
-		return text, err
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/chat/completions", bytes.NewBuffer(jsonBody))
-	if err != nil {
-		slog.Error(fmt.Sprintf("LLM TranslateToEnglish NewRequest error: %v", err))
-		return text, err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		slog.Error(fmt.Sprintf("LLM TranslateToEnglish Do error: %v", err))
-		return text, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		bodyStr := string(bodyBytes)
-		// Truncate body to avoid logging sensitive information
-		if len(bodyStr) > 200 {
-			bodyStr = bodyStr[:200] + "..."
-		}
-		err := fmt.Errorf("LLM TranslateToEnglish non-200 status: %d, body: %s", resp.StatusCode, bodyStr)
 		slog.Error(err.Error())
 		return text, err
 	}
 
-	var chatResp chatResponse
-	if err := json.NewDecoder(resp.Body).Decode(&chatResp); err != nil {
-		slog.Error(fmt.Sprintf("LLM TranslateToEnglish decode error: %v", err))
-		return text, err
-	}
-
-	if len(chatResp.Choices) == 0 {
-		err := fmt.Errorf("LLM TranslateToEnglish no choices returned")
-		slog.Error(fmt.Sprint(err.Error()))
-		return text, err
-	}
-
-	translated := chatResp.Choices[0].Message.Content
 	if translated == "" {
 		return text, nil
 	}
@@ -224,55 +197,12 @@ If formatting text, ONLY use Telegram-supported HTML tags (<b>, <i>, <a>, <code>
 
 	userPrompt := fmt.Sprintf("Intent: %s\nOriginal Message: %s", intent, vanilla)
 
-	reqBody := chatRequest{
-		Model: c.model,
-		Messages: []chatMessage{
-			{Role: "system", Content: systemPrompt},
-			{Role: "user", Content: userPrompt},
-		},
-		Temperature: c.temperature,
-	}
-
-	jsonBody, err := json.Marshal(reqBody)
+	refined, err := c.complete(ctx, "RefineMessage", systemPrompt, userPrompt, c.temperature)
 	if err != nil {
-		slog.Error(fmt.Sprintf("LLM RefineMessage JSON marshal error: %v", err))
+		slog.Error(err.Error())
 		return vanilla
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/chat/completions", bytes.NewBuffer(jsonBody))
-	if err != nil {
-		slog.Error(fmt.Sprintf("LLM RefineMessage NewRequest error: %v", err))
-		return vanilla
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		slog.Error(fmt.Sprintf("LLM RefineMessage Do error: %v", err))
-		return vanilla
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		slog.Info(fmt.Sprintf("LLM RefineMessage non-200 status: %d, body: %s", resp.StatusCode, string(bodyBytes)))
-		return vanilla
-	}
-
-	var chatResp chatResponse
-	if err := json.NewDecoder(resp.Body).Decode(&chatResp); err != nil {
-		slog.Error(fmt.Sprintf("LLM RefineMessage decode error: %v", err))
-		return vanilla
-	}
-
-	if len(chatResp.Choices) == 0 {
-		slog.Info("LLM RefineMessage no choices returned")
-		return vanilla
-	}
-
-	refined := chatResp.Choices[0].Message.Content
 	if refined == "" {
 		return vanilla
 	}
@@ -306,10 +236,7 @@ func (c *Client) ChoreNudge(ctx context.Context, userName, choresContext string)
 
 	userPrompt := fmt.Sprintf("Name: %s\n\nPending chores:\n%s", userName, choresContext)
 
-	content, err := c.chatCompletion(ctx, "ChoreNudge", []chatMessage{
-		{Role: "system", Content: choreNudgeSystemPrompt},
-		{Role: "user", Content: userPrompt},
-	}, c.temperature)
+	content, err := c.complete(ctx, "ChoreNudge", choreNudgeSystemPrompt, userPrompt, c.temperature)
 	if err != nil {
 		return "", err
 	}
@@ -321,8 +248,21 @@ func (c *Client) ChoreNudge(ctx context.Context, userName, choresContext string)
 	return SanitizeTelegramHTML(nudge), nil
 }
 
-// chatCompletion performs a single chat completion request and returns the
-// content of the first choice. op is used to prefix log and error messages.
+// complete sends a system + user prompt to the configured provider and
+// returns the generated text. op is used to prefix error messages.
+// temperature is ignored by the Anthropic provider.
+func (c *Client) complete(ctx context.Context, op, systemPrompt, userPrompt string, temperature float64) (string, error) {
+	if c.anthropic != nil {
+		return c.anthropicCompletion(ctx, op, systemPrompt, userPrompt)
+	}
+	return c.chatCompletion(ctx, op, []chatMessage{
+		{Role: "system", Content: systemPrompt},
+		{Role: "user", Content: userPrompt},
+	}, temperature)
+}
+
+// chatCompletion performs a single OpenAI-compatible chat completion request
+// and returns the content of the first choice. op is used to prefix error messages.
 func (c *Client) chatCompletion(ctx context.Context, op string, messages []chatMessage, temperature float64) (string, error) {
 	jsonBody, err := json.Marshal(chatRequest{
 		Model:       c.model,

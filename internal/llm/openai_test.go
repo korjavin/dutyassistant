@@ -361,7 +361,7 @@ func TestChoreNudge(t *testing.T) {
 				Content string `json:"content"`
 			}{Content: "  🗑️ <b>Anna</b>, the trash is plotting revenge <script>x</script> & the admin is watching!  "}}},
 		}
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -394,7 +394,7 @@ func TestChoreNudge_ErrorCases(t *testing.T) {
 
 	errorServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Internal Server Error"))
+		_, _ = w.Write([]byte("Internal Server Error"))
 	}))
 	defer errorServer.Close()
 
@@ -405,7 +405,7 @@ func TestChoreNudge_ErrorCases(t *testing.T) {
 
 	emptyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"choices":[{"message":{"content":"   "}}]}`))
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"   "}}]}`))
 	}))
 	defer emptyServer.Close()
 
@@ -416,7 +416,7 @@ func TestChoreNudge_ErrorCases(t *testing.T) {
 
 	noChoicesServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"choices":[]}`))
+		_, _ = w.Write([]byte(`{"choices":[]}`))
 	}))
 	defer noChoicesServer.Close()
 

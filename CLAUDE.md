@@ -46,6 +46,16 @@ Key files:
 - `internal/telegram/handlers/sviniya.go` - Sviniya command handlers
 - `internal/store/sqlite/sviniya.go` - Sviniya store implementation
 
+## LLM Integration
+
+`internal/llm` supports two providers behind the same `llm.Client` / `llm.ClientInterface`:
+- **OpenAI-compatible** (`NewClient`, raw HTTP to `/chat/completions`) — `OPENAI_*` env vars.
+- **Anthropic** (`NewAnthropicClient`, official `anthropic-sdk-go`) — `ANTHROPIC_*` env vars. Default model `claude-opus-5-5`, effort `low`; no temperature is sent (Opus 5.5 rejects sampling params).
+
+`LLM_PROVIDER` picks one explicitly; when empty, `resolveLLMProvider` in `cmd/roster-bot/main.go` chooses Anthropic if `ANTHROPIC_API_KEY` is set, else OpenAI. All LLM calls go through `Client.complete`, so a new LLM feature only needs a prompt and a call to `complete`. Every LLM feature must degrade gracefully (fall back to static text) when the client is nil or the call fails.
+
+**Chore nudges:** the periodic 16:00–19:00 chore reminder (`internal/notification/periodic_chore_reminder.go`) asks `ChoreNudge` for a funny carrot-and-stick message (small vague rewards vs. "telling the admin" / extra duties) built from `DescribeChoreDelays` (time since assignment, overdue time). The factual chore list is always appended deterministically.
+
 ## Message Formatting Patterns
 
 ### Channel Messages vs DM Messages
