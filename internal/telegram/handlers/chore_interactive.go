@@ -96,8 +96,8 @@ func (h *Handlers) handleChoreListInteractive(q *tgbotapi.CallbackQuery) (tgbota
 			if rc.AssigneeName != "" {
 				assignee = " → " + html.EscapeString(rc.AssigneeName)
 			}
-			sb.WriteString(fmt.Sprintf("• <b>Every %d days%s</b>: <i>%s</i>\n  <span class=\"tg-spoiler\">ID: R%d, Next: %s</span>\n",
-				rc.Interval, assignee, html.EscapeString(rc.Description), rc.ID, nextRun))
+			fmt.Fprintf(&sb, "• <b>Every %d days%s</b>: <i>%s</i>\n  <span class=\"tg-spoiler\">ID: R%d, Next: %s</span>\n",
+				rc.Interval, assignee, html.EscapeString(rc.Description), rc.ID, nextRun)
 		}
 	}
 
