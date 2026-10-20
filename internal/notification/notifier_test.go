@@ -424,6 +424,18 @@ func (m *MockStore) GrantSviniyaForMonth(ctx context.Context, year int, month ti
 	return nil
 }
 
+func (m *MockStore) UpsertRegistrationRequest(ctx context.Context, req *store.RegistrationRequest) error {
+	return nil
+}
+
+func (m *MockStore) GetRegistrationRequest(ctx context.Context, telegramUserID int64) (*store.RegistrationRequest, error) {
+	return nil, nil
+}
+
+func (m *MockStore) DeleteRegistrationRequest(ctx context.Context, telegramUserID int64) error {
+	return nil
+}
+
 func TestSendDailyChoreSummary_NoOverdue(t *testing.T) {
 	mockStore := new(MockStore)
 	var sentText string

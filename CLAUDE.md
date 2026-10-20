@@ -20,6 +20,13 @@ Key files:
 - `internal/store/sqlite/ratings.go` - DB queries for saving/loading ratings
 - `internal/store/store.go` - `ParticipantDailyRating` (HasEar bool) and `ParticipantMonthlyTotal` (EarCount int) structs
 
+## Registration (admin approval)
+
+Who can talk to the bot at all is decided by `checkAccess` in `internal/telegram/bot.go`: the owner (`ADMIN_ID`) and members of `DISH_GROUP` (everyone, if no group is configured). On top of that, `/start` from an unknown Telegram user does **not** create a user: `HandleStart` → `requestRegistration` (`internal/telegram/handlers/registration.go`) stores a `registration_requests` row (`pending`) and DMs the admin the person's name, @username and Telegram ID with ✅ Approve / ❌ Reject buttons (`reg_ok:<tgID>` / `reg_no:<tgID>`, admin-only).
+- Approve creates the user as an active participant and DMs them the welcome; reject marks the request `rejected` and the person is told so on later /start (the admin is not notified again).
+- Repeated /start while pending only re-notifies the admin after 1 hour.
+- The configured admin is created directly; with `ADMIN_ID` unset, users are created directly as before (nobody could approve).
+
 ## Bot Commands & Scopes
 
 The bot calls Telegram's `setMyCommands` API at startup to publish autocomplete suggestions. Registration happens in `internal/telegram/bot.go` (`NewBot`), which calls `registerCommands` defined in `internal/telegram/commands.go`. Per-scope failures are logged via `slog.Warn` and do not block startup — autocomplete is a nice-to-have.
@@ -171,6 +178,7 @@ The bot uses SQLite with the following key tables:
 - `chore_assignments` - Active chore assignments
 - `participant_ratings` - Daily participant scores with optional ear modifier (`has_ear` column)
 - `sviniya_balances` - Sviniya award balances (user_id PK, balance INTEGER DEFAULT 0)
+- `registration_requests` - Pending/rejected `/start` requests awaiting admin approval (telegram_user_id PK, names, status, requested_at)
 
 ## Timezone Handling
 

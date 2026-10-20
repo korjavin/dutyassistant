@@ -338,6 +338,8 @@ func (b *Bot) handleCallbackQuery(q *tgbotapi.CallbackQuery) (tgbotapi.Chattable
 		return b.handlers.HandleListCallback(q)
 	case "cancel_flow":
 		return b.handlers.HandleCancelFlow(q)
+	case "reg_ok", "reg_no":
+		return b.handlers.HandleRegistrationCallback(q)
 	default:
 		slog.Info(fmt.Sprintf("Unknown callback action: %s", action))
 		return nil, nil

@@ -606,6 +606,18 @@ func (m *mockStore) GrantSviniyaForMonth(ctx context.Context, year int, month ti
 	return nil
 }
 
+func (m *mockStore) UpsertRegistrationRequest(ctx context.Context, req *store.RegistrationRequest) error {
+	return nil
+}
+
+func (m *mockStore) GetRegistrationRequest(ctx context.Context, telegramUserID int64) (*store.RegistrationRequest, error) {
+	return nil, nil
+}
+
+func (m *mockStore) DeleteRegistrationRequest(ctx context.Context, telegramUserID int64) error {
+	return nil
+}
+
 // GetUserByID mocks the GetUserByID method.
 func (m *mockStore) GetUserByID(ctx context.Context, id int64) (*store.User, error) {
 	for _, u := range m.users {

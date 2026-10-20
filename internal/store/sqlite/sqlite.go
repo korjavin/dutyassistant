@@ -141,6 +141,15 @@ func (s *SQLiteStore) migrate(ctx context.Context) error {
 			PRIMARY KEY (year, month),
 			FOREIGN KEY(user_id) REFERENCES users(id)
 		);
+
+		CREATE TABLE IF NOT EXISTS registration_requests (
+			telegram_user_id INTEGER PRIMARY KEY,
+			first_name TEXT NOT NULL,
+			last_name TEXT NOT NULL DEFAULT '',
+			username TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL DEFAULT 'pending',
+			requested_at TEXT NOT NULL
+		);
 	`
 	if _, err := s.db.ExecContext(ctx, schema); err != nil {
 		return err

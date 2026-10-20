@@ -130,6 +130,23 @@ type RecurringChore struct {
 	AssigneeName string
 }
 
+// Registration request statuses.
+const (
+	RegistrationPending  = "pending"
+	RegistrationRejected = "rejected"
+)
+
+// RegistrationRequest is a /start from an unknown Telegram user waiting for
+// the admin's approval. No User exists until it is approved.
+type RegistrationRequest struct {
+	TelegramUserID int64
+	FirstName      string
+	LastName       string
+	Username       string
+	Status         string
+	RequestedAt    time.Time
+}
+
 // SviniyaBalance represents a user's sviniya award balance.
 type SviniyaBalance struct {
 	UserID   int64
@@ -223,4 +240,9 @@ type Store interface {
 	GetSviniyaMonthlyGrant(ctx context.Context, year int, month time.Month) (userID int64, granted bool, err error)
 	RecordSviniyaMonthlyGrant(ctx context.Context, year int, month time.Month, userID int64) error
 	GrantSviniyaForMonth(ctx context.Context, year int, month time.Month, userID int64) error
+
+	// Registration requests (admin approval of new users)
+	UpsertRegistrationRequest(ctx context.Context, req *RegistrationRequest) error
+	GetRegistrationRequest(ctx context.Context, telegramUserID int64) (*RegistrationRequest, error)
+	DeleteRegistrationRequest(ctx context.Context, telegramUserID int64) error
 }
