@@ -19,8 +19,9 @@ type Bot struct {
 	groupID  int64 // DISH_GROUP ID for access control
 	ownerID  int64 // Owner ID for access control
 
-	// assistant handles the admin's free-text requests; nil when disabled.
-	assistant *assistant.Agent
+	// Free-text assistants for the admin and for participants; nil when disabled.
+	adminAssistant       *assistant.Agent
+	participantAssistant *assistant.Agent
 }
 
 // NewBot creates a new Bot instance.
@@ -268,7 +269,7 @@ func (b *Bot) handleCallbackQuery(q *tgbotapi.CallbackQuery) (tgbotapi.Chattable
 		slog.Error(fmt.Sprintf("failed to answer callback query: %v", err))
 	}
 
-	if assistant.IsCallback(q.Data) {
+	if b.adminAssistant.OwnsCallback(q.Data) || b.participantAssistant.OwnsCallback(q.Data) {
 		return b.handleAssistantCallback(q)
 	}
 
@@ -348,8 +349,8 @@ func (b *Bot) handleMessage(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 	// Check if user is in an interactive session
 	session, exists := b.handlers.SessionManager.GetSession(m.Chat.ID)
 	if !exists {
-		// No active session: free text from the admin goes to the assistant,
-		// anything else is ignored.
+		// No active session: free text in a private chat goes to the
+		// assistant (admin or participant); anything else is ignored.
 		if resp, handled := b.handleAssistantMessage(m); handled {
 			return resp, nil
 		}

@@ -16,7 +16,7 @@ type deps struct {
 	store    store.Store
 	executor Executor
 	chatID   int64
-	adminID  int64
+	userID   int64 // Telegram ID of the person talking to the assistant
 	now      time.Time
 	loc      *time.Location
 }
@@ -56,10 +56,11 @@ func boolean(desc string) map[string]any {
 
 const dateLayout = "2006-01-02"
 
-// tools is the registry of everything the admin assistant can do. Data-changing
-// tools run the bot's own admin commands, so validation, notifications and
-// group announcements behave exactly as when the admin types the command.
-var tools = []toolDef{
+// adminTools is the registry of everything the admin assistant can do.
+// Data-changing tools run the bot's own admin commands, so validation,
+// notifications and group announcements behave exactly as when the admin
+// types the command.
+var adminTools = []toolDef{
 	{
 		name:        "list_users",
 		description: "List all users with active/inactive status, admin and volunteer queue days, off-duty periods, upcoming duties, and whether vacation mode is on. Use it to resolve the exact user names other tools need.",
@@ -235,8 +236,8 @@ var tools = []toolDef{
 	},
 }
 
-func findTool(name string) (toolDef, bool) {
-	for _, t := range tools {
+func findTool(list []toolDef, name string) (toolDef, bool) {
+	for _, t := range list {
 		if t.name == name {
 			return t, true
 		}
@@ -246,7 +247,7 @@ func findTool(name string) (toolDef, bool) {
 
 // runText runs a read-only bot command and returns its text.
 func (d deps) runText(ctx context.Context, commandLine string) (string, error) {
-	res, err := d.executor.RunCommand(ctx, d.chatID, d.adminID, commandLine)
+	res, err := d.executor.RunCommand(ctx, d.chatID, d.userID, commandLine)
 	if err != nil {
 		return "", err
 	}
@@ -258,7 +259,7 @@ func (d deps) commandAction(summary, commandLine string) *preparedAction {
 	return &preparedAction{
 		Summary: summary + "\n   <code>" + html.EscapeString(commandLine) + "</code>",
 		Execute: func(ctx context.Context) (Result, error) {
-			return d.executor.RunCommand(ctx, d.chatID, d.adminID, commandLine)
+			return d.executor.RunCommand(ctx, d.chatID, d.userID, commandLine)
 		},
 	}
 }
@@ -268,7 +269,7 @@ func (d deps) callbackAction(summary, data string) *preparedAction {
 	return &preparedAction{
 		Summary: summary,
 		Execute: func(ctx context.Context) (Result, error) {
-			return d.executor.RunCallback(ctx, d.chatID, d.adminID, data)
+			return d.executor.RunCallback(ctx, d.chatID, d.userID, data)
 		},
 	}
 }

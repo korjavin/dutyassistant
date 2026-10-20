@@ -59,6 +59,7 @@ func main() {
 	anthropicModel := getEnv("ANTHROPIC_MODEL", "claude-opus-5-5")
 	anthropicEffort := getEnv("ANTHROPIC_EFFORT", "low")
 	assistantEffort := getEnv("ANTHROPIC_ASSISTANT_EFFORT", "medium")
+	participantDailyLimit := int(parseInt64(getEnv("PARTICIPANT_ASSISTANT_DAILY_LIMIT", "20"), 20))
 
 	llmProvider := resolveLLMProvider(os.Getenv("LLM_PROVIDER"), anthropicAPIKey)
 
@@ -116,17 +117,24 @@ func main() {
 	}
 	slog.Info(fmt.Sprintf("Access control configured: GroupID=%d, OwnerID=%d", dishGroupID, adminID))
 
-	// Free-text admin assistant (needs Anthropic tool use).
+	// Free-text assistants for the admin and participants (need Anthropic tool use).
 	if sdk, model := llmClient.AnthropicSDK(); sdk != nil {
 		choreLoc, err := time.LoadLocation(getEnv("CHORE_TIMEZONE", "Europe/Berlin"))
 		if err != nil {
 			choreLoc = time.Local
 		}
 		effort := llm.ParseEffort(assistantEffort, anthropic.OutputConfigEffortMedium)
-		bot.EnableAdminAssistant(sdk, model, effort, store, choreLoc)
-		slog.Info(fmt.Sprintf("Admin assistant: Enabled (Model: %s, Effort: %s)", model, effort))
+		bot.EnableAssistants(telegram.AssistantConfig{
+			Client:                sdk,
+			Model:                 model,
+			Effort:                effort,
+			Store:                 store,
+			Location:              choreLoc,
+			ParticipantDailyLimit: participantDailyLimit,
+		})
+		slog.Info(fmt.Sprintf("Assistants: Enabled (Model: %s, Effort: %s, participant daily limit: %d, 0 = participants off)", model, effort, participantDailyLimit))
 	} else {
-		slog.Info("Admin assistant: Disabled (needs the Anthropic LLM provider)")
+		slog.Info("Assistants: Disabled (need the Anthropic LLM provider)")
 	}
 
 	// Start bot in background

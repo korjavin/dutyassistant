@@ -21,7 +21,7 @@ func toolDeps(t *testing.T) (deps, *mocks.MockStore, *fakeExecutor) {
 	}, nil)
 	ex := &fakeExecutor{reply: map[string]Result{}}
 	return deps{
-		store: st, executor: ex, chatID: 1, adminID: 1,
+		store: st, executor: ex, chatID: 1, userID: 1,
 		now: time.Date(2026, 10, 20, 18, 0, 0, 0, time.UTC), loc: time.UTC,
 	}, st, ex
 }
@@ -29,7 +29,7 @@ func toolDeps(t *testing.T) (deps, *mocks.MockStore, *fakeExecutor) {
 // prepareCommand prepares a tool call and returns the command it would run.
 func prepareCommand(t *testing.T, d deps, ex *fakeExecutor, name, input string) (*preparedAction, string) {
 	t.Helper()
-	tool, ok := findTool(name)
+	tool, ok := findTool(adminTools, name)
 	require.True(t, ok, name)
 	require.True(t, tool.mutating(), name)
 	action, err := tool.prepare(context.Background(), d, []byte(input))
@@ -90,7 +90,7 @@ func TestTools_ValidationErrors(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.tool+" "+c.input, func(t *testing.T) {
-			tool, _ := findTool(c.tool)
+			tool, _ := findTool(adminTools, c.tool)
 			_, err := tool.prepare(context.Background(), d, []byte(c.input))
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), c.err)
@@ -111,13 +111,13 @@ func TestTools_ChoreCallbacks(t *testing.T) {
 		{ID: 7, Description: "Dishes <now>", ReminderID: "r7", User: &store.User{FirstName: "Ivan"}},
 	}, nil)
 
-	complete, _ := findTool("complete_chore")
+	complete, _ := findTool(adminTools, "complete_chore")
 	action, err := complete.prepare(context.Background(), d, []byte(`{"chore_id":7}`))
 	require.NoError(t, err)
 	assert.Contains(t, action.Summary, "chore #7 <i>Dishes &lt;now&gt;</i> (Ivan)")
 	_, _ = action.Execute(context.Background())
 
-	cancel, _ := findTool("cancel_chore")
+	cancel, _ := findTool(adminTools, "cancel_chore")
 	action, err = cancel.prepare(context.Background(), d, []byte(`{"chore_id":7}`))
 	require.NoError(t, err)
 	_, _ = action.Execute(context.Background())
@@ -137,7 +137,7 @@ func TestTools_CancelRecurringChore(t *testing.T) {
 	assert.Equal(t, "/cancel chore 3", cmd)
 	assert.Contains(t, action.Summary, "<i>Vacuum</i> (every 7 day(s))")
 
-	tool, _ := findTool("cancel_recurring_chore")
+	tool, _ := findTool(adminTools, "cancel_recurring_chore")
 	_, err := tool.prepare(context.Background(), d, []byte(`{"recurring_chore_id":4}`))
 	assert.ErrorContains(t, err, "no active recurring chore")
 }
@@ -167,14 +167,81 @@ func TestTools_ReadActiveChoresAndDuties(t *testing.T) {
 }
 
 func TestTools_NamesUniqueAndDescribed(t *testing.T) {
+	for _, list := range [][]toolDef{adminTools, participantTools} {
+		assertToolList(t, list)
+	}
+}
+
+func assertToolList(t *testing.T, list []toolDef) {
+	t.Helper()
 	seen := map[string]bool{}
-	for _, tool := range tools {
+	for _, tool := range list {
 		assert.False(t, seen[tool.name], "duplicate tool %s", tool.name)
 		seen[tool.name] = true
 		assert.NotEmpty(t, tool.description, tool.name)
 		assert.True(t, (tool.read == nil) != (tool.prepare == nil), "%s must be exactly one of read/prepare", tool.name)
 		for _, r := range tool.required {
 			assert.Contains(t, tool.properties, r, "%s requires undeclared %s", tool.name, r)
+		}
+	}
+}
+
+func TestParticipantTools(t *testing.T) {
+	d, st, ex := toolDeps(t)
+	d.userID = 555
+	st.On("GetActiveChores", mock.Anything).Return([]*store.Chore{
+		{ID: 1, Description: "Feed cat", ReminderID: "r1", User: &store.User{ID: 1, TelegramUserID: 555, FirstName: "Kid"}},
+		{ID: 2, Description: "Dishes", ReminderID: "r2", User: &store.User{ID: 2, TelegramUserID: 777, FirstName: "Ivan"}},
+	}, nil)
+	find := func(name string) toolDef {
+		tool, ok := findTool(participantTools, name)
+		require.True(t, ok, name)
+		return tool
+	}
+
+	mine, err := readMyChores(context.Background(), d, nil)
+	require.NoError(t, err)
+	assert.Contains(t, mine, `chore_id=1 | "Feed cat"`)
+	assert.NotContains(t, mine, "Dishes")
+
+	takeable, err := readTakeableChores(context.Background(), d, nil)
+	require.NoError(t, err)
+	assert.Contains(t, takeable, `chore_id=2 | assigned to Ivan | "Dishes"`)
+	assert.NotContains(t, takeable, "Feed cat")
+
+	run := func(name, input string) *preparedAction {
+		action, err := find(name).prepare(context.Background(), d, []byte(input))
+		require.NoError(t, err, name)
+		if action.NoOp == "" {
+			_, err = action.Execute(context.Background())
+			require.NoError(t, err)
+		}
+		return action
+	}
+	run("complete_my_chore", `{"chore_id":1}`)
+	run("take_chore", `{"chore_id":2}`)
+	assert.Equal(t, "Chore #1 is already yours.", run("take_chore", `{"chore_id":1}`).NoOp)
+	assert.Equal(t, []string{"chore_done:r1", "vc_confirm:2"}, ex.callbacks)
+
+	run("volunteer_for_duty", `{"days":3}`)
+	spend := run("spend_sviniya", `{"description":"  skip   dishes "}`)
+	assert.Contains(t, spend.Summary, "<code>/spend skip dishes</code>")
+	assert.Equal(t, []string{"/volunteer 3", "/spend skip dishes"}, ex.commands)
+
+	_, err = find("complete_my_chore").prepare(context.Background(), d, []byte(`{"chore_id":2}`))
+	assert.ErrorContains(t, err, "not yours")
+	_, err = find("volunteer_for_duty").prepare(context.Background(), d, []byte(`{"days":9}`))
+	assert.ErrorContains(t, err, "between 1 and 7")
+	_, err = find("spend_sviniya").prepare(context.Background(), d, []byte(`{"description":""}`))
+	assert.ErrorContains(t, err, "description is required")
+}
+
+func TestParticipantTools_NoAdminCapabilities(t *testing.T) {
+	for _, tool := range participantTools {
+		_, isAdminTool := findTool(adminTools, tool.name)
+		if isAdminTool {
+			// Shared read tools are fine; shared data-changing tools are not.
+			assert.False(t, tool.mutating(), "%s is an admin action exposed to participants", tool.name)
 		}
 	}
 }

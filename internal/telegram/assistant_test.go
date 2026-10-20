@@ -3,7 +3,9 @@ package telegram
 import (
 	"context"
 	"testing"
+	"time"
 
+	"github.com/anthropics/anthropic-sdk-go"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/korjavin/dutyassistant/internal/mocks"
 	"github.com/korjavin/dutyassistant/internal/store"
@@ -21,8 +23,55 @@ func newAssistantTestBot() (*Bot, *mocks.MockStore) {
 	return &Bot{handlers: h, ownerID: assistantTestAdmin}, mockStore
 }
 
+// enableTestAssistants turns on both assistants with a client that is never
+// called by these tests.
+func enableTestAssistants(bot *Bot, mockStore *mocks.MockStore, participantLimit int) {
+	client := anthropic.NewClient()
+	bot.EnableAssistants(AssistantConfig{
+		Client: &client, Model: "claude-opus-5-5", Store: mockStore,
+		Location: time.UTC, ParticipantDailyLimit: participantLimit,
+	})
+}
+
+func TestEnableAssistants_ParticipantLimitZeroDisablesParticipants(t *testing.T) {
+	bot, mockStore := newAssistantTestBot()
+	enableTestAssistants(bot, mockStore, 0)
+	assert.NotNil(t, bot.adminAssistant)
+	assert.Nil(t, bot.participantAssistant)
+
+	enableTestAssistants(bot, mockStore, 5)
+	assert.NotNil(t, bot.participantAssistant)
+}
+
+func TestHandleAssistantMessage_UnregisteredParticipant(t *testing.T) {
+	bot, mockStore := newAssistantTestBot()
+	enableTestAssistants(bot, mockStore, 5)
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(999)).Return(nil, nil)
+
+	resp, handled := bot.handleAssistantMessage(&tgbotapi.Message{
+		Text: "привет", From: &tgbotapi.User{ID: 999}, Chat: &tgbotapi.Chat{ID: 999, Type: "private"},
+	})
+
+	assert.True(t, handled)
+	assert.Equal(t, assistantNotRegistered, resp.(tgbotapi.MessageConfig).Text)
+}
+
+func TestHandleAssistantCallback_AdminButtonsNeedAdmin(t *testing.T) {
+	bot, mockStore := newAssistantTestBot()
+	enableTestAssistants(bot, mockStore, 5)
+	q := &tgbotapi.CallbackQuery{
+		Data:    "aa:y:abc",
+		From:    &tgbotapi.User{ID: 999},
+		Message: &tgbotapi.Message{MessageID: 5, Chat: &tgbotapi.Chat{ID: 999}},
+	}
+	resp, err := bot.handleAssistantCallback(q)
+	assert.NoError(t, err)
+	assert.Nil(t, resp, "a participant must not trigger admin confirmations")
+}
+
 func TestAssistantExecutor_RunCommandUsesBotHandlers(t *testing.T) {
 	bot, mockStore := newAssistantTestBot()
+	mockStore.On("GetUserByTelegramID", mock.Anything, assistantTestAdmin).Return(&store.User{ID: 1, FirstName: "Admin"}, nil)
 	mockStore.On("GetUserByName", mock.Anything, "Ivan").Return(&store.User{ID: 7, FirstName: "Ivan"}, nil)
 	mockStore.On("SetSviniyaBalance", mock.Anything, int64(7), 3).Return(nil)
 
@@ -40,7 +89,8 @@ func TestAssistantExecutor_RunCommandRejectsNonCommands(t *testing.T) {
 }
 
 func TestAssistantExecutor_RunCallbackAllowList(t *testing.T) {
-	bot, _ := newAssistantTestBot()
+	bot, mockStore := newAssistantTestBot()
+	mockStore.On("GetUserByTelegramID", mock.Anything, mock.Anything).Return(nil, nil)
 	_, err := assistantExecutor{b: bot}.RunCallback(context.Background(), 1, assistantTestAdmin, "vacation:on")
 	assert.ErrorContains(t, err, "not allowed")
 }

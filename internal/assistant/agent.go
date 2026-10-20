@@ -1,6 +1,7 @@
-// Package assistant lets the admin manage the bot in free text. Claude parses
+// Package assistant lets people talk to the bot in free text. Claude parses
 // the request, reads data with read-only tools, and proposes data-changing
-// actions that run only after the admin taps Confirm in Telegram.
+// actions that run only after the person taps Confirm in Telegram. The admin
+// and participants get different profiles (tool sets and prompts).
 package assistant
 
 import (
@@ -32,8 +33,6 @@ const (
 	requestTimeout  = 2 * time.Minute
 	maxTokens       = 16000
 	maxMessageLen   = 4000
-
-	callbackPrefix = "aa"
 )
 
 // Result is what the bot replied to a command or button the assistant ran.
@@ -42,10 +41,29 @@ type Result struct {
 	ParseMode string
 }
 
-// Executor runs bot commands and button callbacks as if the admin used them.
+// Executor runs bot commands and button callbacks as if the given user
+// (by Telegram ID) used them, so the bot's own permission checks apply.
 type Executor interface {
-	RunCommand(ctx context.Context, chatID, adminID int64, commandLine string) (Result, error)
-	RunCallback(ctx context.Context, chatID, adminID int64, data string) (Result, error)
+	RunCommand(ctx context.Context, chatID, userID int64, commandLine string) (Result, error)
+	RunCallback(ctx context.Context, chatID, userID int64, data string) (Result, error)
+}
+
+// Profile is who the assistant serves: its tools, instructions and the
+// prefix of its Confirm/Cancel button data.
+type Profile struct {
+	tools          []toolDef
+	systemPrompt   string
+	callbackPrefix string
+}
+
+// AdminProfile manages the whole household on the admin's behalf.
+func AdminProfile() Profile {
+	return Profile{tools: adminTools, systemPrompt: adminSystemPrompt, callbackPrefix: "aa"}
+}
+
+// ParticipantProfile lets a participant act only on their own behalf.
+func ParticipantProfile() Profile {
+	return Profile{tools: participantTools, systemPrompt: participantSystemPrompt, callbackPrefix: "ap"}
 }
 
 // Sender delivers messages and chat actions to Telegram.
@@ -55,6 +73,7 @@ type Sender interface {
 
 // Config holds the assistant's dependencies.
 type Config struct {
+	Profile  Profile
 	Client   *anthropic.Client
 	Model    string
 	Effort   anthropic.OutputConfigEffort
@@ -63,9 +82,11 @@ type Config struct {
 	Sender   Sender
 	Location *time.Location
 	Now      func() time.Time
+	// DailyLimit caps messages per chat per day (0 = unlimited).
+	DailyLimit int
 }
 
-// Agent is the admin's free-text assistant. It keeps one conversation per chat.
+// Agent is a free-text assistant. It keeps one conversation per chat.
 type Agent struct {
 	cfg   Config
 	tools []anthropic.ToolUnionParam
@@ -79,6 +100,10 @@ type conversation struct {
 	messages   []anthropic.MessageParam
 	pending    *pending
 	lastActive time.Time
+
+	// day and count track DailyLimit.
+	day   string
+	count int
 }
 
 // pending is a model turn whose data-changing tool calls wait for the admin.
@@ -110,19 +135,19 @@ func New(cfg Config) *Agent {
 	if cfg.Effort == "" {
 		cfg.Effort = anthropic.OutputConfigEffortMedium
 	}
-	return &Agent{cfg: cfg, tools: toolParams(), convs: make(map[int64]*conversation)}
+	return &Agent{cfg: cfg, tools: toolParams(cfg.Profile.tools), convs: make(map[int64]*conversation)}
 }
 
-func toolParams() []anthropic.ToolUnionParam {
-	params := make([]anthropic.ToolUnionParam, 0, len(tools))
-	for _, t := range tools {
+func toolParams(list []toolDef) []anthropic.ToolUnionParam {
+	params := make([]anthropic.ToolUnionParam, 0, len(list))
+	for _, t := range list {
 		props := t.properties
 		if props == nil {
 			props = map[string]any{}
 		}
 		desc := t.description
 		if t.mutating() {
-			desc += " Requires the admin's confirmation: the bot shows Confirm/Cancel buttons and runs it only on Confirm."
+			desc += " Requires confirmation: the bot shows Confirm/Cancel buttons and runs it only on Confirm."
 		}
 		params = append(params, anthropic.ToolUnionParam{OfTool: &anthropic.ToolParam{
 			Name:        t.name,
@@ -133,18 +158,19 @@ func toolParams() []anthropic.ToolUnionParam {
 	return params
 }
 
-// ParseCallback decodes Confirm/Cancel button data ("aa:y:<id>" / "aa:n:<id>").
-func ParseCallback(data string) (id string, approved, ok bool) {
+// ParseCallback decodes this agent's Confirm/Cancel button data
+// ("<prefix>:y:<id>" / "<prefix>:n:<id>").
+func (a *Agent) ParseCallback(data string) (id string, approved, ok bool) {
 	parts := strings.Split(data, ":")
-	if len(parts) != 3 || parts[0] != callbackPrefix || (parts[1] != "y" && parts[1] != "n") || parts[2] == "" {
+	if len(parts) != 3 || parts[0] != a.cfg.Profile.callbackPrefix || (parts[1] != "y" && parts[1] != "n") || parts[2] == "" {
 		return "", false, false
 	}
 	return parts[2], parts[1] == "y", true
 }
 
-// IsCallback reports whether callback data belongs to the assistant.
-func IsCallback(data string) bool {
-	return strings.HasPrefix(data, callbackPrefix+":")
+// OwnsCallback reports whether callback data belongs to this agent's buttons.
+func (a *Agent) OwnsCallback(data string) bool {
+	return a != nil && strings.HasPrefix(data, a.cfg.Profile.callbackPrefix+":")
 }
 
 func (a *Agent) conversation(chatID int64) *conversation {
@@ -158,14 +184,25 @@ func (a *Agent) conversation(chatID int64) *conversation {
 	return c
 }
 
-// HandleMessage processes a free-text admin message. It blocks while the
-// model works, so callers should run it in a goroutine.
-func (a *Agent) HandleMessage(ctx context.Context, chatID, adminID int64, text string) {
+// HandleMessage processes a free-text message from userID. It blocks while
+// the model works, so callers should run it in a goroutine.
+func (a *Agent) HandleMessage(ctx context.Context, chatID, userID int64, text string) {
 	conv := a.conversation(chatID)
 	conv.mu.Lock()
 	defer conv.mu.Unlock()
 
 	now := a.cfg.Now()
+	if a.cfg.DailyLimit > 0 {
+		day := now.In(a.cfg.Location).Format(dateLayout)
+		if conv.day != day {
+			conv.day, conv.count = day, 0
+		}
+		if conv.count >= a.cfg.DailyLimit {
+			a.sendHTML(chatID, fmt.Sprintf("😴 That's my limit of %d messages for today. Talk to you tomorrow! Meanwhile /help shows the commands.", a.cfg.DailyLimit), nil)
+			return
+		}
+		conv.count++
+	}
 	if now.Sub(conv.lastActive) > conversationTTL {
 		conv.messages, conv.pending = nil, nil
 	}
@@ -177,7 +214,7 @@ func (a *Agent) HandleMessage(ctx context.Context, chatID, adminID int64, text s
 		content = append(content, conv.pending.results...)
 		for _, pa := range conv.pending.actions {
 			content = append(content, anthropic.NewToolResultBlock(pa.toolUseID,
-				"Not executed: the admin sent a new message instead of confirming.", true))
+				"Not executed: the user sent a new message instead of confirming.", true))
 		}
 		conv.pending = nil
 	}
@@ -185,12 +222,12 @@ func (a *Agent) HandleMessage(ctx context.Context, chatID, adminID int64, text s
 	content = append(content, anthropic.NewTextBlock(fmt.Sprintf("[%s] %s", stamp, text)))
 	conv.messages = append(conv.messages, anthropic.NewUserMessage(content...))
 
-	a.run(ctx, conv, chatID, adminID)
+	a.run(ctx, conv, chatID, userID)
 }
 
 // HandleDecision runs or drops the actions behind a Confirm/Cancel button.
 // It blocks while actions and the model run, so callers should run it in a goroutine.
-func (a *Agent) HandleDecision(ctx context.Context, chatID, adminID int64, pendingID string, approved bool) {
+func (a *Agent) HandleDecision(ctx context.Context, chatID, userID int64, pendingID string, approved bool) {
 	conv := a.conversation(chatID)
 	conv.mu.Lock()
 	defer conv.mu.Unlock()
@@ -207,7 +244,7 @@ func (a *Agent) HandleDecision(ctx context.Context, chatID, adminID int64, pendi
 	if !approved {
 		for _, pa := range p.actions {
 			results = append(results, anthropic.NewToolResultBlock(pa.toolUseID,
-				"The admin declined this action. It was NOT executed.", true))
+				"The user declined this action. It was NOT executed.", true))
 		}
 		conv.messages = append(conv.messages, anthropic.NewUserMessage(results...))
 		a.sendHTML(chatID, "❌ Cancelled, nothing was changed.", nil)
@@ -224,19 +261,19 @@ func (a *Agent) HandleDecision(ctx context.Context, chatID, adminID int64, pendi
 		}
 		a.sendResult(chatID, res)
 		results = append(results, anthropic.NewToolResultBlock(pa.toolUseID,
-			"Executed. The bot replied to the admin:\n"+res.Text, false))
+			"Executed. The bot replied to the user:\n"+res.Text, false))
 	}
 	conv.messages = append(conv.messages, anthropic.NewUserMessage(results...))
 
-	a.run(ctx, conv, chatID, adminID)
+	a.run(ctx, conv, chatID, userID)
 }
 
-func (a *Agent) deps(chatID, adminID int64) deps {
+func (a *Agent) deps(chatID, userID int64) deps {
 	return deps{
 		store:    a.cfg.Store,
 		executor: a.cfg.Executor,
 		chatID:   chatID,
-		adminID:  adminID,
+		userID:   userID,
 		now:      a.cfg.Now(),
 		loc:      a.cfg.Location,
 	}
@@ -244,14 +281,14 @@ func (a *Agent) deps(chatID, adminID int64) deps {
 
 // run calls the model until it answers, asks for confirmation, or gives up.
 // conv.mu must be held.
-func (a *Agent) run(ctx context.Context, conv *conversation, chatID, adminID int64) {
+func (a *Agent) run(ctx context.Context, conv *conversation, chatID, userID int64) {
 	for step := 0; step < maxSteps; step++ {
 		_ = a.cfg.Sender.Send(tgbotapi.NewChatAction(chatID, tgbotapi.ChatTyping))
 
 		resp, err := a.cfg.Client.Messages.New(ctx, anthropic.MessageNewParams{
 			Model:        anthropic.Model(a.cfg.Model),
 			MaxTokens:    maxTokens,
-			System:       []anthropic.TextBlockParam{{Text: systemPrompt, CacheControl: anthropic.NewCacheControlEphemeralParam()}},
+			System:       []anthropic.TextBlockParam{{Text: a.cfg.Profile.systemPrompt, CacheControl: anthropic.NewCacheControlEphemeralParam()}},
 			Tools:        a.tools,
 			OutputConfig: anthropic.OutputConfigParam{Effort: a.cfg.Effort},
 			Messages:     conv.messages,
@@ -288,7 +325,7 @@ func (a *Agent) run(ctx context.Context, conv *conversation, chatID, adminID int
 			return
 		}
 
-		results, actions := a.handleToolUses(ctx, a.deps(chatID, adminID), toolUses)
+		results, actions := a.handleToolUses(ctx, a.deps(chatID, userID), toolUses)
 		if len(actions) == 0 {
 			conv.messages = append(conv.messages, anthropic.NewUserMessage(results...))
 			continue
@@ -310,7 +347,7 @@ func (a *Agent) handleToolUses(ctx context.Context, d deps, uses []anthropic.Too
 	var results []anthropic.ContentBlockParamUnion
 	var actions []pendingAction
 	for _, use := range uses {
-		t, ok := findTool(use.Name)
+		t, ok := findTool(a.cfg.Profile.tools, use.Name)
 		if !ok {
 			results = append(results, anthropic.NewToolResultBlock(use.ID, "Unknown tool "+use.Name, true))
 			continue
@@ -356,8 +393,8 @@ func (a *Agent) sendConfirmation(chatID int64, modelText string, p *pending) {
 		fmt.Fprintf(&sb, "%d. %s\n", i+1, pa.action.Summary)
 	}
 	markup := tgbotapi.NewInlineKeyboardMarkup(tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("✅ Confirm", fmt.Sprintf("%s:y:%s", callbackPrefix, p.id)),
-		tgbotapi.NewInlineKeyboardButtonData("❌ Cancel", fmt.Sprintf("%s:n:%s", callbackPrefix, p.id)),
+		tgbotapi.NewInlineKeyboardButtonData("✅ Confirm", fmt.Sprintf("%s:y:%s", a.cfg.Profile.callbackPrefix, p.id)),
+		tgbotapi.NewInlineKeyboardButtonData("❌ Cancel", fmt.Sprintf("%s:n:%s", a.cfg.Profile.callbackPrefix, p.id)),
 	))
 	a.sendHTML(chatID, sb.String(), &markup)
 }
@@ -406,7 +443,7 @@ func newID() string {
 	return hex.EncodeToString(b)
 }
 
-const systemPrompt = `You are the admin assistant of a Telegram bot that runs a family's household: a daily "duty" rotation (one person per day, e.g. dishes) and chores (one-off or recurring tasks assigned to a person). The admin writes to you in free text, often in Russian. Work out what they want and do it with the tools.
+const adminSystemPrompt = `You are the admin assistant of a Telegram bot that runs a family's household: a daily "duty" rotation (one person per day, e.g. dishes) and chores (one-off or recurring tasks assigned to a person). The admin writes to you in free text, often in Russian. Work out what they want and do it with the tools.
 
 How the household works:
 - Daily duty is assigned automatically each morning. Order of priority: admin queue days (forced duty), then volunteer queue days, then round-robin among active users who are not off-duty. Vacation mode pauses duty assignment.

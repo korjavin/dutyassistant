@@ -115,14 +115,15 @@ func (s *fakeSender) texts() string {
 }
 
 // confirmationID returns the pending ID from the last Confirm button sent.
-func (s *fakeSender) confirmationID(t *testing.T) string {
+func (e *testEnv) confirmationID(t *testing.T) string {
 	t.Helper()
+	s := e.sender
 	for i := len(s.messages) - 1; i >= 0; i-- {
 		markup, ok := s.messages[i].ReplyMarkup.(tgbotapi.InlineKeyboardMarkup)
 		if !ok {
 			continue
 		}
-		id, approved, ok := ParseCallback(*markup.InlineKeyboard[0][0].CallbackData)
+		id, approved, ok := e.agent.ParseCallback(*markup.InlineKeyboard[0][0].CallbackData)
 		require.True(t, ok)
 		require.True(t, approved)
 		return id
@@ -142,6 +143,11 @@ type testEnv struct {
 
 func newTestEnv(t *testing.T, responses ...string) *testEnv {
 	t.Helper()
+	return newProfileEnv(t, AdminProfile(), 0, responses...)
+}
+
+func newProfileEnv(t *testing.T, profile Profile, dailyLimit int, responses ...string) *testEnv {
+	t.Helper()
 	fm := &fakeModel{responses: responses}
 	server := httptest.NewServer(fm.handler(t))
 	t.Cleanup(server.Close)
@@ -155,12 +161,14 @@ func newTestEnv(t *testing.T, responses ...string) *testEnv {
 		now:      time.Date(2026, 10, 20, 18, 0, 0, 0, time.UTC),
 	}
 	env.agent = New(Config{
-		Client:   &client,
-		Model:    "claude-opus-5-5",
-		Store:    env.store,
-		Executor: env.executor,
-		Sender:   env.sender,
-		Now:      func() time.Time { return env.now },
+		Profile:    profile,
+		DailyLimit: dailyLimit,
+		Client:     &client,
+		Model:      "claude-opus-5-5",
+		Store:      env.store,
+		Executor:   env.executor,
+		Sender:     env.sender,
+		Now:        func() time.Time { return env.now },
 	})
 	return env
 }
@@ -217,7 +225,7 @@ func TestAgent_MutatingToolNeedsConfirmation(t *testing.T) {
 	assert.Contains(t, confirm, "Assign one-off chore <i>Wash the dishes</i> to <b>Ivan</b>")
 	assert.Contains(t, confirm, "<code>/chore Wash the dishes /Ivan</code>")
 
-	env.agent.HandleDecision(context.Background(), testChat, testAdmin, env.sender.confirmationID(t), true)
+	env.agent.HandleDecision(context.Background(), testChat, testAdmin, env.confirmationID(t), true)
 
 	assert.Equal(t, []string{"/chore Wash the dishes /Ivan"}, env.executor.commands)
 	last := env.model.lastRequest()
@@ -225,7 +233,7 @@ func TestAgent_MutatingToolNeedsConfirmation(t *testing.T) {
 	assert.Contains(t, last, `"tool_use_id":"tu_1"`)
 	assert.Contains(t, last, "No active chores.")
 	assert.Contains(t, last, `"tool_use_id":"tu_2"`)
-	assert.Contains(t, last, "Executed. The bot replied to the admin")
+	assert.Contains(t, last, "Executed. The bot replied to the user")
 	texts := env.sender.texts()
 	assert.Contains(t, texts, "🎯 Chore assigned to Ivan")
 	assert.Contains(t, texts, "Готово.")
@@ -238,7 +246,7 @@ func TestAgent_DeclineDoesNotExecute(t *testing.T) {
 	)
 
 	env.agent.HandleMessage(context.Background(), testChat, testAdmin, "включи отпуск")
-	env.agent.HandleDecision(context.Background(), testChat, testAdmin, env.sender.confirmationID(t), false)
+	env.agent.HandleDecision(context.Background(), testChat, testAdmin, env.confirmationID(t), false)
 
 	assert.Empty(t, env.executor.commands)
 	assert.Contains(t, env.sender.texts(), "Cancelled, nothing was changed")
@@ -246,7 +254,7 @@ func TestAgent_DeclineDoesNotExecute(t *testing.T) {
 
 	// The decline is part of the history for the next message.
 	env.agent.HandleMessage(context.Background(), testChat, testAdmin, "а что сейчас?")
-	assert.Contains(t, env.model.lastRequest(), "The admin declined this action")
+	assert.Contains(t, env.model.lastRequest(), "The user declined this action")
 }
 
 func TestAgent_NewMessageDropsPendingActions(t *testing.T) {
@@ -256,10 +264,10 @@ func TestAgent_NewMessageDropsPendingActions(t *testing.T) {
 	)
 
 	env.agent.HandleMessage(context.Background(), testChat, testAdmin, "включи отпуск")
-	id := env.sender.confirmationID(t)
+	id := env.confirmationID(t)
 	env.agent.HandleMessage(context.Background(), testChat, testAdmin, "нет, не надо")
 
-	assert.Contains(t, env.model.lastRequest(), "Not executed: the admin sent a new message")
+	assert.Contains(t, env.model.lastRequest(), "Not executed: the user sent a new message")
 	// The old buttons no longer work.
 	env.agent.HandleDecision(context.Background(), testChat, testAdmin, id, true)
 	assert.Empty(t, env.executor.commands)
@@ -287,7 +295,7 @@ func TestAgent_ExpiredConfirmation(t *testing.T) {
 		modelReply("tool_use", toolUse("tu_1", "set_vacation_mode", `{"enabled":false}`)),
 	)
 	env.agent.HandleMessage(context.Background(), testChat, testAdmin, "выключи отпуск")
-	id := env.sender.confirmationID(t)
+	id := env.confirmationID(t)
 
 	env.now = env.now.Add(confirmationTTL + time.Minute)
 	env.agent.HandleDecision(context.Background(), testChat, testAdmin, id, true)
@@ -319,21 +327,29 @@ func TestAgent_StepLimit(t *testing.T) {
 }
 
 func TestParseCallback(t *testing.T) {
-	id, approved, ok := ParseCallback("aa:y:abc123")
+	admin := newTestEnv(t).agent
+	participant := newProfileEnv(t, ParticipantProfile(), 0).agent
+
+	id, approved, ok := admin.ParseCallback("aa:y:abc123")
 	assert.True(t, ok)
 	assert.True(t, approved)
 	assert.Equal(t, "abc123", id)
 
-	_, approved, ok = ParseCallback("aa:n:abc123")
+	_, approved, ok = admin.ParseCallback("aa:n:abc123")
 	assert.True(t, ok)
 	assert.False(t, approved)
 
-	for _, bad := range []string{"aa:x:1", "aa:y:", "aa:y", "complete_chore:1", "aa:y:1:2"} {
-		_, _, ok := ParseCallback(bad)
+	for _, bad := range []string{"aa:x:1", "aa:y:", "aa:y", "complete_chore:1", "aa:y:1:2", "ap:y:1"} {
+		_, _, ok := admin.ParseCallback(bad)
 		assert.False(t, ok, bad)
 	}
-	assert.True(t, IsCallback("aa:y:1"))
-	assert.False(t, IsCallback("assign_user:1"))
+	assert.True(t, admin.OwnsCallback("aa:y:1"))
+	assert.False(t, admin.OwnsCallback("ap:y:1"))
+	assert.True(t, participant.OwnsCallback("ap:n:1"))
+	assert.False(t, participant.OwnsCallback("aa:n:1"))
+	assert.False(t, admin.OwnsCallback("assign_user:1"))
+	var disabled *Agent
+	assert.False(t, disabled.OwnsCallback("aa:y:1"))
 }
 
 func TestTruncate(t *testing.T) {
@@ -345,4 +361,65 @@ func TestTruncate(t *testing.T) {
 	assert.LessOrEqual(t, len(got), maxMessageLen+len("…"))
 	assert.True(t, strings.HasSuffix(got, "…"))
 	assert.True(t, strings.HasPrefix(got, "яяя"))
+}
+
+func TestAgent_ParticipantProfile(t *testing.T) {
+	const kid = int64(555)
+	env := newProfileEnv(t, ParticipantProfile(), 0,
+		modelReply("tool_use", toolUse("tu_1", "complete_my_chore", `{"chore_id":2}`)),
+		modelReply("end_turn", textBlock("Это не твоя задача.")),
+	)
+	env.store.On("GetActiveChores", mock.Anything).Return([]*store.Chore{
+		{ID: 1, Description: "Feed cat", ReminderID: "r1", User: &store.User{ID: 1, TelegramUserID: kid, FirstName: "Kid"}},
+		{ID: 2, Description: "Dishes", ReminderID: "r2", User: &store.User{ID: 2, TelegramUserID: 777, FirstName: "Ivan"}},
+	}, nil)
+
+	env.agent.HandleMessage(context.Background(), kid, kid, "я помыл посуду")
+
+	first := env.model.requests[0]
+	assert.Contains(t, first, `"name":"complete_my_chore"`)
+	assert.NotContains(t, first, `"name":"assign_chore"`, "participants must not see admin tools")
+	assert.NotContains(t, first, `"name":"set_sviniya_balance"`)
+	assert.Contains(t, first, "act only as this participant")
+	// Someone else's chore is refused before any confirmation.
+	assert.Contains(t, env.model.lastRequest(), "chore #2 is not yours")
+	assert.NotContains(t, env.sender.texts(), "Please confirm")
+	assert.Empty(t, env.executor.callbacks)
+}
+
+func TestAgent_ParticipantConfirmUsesOwnPrefix(t *testing.T) {
+	const kid = int64(555)
+	env := newProfileEnv(t, ParticipantProfile(), 0,
+		modelReply("tool_use", toolUse("tu_1", "complete_my_chore", `{"chore_id":1}`)),
+		modelReply("end_turn", textBlock("Молодец!")),
+	)
+	env.store.On("GetActiveChores", mock.Anything).Return([]*store.Chore{
+		{ID: 1, Description: "Feed cat", ReminderID: "r1", User: &store.User{ID: 1, TelegramUserID: kid, FirstName: "Kid"}},
+	}, nil)
+
+	env.agent.HandleMessage(context.Background(), kid, kid, "покормил кота")
+	markup := env.sender.messages[len(env.sender.messages)-1].ReplyMarkup.(tgbotapi.InlineKeyboardMarkup)
+	assert.True(t, strings.HasPrefix(*markup.InlineKeyboard[0][0].CallbackData, "ap:y:"))
+
+	env.agent.HandleDecision(context.Background(), kid, kid, env.confirmationID(t), true)
+	assert.Equal(t, []string{"chore_done:r1"}, env.executor.callbacks)
+	assert.Contains(t, env.sender.texts(), "Молодец!")
+}
+
+func TestAgent_DailyLimit(t *testing.T) {
+	env := newProfileEnv(t, ParticipantProfile(), 2,
+		modelReply("end_turn", textBlock("1")),
+		modelReply("end_turn", textBlock("2")),
+		modelReply("end_turn", textBlock("next day")),
+	)
+	for i := 0; i < 3; i++ {
+		env.agent.HandleMessage(context.Background(), 5, 5, "hi")
+	}
+	assert.Len(t, env.model.requests, 2)
+	assert.Contains(t, env.sender.texts(), "limit of 2 messages for today")
+
+	env.now = env.now.Add(24 * time.Hour)
+	env.agent.HandleMessage(context.Background(), 5, 5, "hi again")
+	assert.Len(t, env.model.requests, 3)
+	assert.Contains(t, env.sender.texts(), "next day")
 }

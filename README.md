@@ -36,16 +36,19 @@ To run the Duty Assistant Bot, you need to set the following environment variabl
 | `ANTHROPIC_TIMEOUT_SECONDS` | Timeout in seconds for Anthropic API calls. | No  | `30`                 |
 | `ANTHROPIC_MODEL`    | The Claude model to use for LLM requests.     | No       | `claude-opus-5-5`    |
 | `ANTHROPIC_EFFORT`   | Claude effort level: `low`, `medium`, `high`, `xhigh`, `max`. Temperature is not used for Anthropic. | No | `low` |
-| `ANTHROPIC_ASSISTANT_EFFORT` | Effort for the free-text admin assistant (tool use): `low`..`max`. | No | `medium` |
+| `ANTHROPIC_ASSISTANT_EFFORT` | Effort for the free-text assistants (tool use): `low`..`max`. | No | `medium` |
+| `PARTICIPANT_ASSISTANT_DAILY_LIMIT` | Max free-text messages per participant per day for the participant assistant; `0` turns it off. | No | `20` |
 | `OPENAI_API_KEY`     | The OpenAI API key for LLM-refined messages.  | No       |                      |
 | `OPENAI_URL`         | The OpenAI API base URL (can be customized).  | No       | `https://api.openai.com/v1` |
 | `OPENAI_TIMEOUT_SECONDS` | Timeout in seconds for LLM API calls.     | No       | `10`                 |
 | `OPENAI_MODEL`       | The OpenAI model to use for LLM requests.     | No       | `gpt-4o-mini`        |
 | `OPENAI_TEMPERATURE` | The temperature parameter for LLM requests.   | No       | `0.7`                |
 
-## Admin Assistant (free text)
+## Free-text Assistant
 
 With the Anthropic provider configured (`ANTHROPIC_API_KEY`), the admin can simply write to the bot in a private chat, in any language, instead of using commands, e.g. *"Пусть Ваня завтра дежурит, а Маше дай 2 свиньи"*. The bot (Claude with tool use) looks up users, chores and duties itself, then shows the planned actions with the exact commands and ✅ Confirm / ❌ Cancel buttons. Nothing is changed until Confirm. Interactive command flows keep working as before.
+
+Participants can chat with the bot privately too, with their own limited set of abilities: ask about their chores and duties, mark their own chore as done, take over someone else's chore, volunteer for duty, or spend a sviniya — always with Confirm/Cancel buttons and only on their own behalf. `PARTICIPANT_ASSISTANT_DAILY_LIMIT` (default 20 messages per person per day) keeps costs in check; set it to `0` to turn participants off.
 
 ## Running with Docker
 
