@@ -52,6 +52,9 @@ func (h *Handlers) HandleList(m *tgbotapi.Message) (tgbotapi.MessageConfig, erro
 			sb.WriteString(fmt.Sprintf("<b>ID:</b> <code>%d</code>\n", chore.ID))
 			sb.WriteString(fmt.Sprintf("<b>Description:</b> <i>%s</i>\n", escapedDesc))
 			sb.WriteString(fmt.Sprintf("<b>Interval:</b> every %d days\n", chore.Interval))
+			if chore.AssigneeName != "" {
+				sb.WriteString(fmt.Sprintf("<b>Assignee:</b> %s\n", html.EscapeString(chore.AssigneeName)))
+			}
 			sb.WriteString(fmt.Sprintf("<b>Next Run:</b> %s\n\n", nextRunStr))
 		}
 
@@ -139,6 +142,9 @@ func (h *Handlers) HandleListCallback(q *tgbotapi.CallbackQuery) (tgbotapi.Chatt
 			sb.WriteString(fmt.Sprintf("<b>ID:</b> <code>%d</code>\n", chore.ID))
 			sb.WriteString(fmt.Sprintf("<b>Description:</b> <i>%s</i>\n", escapedDesc))
 			sb.WriteString(fmt.Sprintf("<b>Interval:</b> every %d days\n", chore.Interval))
+			if chore.AssigneeName != "" {
+				sb.WriteString(fmt.Sprintf("<b>Assignee:</b> %s\n", html.EscapeString(chore.AssigneeName)))
+			}
 			sb.WriteString(fmt.Sprintf("<b>Next Run:</b> %s\n\n", nextRunStr))
 		}
 	} else if listType == "task" {

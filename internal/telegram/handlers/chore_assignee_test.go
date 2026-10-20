@@ -2,11 +2,13 @@ package handlers_test
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/korjavin/dutyassistant/internal/mocks"
@@ -274,26 +276,80 @@ func TestHandleChore_SpecificAssignee_EmptyDescription(t *testing.T) {
 	assert.Empty(t, *sent)
 }
 
-func TestHandleChore_SpecificAssignee_WithRecurringRejected(t *testing.T) {
+// fixChoreClock pins handlers.TimeNow to the given Berlin hour on a fixed day.
+func fixChoreClock(t *testing.T, hour int) {
+	t.Helper()
+	berlin, err := time.LoadLocation("Europe/Berlin")
+	require.NoError(t, err)
+	handlers.TimeNow = func() time.Time { return time.Date(2025, time.October, 15, hour, 0, 0, 0, berlin) }
+	t.Cleanup(func() { handlers.TimeNow = time.Now })
+}
+
+func recurringChoreFor(assigneeID int64, description string, interval int) interface{} {
+	return mock.MatchedBy(func(c *store.RecurringChore) bool {
+		return c.AssigneeUserID == assigneeID && c.Description == description && c.Interval == interval
+	})
+}
+
+func TestHandleChore_RecurringWithAssignee_DuringHours(t *testing.T) {
 	for _, command := range []string{
 		"/chore Water plants /Alice /3d",
-		"/chore Water plants /3d /Alice",
+		"/chore Water plants /3d /alice",
 	} {
 		t.Run(command, func(t *testing.T) {
+			fixChoreClock(t, 14)
 			mockStore, h, sent := setupAssigneeTest(t, assigneeTestUsers())
+			mockStore.On("CreateRecurringChore", mock.Anything, recurringChoreFor(10, "Water plants", 3)).
+				Return(nil).Run(func(args mock.Arguments) { args.Get(1).(*store.RecurringChore).ID = 7 }).Once()
+			mockStore.On("CreateChore", mock.Anything, choreForUser(10, "Water plants")).Return(nil).Once()
 
 			msg, err := h.HandleChore(adminChoreCommand(command))
 			require.NoError(t, err)
 
-			assert.Contains(t, msg.(tgbotapi.MessageConfig).Text, "Recurring chores are always assigned to a random user")
-			mockStore.AssertNotCalled(t, "CreateRecurringChore", mock.Anything, mock.Anything)
-			mockStore.AssertNotCalled(t, "CreateChore", mock.Anything, mock.Anything)
-			assert.Empty(t, *sent)
+			text := msg.(tgbotapi.MessageConfig).Text
+			assert.Contains(t, text, "Assigned chore to <b>Alice</b>")
+			assert.Contains(t, text, "Recurring chore scheduled!")
+			assert.Contains(t, text, "<b>Assignee:</b> <b>Alice</b>")
+			assert.Contains(t, text, "every 3 days")
+			mockStore.AssertExpectations(t)
+			mockStore.AssertNotCalled(t, "GetOffDutyUsers", mock.Anything, mock.Anything)
+			require.Len(t, messagesTo(*sent, "1010"), 1)
+			assert.Equal(t, []string{"🎯 <b>Alice</b>: <i>Water plants</i>"}, messagesTo(*sent, "-1001234567890"))
 		})
 	}
 }
 
+func TestHandleChore_RecurringWithAssignee_OutsideHours(t *testing.T) {
+	fixChoreClock(t, 20)
+	mockStore, h, sent := setupAssigneeTest(t, assigneeTestUsers())
+	mockStore.On("CreateRecurringChore", mock.Anything, recurringChoreFor(11, "Water plants", 2)).Return(nil).Once()
+
+	msg, err := h.HandleChore(adminChoreCommand("/chore Water plants /Bob /2d"))
+	require.NoError(t, err)
+
+	text := msg.(tgbotapi.MessageConfig).Text
+	assert.Contains(t, text, "Recurring chore scheduled!")
+	assert.Contains(t, text, "<b>Assignee:</b> <b>Bob</b>")
+	mockStore.AssertExpectations(t)
+	mockStore.AssertNotCalled(t, "CreateChore", mock.Anything, mock.Anything)
+	assert.Empty(t, *sent)
+}
+
+func TestHandleChore_RecurringWithUnknownAssignee(t *testing.T) {
+	fixChoreClock(t, 14)
+	mockStore, h, sent := setupAssigneeTest(t, assigneeTestUsers())
+
+	msg, err := h.HandleChore(adminChoreCommand("/chore Water plants /Zorro /3d"))
+	require.NoError(t, err)
+
+	assert.Contains(t, msg.(tgbotapi.MessageConfig).Text, "No active user named <b>Zorro</b>")
+	mockStore.AssertNotCalled(t, "CreateRecurringChore", mock.Anything, mock.Anything)
+	mockStore.AssertNotCalled(t, "CreateChore", mock.Anything, mock.Anything)
+	assert.Empty(t, *sent)
+}
+
 func TestHandleChore_RecurringWithoutAssigneeStillWorks(t *testing.T) {
+	fixChoreClock(t, 14)
 	mockStore, h, _ := setupAssigneeTest(t, assigneeTestUsers())
 	mockStore.On("CreateRecurringChore", mock.Anything, mock.MatchedBy(func(c *store.RecurringChore) bool {
 		return c.Description == "Water plants" && c.Interval == 3
@@ -346,21 +402,74 @@ func TestHandleChoreInteractive_SpecificAssignee_UnknownUser(t *testing.T) {
 	assert.Empty(t, *sent)
 }
 
-func TestHandleChoreInteractive_RecurringSuffixRejected(t *testing.T) {
+func TestHandleChoreInteractive_Recurring(t *testing.T) {
+	tests := []struct {
+		name         string
+		text         string
+		wantAssignee int64
+		wantText     string
+	}{
+		{name: "random", text: "Water plants /3d", wantAssignee: 0, wantText: "<b>Assignee:</b> random user"},
+		{name: "specific", text: "Water plants /bob /3d", wantAssignee: 11, wantText: "<b>Assignee:</b> <b>Bob</b>"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fixChoreClock(t, 20)
+			mockStore, h, sent := setupAssigneeTest(t, assigneeTestUsers())
+			mockStore.On("CreateRecurringChore", mock.Anything, recurringChoreFor(tt.wantAssignee, "Water plants", 3)).Return(nil).Once()
+			h.SessionManager.StartSession(assigneeTestChatID, assigneeTestAdminID, handlers.SessionTypeChoreCreation)
+
+			msg, err := h.HandleChoreInteractive(&tgbotapi.Message{
+				Chat: &tgbotapi.Chat{ID: assigneeTestChatID},
+				From: &tgbotapi.User{ID: assigneeTestAdminID},
+				Text: tt.text,
+			})
+			require.NoError(t, err)
+
+			text := msg.(tgbotapi.MessageConfig).Text
+			assert.Contains(t, text, "Recurring chore scheduled!")
+			assert.Contains(t, text, tt.wantText)
+			mockStore.AssertNumberOfCalls(t, "CreateRecurringChore", 1)
+			mockStore.AssertNotCalled(t, "CreateChore", mock.Anything, mock.Anything)
+			assert.Empty(t, *sent)
+
+			_, exists := h.SessionManager.GetSession(assigneeTestChatID)
+			assert.False(t, exists)
+		})
+	}
+}
+
+func TestProcessRecurringChores_FixedAssignee(t *testing.T) {
 	mockStore, h, sent := setupAssigneeTest(t, assigneeTestUsers())
-	h.SessionManager.StartSession(assigneeTestChatID, assigneeTestAdminID, handlers.SessionTypeChoreCreation)
+	mockStore.On("GetDueRecurringChores", mock.Anything, mock.Anything).Return([]*store.RecurringChore{
+		{ID: 7, Description: "Water plants", Interval: 3, NextRunAt: time.Now().Add(-time.Hour), IsActive: true, AssigneeUserID: 12},
+	}, nil)
+	mockStore.On("CreateChore", mock.Anything, choreForUser(12, "Water plants")).Return(nil).Once()
+	mockStore.On("UpdateRecurringChoreNextRun", mock.Anything, int64(7), mock.Anything).Return(nil).Once()
 
-	msg, err := h.HandleChoreInteractive(&tgbotapi.Message{
-		Chat: &tgbotapi.Chat{ID: assigneeTestChatID},
-		From: &tgbotapi.User{ID: assigneeTestAdminID},
-		Text: "Water plants /3d",
+	require.NoError(t, h.ProcessRecurringChores(context.Background()))
+
+	mockStore.AssertExpectations(t)
+	mockStore.AssertNotCalled(t, "GetOffDutyUsers", mock.Anything, mock.Anything)
+	assert.Equal(t, []string{"🎯 <b>Crusader</b>: <i>Water plants</i>"}, messagesTo(*sent, "-1001234567890"))
+	require.Len(t, messagesTo(*sent, "1212"), 1)
+}
+
+func TestProcessRecurringChores_InactiveAssigneeFallsBackToRandom(t *testing.T) {
+	mockStore, h, _ := setupAssigneeTest(t, []*store.User{
+		{ID: 10, TelegramUserID: 1010, FirstName: "Alice", IsActive: true},
 	})
-	require.NoError(t, err)
+	mockStore.On("GetDueRecurringChores", mock.Anything, mock.Anything).Return([]*store.RecurringChore{
+		// User 99 is no longer in the active roster.
+		{ID: 7, Description: "Water plants", Interval: 3, NextRunAt: time.Now().Add(-time.Hour), IsActive: true, AssigneeUserID: 99},
+	}, nil)
+	mockStore.On("GetOffDutyUsers", mock.Anything, mock.Anything).Return([]*store.User{}, nil).Once()
+	mockStore.On("CreateChore", mock.Anything, choreForUser(10, "Water plants")).Return(nil).Once()
+	mockStore.On("UpdateRecurringChoreNextRun", mock.Anything, int64(7), mock.Anything).Return(nil).Once()
 
-	assert.Contains(t, msg.(tgbotapi.MessageConfig).Text, "Recurring chores can't be created in interactive mode")
-	mockStore.AssertNotCalled(t, "CreateChore", mock.Anything, mock.Anything)
-	mockStore.AssertNotCalled(t, "CreateRecurringChore", mock.Anything, mock.Anything)
-	assert.Empty(t, *sent)
+	require.NoError(t, h.ProcessRecurringChores(context.Background()))
+
+	mockStore.AssertExpectations(t)
 }
 
 func TestHandleChore_NonAdminCannotAssignToSpecificUser(t *testing.T) {

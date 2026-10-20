@@ -95,6 +95,41 @@ func TestRecurringChores(t *testing.T) {
 	assert.Equal(t, sql.ErrNoRows, err)
 }
 
+func TestRecurringChores_Assignee(t *testing.T) {
+	s := setupTestDB(t)
+	ctx := context.Background()
+
+	user := &store.User{TelegramUserID: 111, FirstName: "Alice"}
+	require.NoError(t, s.CreateUser(ctx, user))
+
+	now := time.Now()
+	fixed := &store.RecurringChore{Description: "Water plants", Interval: 3, NextRunAt: now.Add(-time.Hour), CreatedAt: now, AssigneeUserID: user.ID}
+	random := &store.RecurringChore{Description: "Take out trash", Interval: 2, NextRunAt: now.Add(-time.Hour), CreatedAt: now}
+	require.NoError(t, s.CreateRecurringChore(ctx, fixed))
+	require.NoError(t, s.CreateRecurringChore(ctx, random))
+
+	got, err := s.GetRecurringChore(ctx, fixed.ID)
+	require.NoError(t, err)
+	assert.Equal(t, user.ID, got.AssigneeUserID)
+	assert.Equal(t, "Alice", got.AssigneeName)
+
+	got, err = s.GetRecurringChore(ctx, random.ID)
+	require.NoError(t, err)
+	assert.Zero(t, got.AssigneeUserID)
+	assert.Empty(t, got.AssigneeName)
+
+	active, err := s.GetActiveRecurringChores(ctx)
+	require.NoError(t, err)
+	due, err := s.GetDueRecurringChores(ctx, now)
+	require.NoError(t, err)
+	for _, list := range [][]*store.RecurringChore{active, due} {
+		require.Len(t, list, 2)
+		assert.Equal(t, user.ID, list[0].AssigneeUserID)
+		assert.Equal(t, "Alice", list[0].AssigneeName)
+		assert.Zero(t, list[1].AssigneeUserID)
+	}
+}
+
 func TestGetActiveChoresByUserID(t *testing.T) {
 	s := setupTestDB(t)
 	ctx := context.Background()
