@@ -50,6 +50,15 @@ services:
       - DATABASE_PATH=/app/data/roster.db
       # Shared HMAC secret for the /who endpoint used by EchoBridge
       - DUTY_SECRET=${DUTY_SECRET}
+      # LLM provider: "openai" (any OpenAI-compatible API) or "anthropic".
+      # Empty = auto: anthropic if ANTHROPIC_API_KEY is set, otherwise openai.
+      - LLM_PROVIDER=${LLM_PROVIDER:-}
+      # Anthropic keys
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-}
+      - ANTHROPIC_TIMEOUT_SECONDS=${ANTHROPIC_TIMEOUT_SECONDS:-30}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-opus-5-5}
+      - ANTHROPIC_EFFORT=${ANTHROPIC_EFFORT:-low}
       # OpenAI keys
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_URL=${OPENAI_URL:-}

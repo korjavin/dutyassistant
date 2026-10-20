@@ -21,3 +21,25 @@ func TestCreateHTTPServer(t *testing.T) {
 	assert.Equal(t, 60*time.Second, srv.IdleTimeout)
 	assert.Equal(t, 1<<20, srv.MaxHeaderBytes)
 }
+
+func TestResolveLLMProvider(t *testing.T) {
+	tests := []struct {
+		name         string
+		explicit     string
+		anthropicKey string
+		want         string
+	}{
+		{"default is openai", "", "", "openai"},
+		{"anthropic key auto-selects anthropic", "", "sk-ant", "anthropic"},
+		{"explicit openai wins over anthropic key", "openai", "sk-ant", "openai"},
+		{"explicit anthropic", " Anthropic ", "", "anthropic"},
+		{"unknown value falls back to auto", "gemini", "sk-ant", "anthropic"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := resolveLLMProvider(tt.explicit, tt.anthropicKey); got != tt.want {
+				t.Errorf("resolveLLMProvider(%q, %q) = %q, want %q", tt.explicit, tt.anthropicKey, got, tt.want)
+			}
+		})
+	}
+}

@@ -42,6 +42,7 @@ var adminOnlyCommands = []tgbotapi.BotCommand{
 	{Command: "overdue", Description: "Send the overdue chores report"},
 	{Command: "set_volunteer", Description: "Set a user's volunteer queue days"},
 	{Command: "set_sviniya_balance", Description: "Set sviniya balance for a user"},
+	{Command: "text_candidate_chore", Description: "Preview the LLM chore reminder for a user"},
 }
 
 // adminCommands is the full list registered against the admin's private chat:

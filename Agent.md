@@ -20,6 +20,12 @@ To run the Duty Assistant Bot, you need to set the following environment variabl
 | `DATABASE_PATH`      | The path to the SQLite database file. | No       | `/app/data/roster.db` |
 | `DISH_GROUP`        | Telegram chat ID for the main group, used for group duty and month-end participant rating announcements. | No       | `0` |
 | `DNS_NAME`           | The DNS name for the web interface.   | No       |                      |
+| `LLM_PROVIDER`       | LLM backend: `openai` (any OpenAI-compatible API) or `anthropic`. Empty = auto: `anthropic` if `ANTHROPIC_API_KEY` is set, otherwise `openai`. | No | auto |
+| `ANTHROPIC_API_KEY`  | The Anthropic API key for LLM-refined messages. | No       |                      |
+| `ANTHROPIC_BASE_URL` | The Anthropic API base URL (can be customized). | No       | `https://api.anthropic.com` |
+| `ANTHROPIC_TIMEOUT_SECONDS` | Timeout in seconds for Anthropic API calls. | No  | `30`                 |
+| `ANTHROPIC_MODEL`    | The Claude model to use for LLM requests.     | No       | `claude-opus-5-5`    |
+| `ANTHROPIC_EFFORT`   | Claude effort level: `low`, `medium`, `high`, `xhigh`, `max`. Temperature is not used for Anthropic. | No | `low` |
 | `OPENAI_API_KEY`     | The OpenAI API key for LLM-refined messages.  | No       |                      |
 | `OPENAI_URL`         | The OpenAI API base URL (can be customized).  | No       | `https://api.openai.com/v1` |
 | `OPENAI_TIMEOUT_SECONDS` | Timeout in seconds for LLM API calls.     | No       | `10`                 |
@@ -604,7 +610,7 @@ This approach allows users to interact with the system in a more natural and con
 
 ### **9.1. Actual Implementation**
 
-The LLM integration has been implemented in `/internal/llm/openai.go` with a `Client` struct that wraps OpenAI-compatible APIs. The implementation follows the adapter pattern described in section VIII but uses concrete types rather than an abstract interface.
+The LLM integration has been implemented in `/internal/llm/openai.go` with a `Client` struct that wraps either OpenAI-compatible APIs (`NewClient`) or the Anthropic Messages API via the official Go SDK (`NewAnthropicClient`, in `/internal/llm/anthropic.go`). All methods go through the provider-neutral `complete` helper. The implementation follows the adapter pattern described in section VIII but uses concrete types rather than an abstract interface.
 
 **Key Methods:**
 
@@ -613,6 +619,10 @@ The LLM integration has been implemented in `/internal/llm/openai.go` with a `Cl
   - Uses the configured model from `OPENAI_MODEL` environment variable
   - Returns original text on error or if client is nil
   - Logs errors for debugging but gracefully falls back to original text
+
+- `ChoreNudge(ctx, userName, choresContext) (string, error)`: Writes a funny carrot-and-stick message for the periodic chore reminder, given each pending chore's age and overdue time
+  - Returns an error on failure so the caller falls back to the static reminder
+  - Admin preview: `/text_candidate_chore <name>` shows the reminder that user would get right now (not sent to them)
 
 - `RefineMessage(ctx, intent, vanilla) string`: Refines messages for fun/humorous formatting
   - Uses the configured temperature from `OPENAI_TEMPERATURE` (default 0.7)
@@ -662,6 +672,12 @@ The LLM client is configured via environment variables:
 
 | Variable | Purpose | Required | Default |
 |----------|---------|----------|---------|
+| `LLM_PROVIDER` | `openai` or `anthropic`; empty = `anthropic` if `ANTHROPIC_API_KEY` is set, else `openai` | No | auto |
+| `ANTHROPIC_API_KEY` | Anthropic API key | No (optional feature) | |
+| `ANTHROPIC_BASE_URL` | Anthropic API base URL | No | `https://api.anthropic.com` |
+| `ANTHROPIC_MODEL` | Claude model | No | `claude-opus-5-5` |
+| `ANTHROPIC_EFFORT` | Effort level (`low`..`max`); temperature is not sent to Anthropic | No | `low` |
+| `ANTHROPIC_TIMEOUT_SECONDS` | Timeout in seconds for Anthropic API calls | No | `30` |
 | `OPENAI_API_KEY` | The API key for the LLM service | No (optional feature) | |
 | `OPENAI_URL` | The API base URL | No | `https://api.openai.com/v1` |
 | `OPENAI_MODEL` | The model to use for requests | No | `gpt-4o-mini` |

@@ -248,6 +248,8 @@ func (b *Bot) handleCommand(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 		return b.handlers.HandleSetSviniyaBalance(m)
 	case "spend":
 		return b.handlers.HandleSpend(m)
+	case "text_candidate_chore":
+		return b.handlers.HandleTextCandidateChore(m)
 	default:
 		msg := tgbotapi.NewMessage(m.Chat.ID, "Unknown command. Use /help for a list of commands.")
 		return msg, nil

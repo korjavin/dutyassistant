@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -51,6 +52,14 @@ func main() {
 		}
 	}
 
+	anthropicAPIKey := getEnv("ANTHROPIC_API_KEY", "")
+	anthropicURL := getEnv("ANTHROPIC_BASE_URL", "")
+	anthropicTimeout := parseInt64(getEnv("ANTHROPIC_TIMEOUT_SECONDS", "30"), 30)
+	anthropicModel := getEnv("ANTHROPIC_MODEL", "claude-opus-5-5")
+	anthropicEffort := getEnv("ANTHROPIC_EFFORT", "low")
+
+	llmProvider := resolveLLMProvider(os.Getenv("LLM_PROVIDER"), anthropicAPIKey)
+
 	// Initialize database
 	slog.Info(fmt.Sprint("Initializing database at", dbPath))
 	ctx := context.Background()
@@ -66,12 +75,24 @@ func main() {
 
 	// Initialize LLM client
 	slog.Info("Initializing LLM client...")
-	llmClient := llm.NewClient(openaiAPIKey, openaiURL, int(openaiTimeout), openaiModel, openaiTemperature)
-	if llmClient != nil {
-		model, temp, url := llmClient.Config()
-		slog.Info(fmt.Sprintf("LLM Client: Enabled (Provider: OpenAI, Model: %s, Temperature: %.2f, BaseURL: %s)", model, temp, url))
-	} else {
-		slog.Info("LLM Client: Disabled (OPENAI_API_KEY not set)")
+	var llmClient *llm.Client
+	switch llmProvider {
+	case llm.ProviderAnthropic:
+		llmClient = llm.NewAnthropicClient(anthropicAPIKey, anthropicURL, int(anthropicTimeout), anthropicModel, anthropicEffort)
+		if llmClient != nil {
+			model, _, url := llmClient.Config()
+			slog.Info(fmt.Sprintf("LLM Client: Enabled (Provider: Anthropic, Model: %s, Effort: %s, BaseURL: %s)", model, llmClient.Effort(), url))
+		} else {
+			slog.Info("LLM Client: Disabled (ANTHROPIC_API_KEY not set)")
+		}
+	default:
+		llmClient = llm.NewClient(openaiAPIKey, openaiURL, int(openaiTimeout), openaiModel, openaiTemperature)
+		if llmClient != nil {
+			model, temp, url := llmClient.Config()
+			slog.Info(fmt.Sprintf("LLM Client: Enabled (Provider: OpenAI, Model: %s, Temperature: %.2f, BaseURL: %s)", model, temp, url))
+		} else {
+			slog.Info("LLM Client: Disabled (OPENAI_API_KEY not set)")
+		}
 	}
 
 	// Initialize Telegram handlers
@@ -98,8 +119,13 @@ func main() {
 	defer botCancel()
 	go bot.Start(botCtx)
 
-	// Launch periodic chore reminders goroutine
-	go notification.StartPeriodicChoreReminders(botCtx, bot, store, getEnv("CHORE_TIMEZONE", "Europe/Berlin"))
+	// Launch periodic chore reminders goroutine.
+	// Avoid passing a typed-nil *llm.Client into the interface.
+	var choreNudger notification.ChoreNudger
+	if llmClient != nil {
+		choreNudger = llmClient
+	}
+	go notification.StartPeriodicChoreReminders(botCtx, bot, store, choreNudger, getEnv("CHORE_TIMEZONE", "Europe/Berlin"))
 
 	// Initialize cron scheduler for scheduled jobs (all times in Europe/Berlin)
 	slog.Info("Initializing cron scheduler...")
@@ -373,6 +399,23 @@ func getEnv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+// resolveLLMProvider picks the LLM provider. An explicit LLM_PROVIDER value
+// ("openai" or "anthropic") wins; otherwise Anthropic is used when
+// ANTHROPIC_API_KEY is set, falling back to the OpenAI-compatible API.
+func resolveLLMProvider(explicit, anthropicAPIKey string) string {
+	switch p := strings.ToLower(strings.TrimSpace(explicit)); p {
+	case llm.ProviderOpenAI, llm.ProviderAnthropic:
+		return p
+	case "":
+	default:
+		slog.Warn("Unknown LLM_PROVIDER value (expected openai or anthropic), auto-detecting from API keys")
+	}
+	if anthropicAPIKey != "" {
+		return llm.ProviderAnthropic
+	}
+	return llm.ProviderOpenAI
 }
 
 func parseInt64(s string, defaultValue int64) int64 {

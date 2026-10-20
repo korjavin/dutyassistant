@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -333,5 +334,94 @@ func BenchmarkSanitizeTelegramHTML(b *testing.B) {
 	input := "<b>Hello</b> <i>World</i> & <script>alert(1)</script> <a href=\"http://example.com\">Link</a>"
 	for i := 0; i < b.N; i++ {
 		SanitizeTelegramHTML(input)
+	}
+}
+
+func TestChoreNudge(t *testing.T) {
+	ctx := context.Background()
+
+	// Nil client returns an error so callers can fall back
+	var nilClient *Client
+	if _, err := nilClient.ChoreNudge(ctx, "Anna", "1. \"Trash\""); err == nil {
+		t.Error("Expected error from nil client")
+	}
+
+	var gotReq chatRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&gotReq); err != nil {
+			t.Errorf("Failed to decode request body: %v", err)
+		}
+		w.WriteHeader(http.StatusOK)
+		resp := chatResponse{
+			Choices: []struct {
+				Message struct {
+					Content string `json:"content"`
+				} `json:"message"`
+			}{{Message: struct {
+				Content string `json:"content"`
+			}{Content: "  🗑️ <b>Anna</b>, the trash is plotting revenge <script>x</script> & the admin is watching!  "}}},
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	c := NewClient("test-key", server.URL, 10, "", nil)
+	res, err := c.ChoreNudge(ctx, "Anna", "1. \"Take out trash\" - assigned 3 days ago, OVERDUE by 2 days\n")
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	expected := "🗑️ <b>Anna</b>, the trash is plotting revenge &lt;script&gt;x&lt;/script&gt; &amp; the admin is watching!"
+	if res != expected {
+		t.Errorf("Expected %q, got %q", expected, res)
+	}
+
+	if len(gotReq.Messages) != 2 {
+		t.Fatalf("Expected 2 messages, got %d", len(gotReq.Messages))
+	}
+	if !strings.Contains(gotReq.Messages[0].Content, "carrot") || !strings.Contains(gotReq.Messages[0].Content, "admin") {
+		t.Errorf("System prompt missing carrot-and-stick instructions: %s", gotReq.Messages[0].Content)
+	}
+	if !strings.Contains(gotReq.Messages[1].Content, "Anna") || !strings.Contains(gotReq.Messages[1].Content, "OVERDUE by 2 days") {
+		t.Errorf("User prompt missing name or chore context: %s", gotReq.Messages[1].Content)
+	}
+	if gotReq.Temperature != 0.7 {
+		t.Errorf("Expected default temperature 0.7, got %f", gotReq.Temperature)
+	}
+}
+
+func TestChoreNudge_ErrorCases(t *testing.T) {
+	ctx := context.Background()
+
+	errorServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte("Internal Server Error"))
+	}))
+	defer errorServer.Close()
+
+	c := NewClient("test-key", errorServer.URL, 10, "", nil)
+	if _, err := c.ChoreNudge(ctx, "Anna", "chores"); err == nil {
+		t.Error("Expected error on 500 response")
+	}
+
+	emptyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"   "}}]}`))
+	}))
+	defer emptyServer.Close()
+
+	c = NewClient("test-key", emptyServer.URL, 10, "", nil)
+	if _, err := c.ChoreNudge(ctx, "Anna", "chores"); err == nil {
+		t.Error("Expected error on empty content")
+	}
+
+	noChoicesServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"choices":[]}`))
+	}))
+	defer noChoicesServer.Close()
+
+	c = NewClient("test-key", noChoicesServer.URL, 10, "", nil)
+	if _, err := c.ChoreNudge(ctx, "Anna", "chores"); err == nil {
+		t.Error("Expected error when no choices returned")
 	}
 }

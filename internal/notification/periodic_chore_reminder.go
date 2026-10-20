@@ -14,10 +14,18 @@ type BotSender interface {
 	SendMessageHTML(chatID int64, text string) error
 }
 
+// ChoreNudger generates a motivational (carrot-and-stick) message for a user
+// who is delaying their chores. Implemented by *llm.Client.
+type ChoreNudger interface {
+	ChoreNudge(ctx context.Context, userName, choresContext string) (string, error)
+}
+
 // StartPeriodicChoreReminders launches a background goroutine that occasionally
 // checks for active chores and sends a DM to assigned users within a kid-friendly
 // time window (16:00 to 19:00 in the given timezone).
-func StartPeriodicChoreReminders(ctx context.Context, bot BotSender, s store.Store, timezone string) {
+// If nudger is non-nil, the reminder opens with an LLM-generated motivational
+// message; otherwise (or on LLM failure) a static reminder is sent.
+func StartPeriodicChoreReminders(ctx context.Context, bot BotSender, s store.Store, nudger ChoreNudger, timezone string) {
 	loc, err := time.LoadLocation(timezone)
 	if err != nil {
 		slog.Error("[PeriodicReminders] Invalid timezone, defaulting to UTC", "timezone", timezone, "error", err)
@@ -37,7 +45,7 @@ func StartPeriodicChoreReminders(ctx context.Context, bot BotSender, s store.Sto
 			slog.Info("[PeriodicReminders] Context done, stopping periodic chore reminders")
 			return
 		case <-time.After(waitDuration):
-			sendChoreReminders(ctx, time.Now().In(loc), bot, s, loc)
+			sendChoreReminders(ctx, time.Now().In(loc), bot, s, nudger, loc)
 		}
 	}
 }
@@ -73,7 +81,7 @@ func nextReminderTime(now time.Time, loc *time.Location) time.Time {
 	return next
 }
 
-func sendChoreReminders(ctx context.Context, now time.Time, bot BotSender, s store.Store, loc *time.Location) {
+func sendChoreReminders(ctx context.Context, now time.Time, bot BotSender, s store.Store, nudger ChoreNudger, loc *time.Location) {
 	hour := now.Hour()
 
 	// Double check we are in the 16-19 window
@@ -100,16 +108,42 @@ func sendChoreReminders(ctx context.Context, now time.Time, bot BotSender, s sto
 	}
 
 	for telegramID, list := range userChores {
-		msg := FormatPeriodicChoreReminder(list, loc)
+		msg, err := ComposeChoreReminder(ctx, now, nudger, list, loc)
+		if err != nil {
+			slog.Error("[PeriodicReminders] LLM nudge failed, using static reminder", "error", err)
+		}
 		if msg == "" {
 			continue
 		}
 
-		err := bot.SendMessageHTML(telegramID, msg)
+		err = bot.SendMessageHTML(telegramID, msg)
 		if err != nil {
 			slog.Error("[PeriodicReminders] Failed to send reminder", "telegramID", telegramID, "error", err)
 		} else {
 			slog.Info("[PeriodicReminders] Sent reminder", "telegramID", telegramID, "activeChoresCount", len(list))
 		}
 	}
+}
+
+// ComposeChoreReminder returns the reminder text for one user's pending chores.
+// When an LLM nudger is available, its motivational message is followed by the
+// factual chore list. Without a nudger, or when the LLM call fails, the static
+// reminder is returned together with the LLM error (if any), so callers can
+// report it while still having a message to send.
+func ComposeChoreReminder(ctx context.Context, now time.Time, nudger ChoreNudger, chores []*store.Chore, loc *time.Location) (string, error) {
+	if nudger == nil || len(chores) == 0 {
+		return FormatPeriodicChoreReminder(chores, loc), nil
+	}
+
+	userName := ""
+	if chores[0].User != nil {
+		userName = chores[0].User.FirstName
+	}
+
+	nudge, err := nudger.ChoreNudge(ctx, userName, DescribeChoreDelays(chores, now))
+	if err != nil {
+		return FormatPeriodicChoreReminder(chores, loc), err
+	}
+
+	return FormatNudgeChoreReminder(nudge, chores, loc), nil
 }
