@@ -8,42 +8,63 @@ import (
 	"log/slog"
 	"math/big"
 	"os"
+	"sync"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/korjavin/dutyassistant/internal/store"
 )
 
-// ProcessRecurringChores fetches all due recurring chores and assigns them.
-// It should be called periodically by the cron scheduler.
+// processRecurringMu keeps two runs of ProcessRecurringChores from assigning
+// the same occurrence twice.
+var processRecurringMu sync.Mutex
+
+// ProcessRecurringChores fetches all due recurring and scheduled chores and assigns them.
+// It is called every minute by the cron scheduler, so a chore is assigned at its NextRunAt.
 func (h *Handlers) ProcessRecurringChores(ctx context.Context) error {
-	slog.Info("[CRON] Starting ProcessRecurringChores")
+	if !processRecurringMu.TryLock() {
+		slog.Warn("[CRON] ProcessRecurringChores is already running; skipping this tick")
+		return nil
+	}
+	defer processRecurringMu.Unlock()
 
 	berlinLoc, err := time.LoadLocation("Europe/Berlin")
 	if err != nil {
 		return fmt.Errorf("failed to load Europe/Berlin timezone: %v", err)
 	}
 
-	now := time.Now().In(berlinLoc)
+	now := TimeNow().In(berlinLoc)
 	dueChores, err := h.Store.GetDueRecurringChores(ctx, now)
 	if err != nil {
 		return fmt.Errorf("failed to get due recurring chores: %v", err)
 	}
 
 	if len(dueChores) == 0 {
-		slog.Info("[CRON] No recurring chores are due.")
+		slog.Debug("[CRON] No recurring chores are due.")
 		return nil
 	}
 
 	slog.Info(fmt.Sprintf("[CRON] Found %d due recurring chores.", len(dueChores)))
 
 	for _, chore := range dueChores {
+		// Past its end without having run (e.g. the bot was down): just retire it
+		if chore.EndsAt != nil && chore.NextRunAt.After(*chore.EndsAt) {
+			h.finishRecurringChore(ctx, chore)
+			continue
+		}
+
 		slog.Info(fmt.Sprintf("[CRON] Processing recurring chore %d: %s", chore.ID, chore.Description))
 
 		err := h.assignRecurringChore(ctx, chore)
 		if err != nil {
 			slog.Error(fmt.Sprintf("[CRON] ERROR: Failed to assign recurring chore %d: %v", chore.ID, err))
 			// Do not update nextRunAt so it retries next time
+			continue
+		}
+
+		// A scheduled one-off chore runs only once
+		if chore.Interval <= 0 {
+			h.finishRecurringChore(ctx, chore)
 			continue
 		}
 
@@ -56,6 +77,11 @@ func (h *Handlers) ProcessRecurringChores(ctx context.Context) error {
 			newNextRun = newNextRun.AddDate(0, 0, chore.Interval)
 		}
 
+		if chore.EndsAt != nil && newNextRun.After(*chore.EndsAt) {
+			h.finishRecurringChore(ctx, chore)
+			continue
+		}
+
 		if err := h.Store.UpdateRecurringChoreNextRun(ctx, chore.ID, newNextRun); err != nil {
 			slog.Error(fmt.Sprintf("[CRON] ERROR: Failed to update next_run_at for chore %d: %v", chore.ID, err))
 		} else {
@@ -64,6 +90,15 @@ func (h *Handlers) ProcessRecurringChores(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// finishRecurringChore deactivates a chore that has no runs left.
+func (h *Handlers) finishRecurringChore(ctx context.Context, chore *store.RecurringChore) {
+	if err := h.Store.CancelRecurringChore(ctx, chore.ID); err != nil {
+		slog.Error(fmt.Sprintf("[CRON] ERROR: Failed to deactivate finished recurring chore %d: %v", chore.ID, err))
+		return
+	}
+	slog.Info(fmt.Sprintf("[CRON] Recurring chore %d has no runs left and was deactivated", chore.ID))
 }
 
 // assignRecurringChore is similar to assignChore but doesn't reply to a specific user
@@ -99,29 +134,9 @@ func (h *Handlers) assignRecurringChore(ctx context.Context, chore *store.Recurr
 		}
 	}
 
-	// 5. Notifications
-	escapedName := html.EscapeString(selectedUser.FirstName)
-	escapedDesc := html.EscapeString(chore.Description)
-
-	// Construct group announcement
-	groupText := fmt.Sprintf("🎯 <b>%s</b>: <i>%s</i>", escapedName, escapedDesc)
-
-	// Handle group announcement
-	if h.GroupID != 0 && h.Bot != nil {
-		groupMsg := tgbotapi.NewMessage(h.GroupID, groupText)
-		groupMsg.ParseMode = tgbotapi.ModeHTML
-		if _, err := h.Bot.Send(groupMsg); err != nil {
-			slog.Error(fmt.Sprintf("Failed to send recurring chore announcement to group %d: %v", h.GroupID, err))
-		} else {
-			slog.Info("Announced recurring chore in group.")
-		}
-	} else if h.GroupID == 0 {
-		slog.Info("No group configured to announce recurring chore.")
-	} else if h.Bot == nil {
-		slog.Info("Bot API not available for group announcement.")
-	}
-
-	// 6. Save chore to database to be visible in web UI and loaded on restart
+	// 5. Save chore to database to be visible in web UI and loaded on restart.
+	// This comes before the announcement: a failed save is retried on the next
+	// tick, and the group must not get the announcement again each time.
 	tz := os.Getenv("CHORE_TIMEZONE")
 	if tz == "" {
 		tz = "Europe/Berlin"
@@ -144,6 +159,28 @@ func (h *Handlers) assignRecurringChore(ctx context.Context, chore *store.Recurr
 	}
 	if err := h.Store.CreateChore(ctx, dbChore); err != nil {
 		return fmt.Errorf("failed to save recurring chore to database: %v", err)
+	}
+
+	// 6. Notifications
+	escapedName := html.EscapeString(selectedUser.FirstName)
+	escapedDesc := html.EscapeString(chore.Description)
+
+	// Construct group announcement
+	groupText := fmt.Sprintf("🎯 <b>%s</b>: <i>%s</i>", escapedName, escapedDesc)
+
+	// Handle group announcement
+	if h.GroupID != 0 && h.Bot != nil {
+		groupMsg := tgbotapi.NewMessage(h.GroupID, groupText)
+		groupMsg.ParseMode = tgbotapi.ModeHTML
+		if _, err := h.Bot.Send(groupMsg); err != nil {
+			slog.Error(fmt.Sprintf("Failed to send recurring chore announcement to group %d: %v", h.GroupID, err))
+		} else {
+			slog.Info("Announced recurring chore in group.")
+		}
+	} else if h.GroupID == 0 {
+		slog.Info("No group configured to announce recurring chore.")
+	} else if h.Bot == nil {
+		slog.Info("Bot API not available for group announcement.")
 	}
 
 	// 7. Send DM to assigned user and schedule reminder (Best Effort)
@@ -257,4 +294,12 @@ func (h *Handlers) pickRandomRecurringChoreUser(ctx context.Context, users []*st
 	}
 
 	return selectedUser, nil
+}
+
+// recurrenceLabel describes how often a recurring chore runs.
+func recurrenceLabel(rc *store.RecurringChore) string {
+	if rc.Interval <= 0 {
+		return "once (scheduled)"
+	}
+	return fmt.Sprintf("every %d days", rc.Interval)
 }

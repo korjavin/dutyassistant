@@ -96,8 +96,11 @@ func (h *Handlers) handleChoreListInteractive(q *tgbotapi.CallbackQuery) (tgbota
 			if rc.AssigneeName != "" {
 				assignee = " → " + html.EscapeString(rc.AssigneeName)
 			}
-			fmt.Fprintf(&sb, "• <b>Every %d days%s</b>: <i>%s</i>\n  <span class=\"tg-spoiler\">ID: R%d, Next: %s</span>\n",
-				rc.Interval, assignee, html.EscapeString(rc.Description), rc.ID, nextRun)
+			if rc.EndsAt != nil {
+				nextRun += ", Until: " + rc.EndsAt.In(loc).Format("2006-01-02")
+			}
+			fmt.Fprintf(&sb, "• <b>%s%s</b>: <i>%s</i>\n  <span class=\"tg-spoiler\">ID: R%d, Next: %s</span>\n",
+				recurrenceLabel(rc), assignee, html.EscapeString(rc.Description), rc.ID, nextRun)
 		}
 	}
 
@@ -147,7 +150,7 @@ func (h *Handlers) handleChoreDeleteInteractive(q *tgbotapi.CallbackQuery) (tgbo
 		if len(runes) > 30 {
 			desc = string(runes[:27]) + "..."
 		}
-		btnText := fmt.Sprintf("R%d: %s (Every %d days)", r.ID, desc, r.Interval)
+		btnText := fmt.Sprintf("R%d: %s (%s)", r.ID, desc, recurrenceLabel(r))
 		cbData := fmt.Sprintf("chore_delete:R%d", r.ID)
 		keyboard = append(keyboard, tgbotapi.NewInlineKeyboardRow(tgbotapi.NewInlineKeyboardButtonData(btnText, cbData)))
 	}

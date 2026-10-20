@@ -12,7 +12,7 @@ import (
 // The LEFT JOIN on users fills in the fixed assignee's name, if any.
 const recurringChoreColumns = `
 		SELECT rc.id, rc.description, rc.interval_days, rc.next_run_at, rc.is_active, rc.created_at,
-			rc.assignee_user_id, u.first_name
+			rc.assignee_user_id, u.first_name, rc.ends_at
 		FROM recurring_chores rc
 		LEFT JOIN users u ON u.id = rc.assignee_user_id
 `
@@ -28,7 +28,7 @@ func scanRecurringChore(row rowScanner) (*store.RecurringChore, error) {
 	var nextRunAtStr, createdAtStr string
 	var isActiveInt int
 	var assigneeID sql.NullInt64
-	var assigneeName sql.NullString
+	var assigneeName, endsAtStr sql.NullString
 
 	err := row.Scan(
 		&chore.ID,
@@ -39,6 +39,7 @@ func scanRecurringChore(row rowScanner) (*store.RecurringChore, error) {
 		&createdAtStr,
 		&assigneeID,
 		&assigneeName,
+		&endsAtStr,
 	)
 	if err != nil {
 		return nil, err
@@ -54,6 +55,11 @@ func scanRecurringChore(row rowScanner) (*store.RecurringChore, error) {
 	if t, err := time.Parse(time.RFC3339, createdAtStr); err == nil {
 		chore.CreatedAt = t
 	}
+	if endsAtStr.Valid {
+		if t, err := time.Parse(time.RFC3339, endsAtStr.String); err == nil {
+			chore.EndsAt = &t
+		}
+	}
 
 	return &chore, nil
 }
@@ -61,12 +67,16 @@ func scanRecurringChore(row rowScanner) (*store.RecurringChore, error) {
 // CreateRecurringChore adds a new recurring chore to the database.
 func (s *SQLiteStore) CreateRecurringChore(ctx context.Context, chore *store.RecurringChore) error {
 	query := `
-		INSERT INTO recurring_chores (description, interval_days, next_run_at, is_active, created_at, assignee_user_id)
-		VALUES (?, ?, ?, ?, ?, ?)
+		INSERT INTO recurring_chores (description, interval_days, next_run_at, is_active, created_at, assignee_user_id, ends_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`
 	var assigneeID sql.NullInt64
 	if chore.AssigneeUserID != 0 {
 		assigneeID = sql.NullInt64{Int64: chore.AssigneeUserID, Valid: true}
+	}
+	var endsAt sql.NullString
+	if chore.EndsAt != nil {
+		endsAt = sql.NullString{String: chore.EndsAt.UTC().Format(time.RFC3339), Valid: true}
 	}
 	result, err := s.db.ExecContext(ctx, query,
 		chore.Description,
@@ -75,6 +85,7 @@ func (s *SQLiteStore) CreateRecurringChore(ctx context.Context, chore *store.Rec
 		1, // is_active
 		chore.CreatedAt.UTC().Format(time.RFC3339),
 		assigneeID,
+		endsAt,
 	)
 	if err != nil {
 		return err
@@ -175,7 +186,8 @@ func (s *SQLiteStore) UpdateRecurringChoreDescription(ctx context.Context, id in
 	return nil
 }
 
-// CancelRecurringChore sets a recurring chore to inactive.
+// CancelRecurringChore sets a recurring chore to inactive. It is also how a
+// chore that has run for the last time (one-off, or past its end) is retired.
 func (s *SQLiteStore) CancelRecurringChore(ctx context.Context, id int64) error {
 	query := `
 		UPDATE recurring_chores

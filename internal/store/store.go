@@ -116,18 +116,39 @@ type ParticipantMonthlyTotal struct {
 	EarCount        int
 }
 
-// RecurringChore represents a scheduled periodic chore.
+// RecurringChore represents a scheduled chore: periodic, or a one-off assigned
+// at a future time (Interval 0).
 type RecurringChore struct {
 	ID          int64
 	Description string
-	Interval    int       // Interval in days
+	Interval    int       // Interval in days; 0 means it runs once, at NextRunAt
 	NextRunAt   time.Time // Time when the chore is next due
-	IsActive    bool
-	CreatedAt   time.Time
+	// EndsAt, when set, is the latest time an occurrence may run; the chore
+	// is deactivated once the next run would be after it.
+	EndsAt    *time.Time
+	IsActive  bool
+	CreatedAt time.Time
 	// AssigneeUserID is the user every occurrence goes to; 0 means a random user each time.
 	AssigneeUserID int64
 	// AssigneeName is the assignee's first name, populated on reads (empty when random).
 	AssigneeName string
+}
+
+// RunsLeft counts the occurrences still to come, starting with NextRunAt,
+// stepping whole days in loc so the time of day survives DST changes.
+// It returns -1 for a periodic chore without an end.
+func (c *RecurringChore) RunsLeft(loc *time.Location) int {
+	if c.Interval <= 0 {
+		return 1
+	}
+	if c.EndsAt == nil {
+		return -1
+	}
+	n := 0
+	for run := c.NextRunAt.In(loc); !run.After(*c.EndsAt); run = run.AddDate(0, 0, c.Interval) {
+		n++
+	}
+	return n
 }
 
 // Registration request statuses.

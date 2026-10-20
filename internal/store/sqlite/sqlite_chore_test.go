@@ -37,6 +37,7 @@ func TestRecurringChores(t *testing.T) {
 	assert.Equal(t, chore.Interval, fetchedChore.Interval)
 	assert.Equal(t, chore.NextRunAt.Unix(), fetchedChore.NextRunAt.Unix())
 	assert.True(t, fetchedChore.IsActive)
+	assert.Nil(t, fetchedChore.EndsAt)
 
 	// 3. Get active recurring chores
 	chores, err := s.GetActiveRecurringChores(ctx)
@@ -290,4 +291,31 @@ func TestGetUserWeeklyStats(t *testing.T) {
 	assert.Equal(t, float64(7200), stats[1].AvgExecSeconds)
 	// Bob: 0 late = 0s
 	assert.Equal(t, float64(0), stats[1].AvgLateSeconds)
+}
+
+func TestRecurringChores_EndsAt(t *testing.T) {
+	s := setupTestDB(t)
+	ctx := context.Background()
+
+	now := time.Now()
+	endsAt := now.Add(10 * 24 * time.Hour)
+	chore := &store.RecurringChore{
+		Description: "Air the cellar",
+		Interval:    0,
+		NextRunAt:   now.Add(time.Hour),
+		EndsAt:      &endsAt,
+		CreatedAt:   now,
+	}
+	require.NoError(t, s.CreateRecurringChore(ctx, chore))
+
+	fetched, err := s.GetRecurringChore(ctx, chore.ID)
+	require.NoError(t, err)
+	require.NotNil(t, fetched.EndsAt)
+	assert.Equal(t, endsAt.Unix(), fetched.EndsAt.Unix())
+	assert.Equal(t, 0, fetched.Interval)
+
+	due, err := s.GetDueRecurringChores(ctx, now.Add(2*time.Hour))
+	require.NoError(t, err)
+	require.Len(t, due, 1)
+	require.NotNil(t, due[0].EndsAt)
 }

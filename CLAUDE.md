@@ -63,6 +63,16 @@ Key files:
 
 **Chore nudges:** the periodic 16:00–19:00 chore reminder (`internal/notification/periodic_chore_reminder.go`) asks `ChoreNudge` for a funny carrot-and-stick message (small vague rewards vs. "telling the admin" / extra duties) built from `DescribeChoreDelays` (time since assignment, overdue time). The factual chore list is always appended deterministically. `notification.ComposeChoreReminder` builds the message (and returns the LLM error alongside the static fallback). Admins can preview it with `/text_candidate_chore <name>` (`internal/telegram/handlers/chore_nudge_preview.go`), which runs the same code path and replies to the admin only, plus the LLM context and provider/model used.
 
+## Recurring and Scheduled Chores
+
+`recurring_chores` holds both periodic chores and one-off chores scheduled for later (`interval_days = 0`). `ProcessRecurringChores` (`internal/telegram/handlers/chore_cron.go`) runs **every minute** from the cron in `main.go` and assigns everything whose `next_run_at` has passed (DM + group notice), so a chore is assigned at its exact time. A one-off is deactivated after its run; a periodic chore with `ends_at` is deactivated once its next run would be after `ends_at` (`RecurringChore.RunsLeft` counts the remaining runs).
+
+`/chore` accepts two extra suffixes, kept out of `/help` and used by the admin assistant (`assign_chore` `start_at` / `end_date`):
+- `/from=YYYY-MM-DD_HH:MM` — assign at that time instead of now (first run of a recurring chore). A bare date means 10:00.
+- `/until=YYYY-MM-DD` — recurring only; last day an occurrence may run (inclusive).
+
+e.g. `/chore Air the cellar /Vladimir /1d /from=2026-10-21_12:00 /until=2026-10-30` → daily at 12:00, 10 times. Times are in `CHORE_TIMEZONE`.
+
 ## Free-text Assistants (admin and participants)
 
 When the Anthropic provider is configured, people can write to the bot in free text (any language) in a private chat instead of using /commands. Claude parses the intent and acts through tools. There are two profiles (`assistant.AdminProfile()` / `assistant.ParticipantProfile()`), each with its own tools, system prompt and button prefix (`aa` / `ap`):
