@@ -11,8 +11,9 @@ import (
 )
 
 const (
-	defaultAnthropicModel  = "claude-opus-5-5"
-	defaultAnthropicEffort = anthropic.OutputConfigEffortLow
+	defaultAnthropicBaseURL = "https://api.anthropic.com/"
+	defaultAnthropicModel   = "claude-opus-5-5"
+	defaultAnthropicEffort  = anthropic.OutputConfigEffortLow
 	// Generous output ceiling: thinking tokens count against it, while the
 	// visible messages we ask for are only a few sentences.
 	anthropicMaxTokens = 16000
@@ -30,16 +31,19 @@ func NewAnthropicClient(apiKey, baseURL string, timeoutSeconds int, model, effor
 		model = defaultAnthropicModel
 	}
 
-	opts := []option.RequestOption{
+	if baseURL == "" {
+		baseURL = defaultAnthropicBaseURL
+	}
+
+	client := anthropic.NewClient(
 		option.WithAPIKey(apiKey),
-		option.WithRequestTimeout(time.Duration(timeoutSeconds) * time.Second),
+		// Always set explicitly: the SDK would otherwise read ANTHROPIC_BASE_URL
+		// from the environment, and docker-compose defines it as "" when unset.
+		option.WithBaseURL(baseURL),
+		option.WithRequestTimeout(time.Duration(timeoutSeconds)*time.Second),
 		// Timeouts are retried; keep the worst case bounded for chat handlers.
 		option.WithMaxRetries(1),
-	}
-	if baseURL != "" {
-		opts = append(opts, option.WithBaseURL(baseURL))
-	}
-	client := anthropic.NewClient(opts...)
+	)
 
 	return &Client{
 		baseURL:   baseURL,

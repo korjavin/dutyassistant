@@ -3,10 +3,14 @@ package llm
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // anthropicServer returns a fake Messages API that records the last request
@@ -142,4 +146,49 @@ func TestAnthropic_ErrorCases(t *testing.T) {
 	if _, err := c.ChoreNudge(ctx, "Anna", "chores"); err == nil {
 		t.Error("Expected error on 400 response")
 	}
+}
+
+// recordingTransport captures request URLs instead of hitting the network.
+type recordingTransport struct{ urls []string }
+
+func (r *recordingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	r.urls = append(r.urls, req.URL.String())
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(messageReply("end_turn", `{"type":"text","text":"ok"}`))),
+		Request:    req,
+	}, nil
+}
+
+// Regression: docker-compose sets ANTHROPIC_BASE_URL to an empty string when it
+// is not configured, and the SDK used it verbatim ("unsupported protocol scheme").
+func TestNewAnthropicClient_EmptyBaseURLEnvUsesProduction(t *testing.T) {
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+	rec := &recordingTransport{}
+	orig := http.DefaultTransport
+	http.DefaultTransport = rec
+	t.Cleanup(func() { http.DefaultTransport = orig })
+
+	c := NewAnthropicClient("test-key", "", 10, "", "")
+	_, err := c.ChoreNudge(context.Background(), "Anna", "chores")
+
+	require.NoError(t, err)
+	require.Len(t, rec.urls, 1)
+	assert.Equal(t, "https://api.anthropic.com/v1/messages", rec.urls[0])
+}
+
+func TestNewAnthropicClient_ExplicitBaseURLWinsOverEnv(t *testing.T) {
+	t.Setenv("ANTHROPIC_BASE_URL", "https://env.example.com")
+	rec := &recordingTransport{}
+	orig := http.DefaultTransport
+	http.DefaultTransport = rec
+	t.Cleanup(func() { http.DefaultTransport = orig })
+
+	c := NewAnthropicClient("test-key", "https://proxy.example.com", 10, "", "")
+	_, err := c.ChoreNudge(context.Background(), "Anna", "chores")
+
+	require.NoError(t, err)
+	require.Len(t, rec.urls, 1)
+	assert.Equal(t, "https://proxy.example.com/v1/messages", rec.urls[0])
 }
