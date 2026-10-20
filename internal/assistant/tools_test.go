@@ -53,6 +53,9 @@ func TestTools_CommandsBuilt(t *testing.T) {
 		{"assign_chore", `{"description":"Feed cat","assignee_name":"IVAN"}`, "/chore Feed cat /Ivan"},
 		{"assign_chore", `{"description":"Water plants","repeat_every_days":3}`, "/chore Water plants /3d"},
 		{"assign_chore", `{"description":"Water plants","assignee_name":"maria","repeat_every_days":7}`, "/chore Water plants /Maria /7d"},
+		{"assign_chore", `{"description":"Air the cellar","assignee_name":"Ivan","start_at":"2026-10-21 12:00"}`, "/chore Air the cellar /Ivan /from=2026-10-21_12:00"},
+		{"assign_chore", `{"description":"Air the cellar","assignee_name":"Ivan","repeat_every_days":1,"start_at":"2026-10-21T12:00","end_date":"2026-10-30"}`, "/chore Air the cellar /Ivan /1d /from=2026-10-21_12:00 /until=2026-10-30"},
+		{"assign_chore", `{"description":"Water plants","repeat_every_days":2,"end_date":"2026-10-30"}`, "/chore Water plants /2d /until=2026-10-30"},
 		{"add_admin_queue_days", `{"user_name":"ivan","days":2}`, "/assign Ivan 2"},
 		{"remove_admin_queue_days", `{"user_name":"Ivan","days":1}`, "/unassign Ivan 1"},
 		{"set_volunteer_queue", `{"user_name":"Ivan","days":0}`, "/set_volunteer Ivan 0"},
@@ -72,6 +75,19 @@ func TestTools_CommandsBuilt(t *testing.T) {
 	}
 }
 
+func TestTools_AssignChoreScheduleSummary(t *testing.T) {
+	d, _, ex := toolDeps(t)
+
+	action, _ := prepareCommand(t, d, ex, "assign_chore",
+		`{"description":"Air the cellar","assignee_name":"Ivan","repeat_every_days":1,"start_at":"2026-10-21 12:00","end_date":"2026-10-30"}`)
+	assert.Contains(t, action.Summary, "first on <b>Wed 2026-10-21 12:00</b>")
+	assert.Contains(t, action.Summary, "last by <b>Fri 2026-10-30</b> (<b>10</b> times)")
+
+	action, _ = prepareCommand(t, d, ex, "assign_chore", `{"description":"Air the cellar","start_at":"2026-10-21 12:00"}`)
+	assert.Contains(t, action.Summary, "Schedule one-off chore")
+	assert.Contains(t, action.Summary, "on <b>Wed 2026-10-21 12:00</b>")
+}
+
 func TestTools_ValidationErrors(t *testing.T) {
 	d, _, _ := toolDeps(t)
 	cases := []struct {
@@ -81,6 +97,12 @@ func TestTools_ValidationErrors(t *testing.T) {
 		{"assign_chore", `{"description":"Clean /Ivan"}`, "must not contain words starting with '/'"},
 		{"assign_chore", `{"description":"x","repeat_every_days":400}`, "between 1 and 365"},
 		{"assign_chore", `{"description":"x","assignee_name":"Petya"}`, `no user named "Petya"`},
+		{"assign_chore", `{"description":"x","start_at":"2026-10-20 17:00"}`, "not in the future"},
+		{"assign_chore", `{"description":"x","start_at":"21.10.2026 12:00"}`, "YYYY-MM-DD HH:MM"},
+		{"assign_chore", `{"description":"x","end_date":"2026-10-30"}`, "only applies to recurring chores"},
+		{"assign_chore", `{"description":"x","repeat_every_days":1,"end_date":"30.10.2026"}`, "end_date must be YYYY-MM-DD"},
+		{"assign_chore", `{"description":"x","repeat_every_days":1,"start_at":"2026-10-25 12:00","end_date":"2026-10-24"}`, "before the first occurrence"},
+		{"assign_chore", `{"description":"x","repeat_every_days":1,"end_date":"2026-10-19"}`, "before the first occurrence"},
 		{"add_admin_queue_days", `{"user_name":"Ivan","days":0}`, "between 1 and 30"},
 		{"set_volunteer_queue", `{"user_name":"Ivan","days":8}`, "between 0 and 7"},
 		{"set_sviniya_balance", `{"user_name":"Ivan","balance":-1}`, "between 0 and 1000"},

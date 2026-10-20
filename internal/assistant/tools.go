@@ -75,7 +75,7 @@ var adminTools = []toolDef{
 	},
 	{
 		name:        "list_recurring_chores",
-		description: "List active recurring (periodic) chores with their recurring_chore_id, interval, fixed assignee (if any) and next run time.",
+		description: "List active recurring (periodic) chores and one-off chores scheduled for later, with their recurring_chore_id, interval ('once (scheduled)' for one-offs), fixed assignee (if any), next run time and end (Until) if set.",
 		read: func(ctx context.Context, d deps, _ []byte) (string, error) {
 			return d.runText(ctx, "/list chore")
 		},
@@ -111,12 +111,18 @@ var adminTools = []toolDef{
 	},
 	{
 		name: "assign_chore",
-		description: "Create a chore. Without repeat_every_days it is a one-off chore assigned now (to assignee_name, or to a random active user when omitted); " +
-			"the assignee gets a DM and the group is notified. With repeat_every_days it becomes a recurring chore.",
+		description: "Create a chore. Without repeat_every_days and start_at it is a one-off chore assigned now (to assignee_name, or to a random active user when omitted); " +
+			"the assignee gets a DM and the group is notified. With start_at the chore is assigned only at that time (DM and group notice then), so future chores never pile up on someone now; " +
+			"never write the date into the description. With repeat_every_days it becomes a recurring chore: start_at is its first occurrence and every later one is at the same time of day; " +
+			"end_date makes it stop by itself. E.g. 'every day for the next 10 days at 12:00' is repeat_every_days=1, start_at=<first day> 12:00, end_date=<first day + 9 days>. " +
+			"Scheduled and recurring chores show up in list_recurring_chores; use it afterwards to check the dates.",
 		properties: map[string]any{
-			"description":       str("What has to be done, e.g. 'Take out the trash'."),
-			"assignee_name":     str("Exact user name to assign to. Omit for a random user."),
+			"description":       str("What has to be done, e.g. 'Take out the trash'. No dates or times in it."),
+			"assignee_name":     str("Exact user name to assign to. Omit for a random user (picked when the chore is assigned)."),
 			"repeat_every_days": integer("Make it recurring every N days (1-365). Omit for a one-off chore."),
+			"start_at": str("When to assign it (the first occurrence of a recurring chore), as 'YYYY-MM-DD HH:MM' in the local time of the [bracketed] timestamp. Must be in the future. " +
+				"Omit to assign a one-off chore now; a recurring chore without it starts now if it is 10:00-18:00, else at the next 10:00."),
+			"end_date": str("Recurring chores only: last day (YYYY-MM-DD, inclusive) on which an occurrence may be assigned. Omit to repeat until cancelled."),
 		},
 		required: []string{"description"},
 		prepare:  prepareAssignChore,
@@ -141,7 +147,7 @@ var adminTools = []toolDef{
 	},
 	{
 		name:        "cancel_recurring_chore",
-		description: "Stop a recurring chore so no new occurrences are created.",
+		description: "Stop a recurring chore so no new occurrences are created, or cancel a one-off chore scheduled for later before it is assigned.",
 		properties: map[string]any{
 			"recurring_chore_id": integer("recurring_chore_id from list_recurring_chores."),
 		},
@@ -375,6 +381,8 @@ func prepareAssignChore(ctx context.Context, d deps, input []byte) (*preparedAct
 		Description     string `json:"description"`
 		AssigneeName    string `json:"assignee_name"`
 		RepeatEveryDays int    `json:"repeat_every_days"`
+		StartAt         string `json:"start_at"`
+		EndDate         string `json:"end_date"`
 	}
 	if err := decode(input, &in); err != nil {
 		return nil, err
@@ -392,10 +400,42 @@ func prepareAssignChore(ctx context.Context, d deps, input []byte) (*preparedAct
 		return nil, fmt.Errorf("repeat_every_days must be between 1 and 365")
 	}
 
+	// The schedule is checked here too, so the admin confirms exact dates
+	rc := &store.RecurringChore{Interval: in.RepeatEveryDays}
+	if s := strings.TrimSpace(in.StartAt); s != "" {
+		t, err := time.ParseInLocation("2006-01-02 15:04", strings.Replace(s, "T", " ", 1), d.loc)
+		if err != nil {
+			return nil, fmt.Errorf("start_at must be 'YYYY-MM-DD HH:MM'")
+		}
+		if !t.After(d.now) {
+			return nil, fmt.Errorf("start_at %s is not in the future (now is %s)", t.Format("2006-01-02 15:04"), d.now.In(d.loc).Format("2006-01-02 15:04"))
+		}
+		rc.NextRunAt = t
+	}
+	if s := strings.TrimSpace(in.EndDate); s != "" {
+		if in.RepeatEveryDays == 0 {
+			return nil, fmt.Errorf("end_date only applies to recurring chores (set repeat_every_days)")
+		}
+		day, err := time.ParseInLocation(dateLayout, s, d.loc)
+		if err != nil {
+			return nil, fmt.Errorf("end_date must be YYYY-MM-DD")
+		}
+		end := time.Date(day.Year(), day.Month(), day.Day(), 23, 59, 59, 0, d.loc)
+		if end.Before(d.now) || (!rc.NextRunAt.IsZero() && end.Before(rc.NextRunAt)) {
+			return nil, fmt.Errorf("end_date %s is before the first occurrence", s)
+		}
+		rc.EndsAt = &end
+	}
+
 	line := "/chore " + desc
-	summary := fmt.Sprintf("Assign one-off chore <i>%s</i>", html.EscapeString(desc))
-	if in.RepeatEveryDays > 0 {
+	var summary string
+	switch {
+	case in.RepeatEveryDays > 0:
 		summary = fmt.Sprintf("Create recurring chore <i>%s</i> every <b>%d</b> day(s)", html.EscapeString(desc), in.RepeatEveryDays)
+	case !rc.NextRunAt.IsZero():
+		summary = fmt.Sprintf("Schedule one-off chore <i>%s</i>", html.EscapeString(desc))
+	default:
+		summary = fmt.Sprintf("Assign one-off chore <i>%s</i>", html.EscapeString(desc))
 	}
 	if strings.TrimSpace(in.AssigneeName) != "" {
 		u, err := resolveUser(ctx, d.store, in.AssigneeName)
@@ -409,6 +449,21 @@ func prepareAssignChore(ctx context.Context, d deps, input []byte) (*preparedAct
 	}
 	if in.RepeatEveryDays > 0 {
 		line += fmt.Sprintf(" /%dd", in.RepeatEveryDays)
+	}
+	if !rc.NextRunAt.IsZero() {
+		line += " /from=" + rc.NextRunAt.Format("2006-01-02_15:04")
+		if in.RepeatEveryDays > 0 {
+			summary += fmt.Sprintf(", first on <b>%s</b>", rc.NextRunAt.Format("Mon 2006-01-02 15:04"))
+		} else {
+			summary += fmt.Sprintf(" on <b>%s</b>", rc.NextRunAt.Format("Mon 2006-01-02 15:04"))
+		}
+	}
+	if rc.EndsAt != nil {
+		line += " /until=" + rc.EndsAt.Format(dateLayout)
+		summary += fmt.Sprintf(", last by <b>%s</b>", rc.EndsAt.Format("Mon 2006-01-02"))
+		if !rc.NextRunAt.IsZero() {
+			summary += fmt.Sprintf(" (<b>%d</b> times)", rc.RunsLeft(d.loc))
+		}
 	}
 	return d.commandAction(summary, line), nil
 }
@@ -472,6 +527,9 @@ func prepareCancelRecurringChore(ctx context.Context, d deps, input []byte) (*pr
 		return nil, fmt.Errorf("no active recurring chore with recurring_chore_id=%d; call list_recurring_chores", in.ID)
 	}
 	summary := fmt.Sprintf("<b>Stop</b> recurring chore #%d <i>%s</i> (every %d day(s))", rc.ID, html.EscapeString(rc.Description), rc.Interval)
+	if rc.Interval <= 0 {
+		summary = fmt.Sprintf("<b>Cancel</b> scheduled chore #%d <i>%s</i> (due %s)", rc.ID, html.EscapeString(rc.Description), rc.NextRunAt.In(d.loc).Format("2006-01-02 15:04"))
+	}
 	return d.commandAction(summary, fmt.Sprintf("/cancel chore %d", rc.ID)), nil
 }
 

@@ -51,11 +51,15 @@ func (h *Handlers) HandleList(m *tgbotapi.Message) (tgbotapi.MessageConfig, erro
 			nextRunStr := chore.NextRunAt.In(berlinLoc).Format("2006-01-02 15:04 MST")
 			sb.WriteString(fmt.Sprintf("<b>ID:</b> <code>%d</code>\n", chore.ID))
 			sb.WriteString(fmt.Sprintf("<b>Description:</b> <i>%s</i>\n", escapedDesc))
-			sb.WriteString(fmt.Sprintf("<b>Interval:</b> every %d days\n", chore.Interval))
+			sb.WriteString(fmt.Sprintf("<b>Interval:</b> %s\n", recurrenceLabel(chore)))
 			if chore.AssigneeName != "" {
 				fmt.Fprintf(&sb, "<b>Assignee:</b> %s\n", html.EscapeString(chore.AssigneeName))
 			}
-			sb.WriteString(fmt.Sprintf("<b>Next Run:</b> %s\n\n", nextRunStr))
+			sb.WriteString(fmt.Sprintf("<b>Next Run:</b> %s\n", nextRunStr))
+			if chore.EndsAt != nil {
+				fmt.Fprintf(&sb, "<b>Until:</b> %s (%d run(s) left)\n", chore.EndsAt.In(berlinLoc).Format("2006-01-02 15:04"), chore.RunsLeft(berlinLoc))
+			}
+			sb.WriteString("\n")
 		}
 
 		msg := tgbotapi.NewMessage(m.Chat.ID, sb.String())
@@ -141,11 +145,15 @@ func (h *Handlers) HandleListCallback(q *tgbotapi.CallbackQuery) (tgbotapi.Chatt
 			nextRunStr := chore.NextRunAt.In(berlinLoc).Format("2006-01-02 15:04 MST")
 			sb.WriteString(fmt.Sprintf("<b>ID:</b> <code>%d</code>\n", chore.ID))
 			sb.WriteString(fmt.Sprintf("<b>Description:</b> <i>%s</i>\n", escapedDesc))
-			sb.WriteString(fmt.Sprintf("<b>Interval:</b> every %d days\n", chore.Interval))
+			sb.WriteString(fmt.Sprintf("<b>Interval:</b> %s\n", recurrenceLabel(chore)))
 			if chore.AssigneeName != "" {
 				fmt.Fprintf(&sb, "<b>Assignee:</b> %s\n", html.EscapeString(chore.AssigneeName))
 			}
-			sb.WriteString(fmt.Sprintf("<b>Next Run:</b> %s\n\n", nextRunStr))
+			sb.WriteString(fmt.Sprintf("<b>Next Run:</b> %s\n", nextRunStr))
+			if chore.EndsAt != nil {
+				fmt.Fprintf(&sb, "<b>Until:</b> %s (%d run(s) left)\n", chore.EndsAt.In(berlinLoc).Format("2006-01-02 15:04"), chore.RunsLeft(berlinLoc))
+			}
+			sb.WriteString("\n")
 		}
 	} else if listType == "task" {
 		chores, err := h.Store.ListActiveChores(context.Background())

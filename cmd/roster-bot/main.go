@@ -159,16 +159,22 @@ func main() {
 	}
 	c := cron.New(cron.WithLocation(berlinLoc))
 
-	// Daily at 07:30 AM Berlin - Assign today's duty and Process Recurring Chores
-	_, err = c.AddFunc("30 7 * * *", func() {
-		slog.Info("═══════════════════════════════════════════════════════════")
-		slog.Info("Running daily duty assignment and recurring chores (07:30 AM Berlin)", slog.String("component", "cron"))
-		slog.Info(fmt.Sprintf("Current time: %s", time.Now().In(berlinLoc).Format("2006-01-02 15:04:05 MST")), slog.String("component", "cron"))
-
-		// Process Recurring Chores
+	// Every minute - assign recurring and scheduled chores whose run time has come
+	_, err = c.AddFunc("* * * * *", func() {
 		if err := telegramHandlers.ProcessRecurringChores(context.Background()); err != nil {
 			slog.Error(fmt.Sprintf("ERROR: Failed to process recurring chores: %v", err), slog.String("component", "cron"))
 		}
+	})
+	if err != nil {
+		slog.Error(fmt.Sprintf("Failed to schedule recurring chores job: %v", err))
+		os.Exit(1)
+	}
+
+	// Daily at 07:30 AM Berlin - Assign today's duty
+	_, err = c.AddFunc("30 7 * * *", func() {
+		slog.Info("═══════════════════════════════════════════════════════════")
+		slog.Info("Running daily duty assignment (07:30 AM Berlin)", slog.String("component", "cron"))
+		slog.Info(fmt.Sprintf("Current time: %s", time.Now().In(berlinLoc).Format("2006-01-02 15:04:05 MST")), slog.String("component", "cron"))
 
 		duty, err := sched.AssignTodaysDuty(context.Background())
 		if err != nil {

@@ -447,7 +447,8 @@ const adminSystemPrompt = `You are the admin assistant of a Telegram bot that ru
 
 How the household works:
 - Daily duty is assigned automatically each morning. Order of priority: admin queue days (forced duty), then volunteer queue days, then round-robin among active users who are not off-duty. Vacation mode pauses duty assignment.
-- Chores have an assignee and a deadline; assignees get Telegram reminders. Recurring chores create a new chore every N days.
+- Chores have an assignee and a deadline; assignees get Telegram reminders. Recurring chores create a new chore every N days, optionally from a start time until an end date.
+- A chore can be scheduled for a future date and time (assign_chore start_at): nothing happens until then, and then the assignee gets the DM and the group the notice. For chores on future days, schedule them this way; never put the date in the description or create them all now.
 - "Sviniya" is an award currency; balances can be set by the admin.
 
 Rules:
