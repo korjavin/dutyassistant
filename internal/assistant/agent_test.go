@@ -309,7 +309,7 @@ func TestAgent_ModelErrorResetsConversation(t *testing.T) {
 	env.agent.HandleMessage(context.Background(), testChat, testAdmin, "привет")
 
 	assert.Contains(t, env.sender.texts(), "assistant is unavailable")
-	assert.Empty(t, env.agent.conversation(testChat).messages)
+	assert.Empty(t, env.agent.conversation(testChat, testAdmin).messages)
 }
 
 func TestAgent_StepLimit(t *testing.T) {
@@ -323,7 +323,7 @@ func TestAgent_StepLimit(t *testing.T) {
 
 	assert.Len(t, env.executor.commands, maxSteps)
 	assert.Contains(t, env.sender.texts(), "too many steps")
-	assert.Empty(t, env.agent.conversation(testChat).messages)
+	assert.Empty(t, env.agent.conversation(testChat, testAdmin).messages)
 }
 
 func TestParseCallback(t *testing.T) {
@@ -422,4 +422,72 @@ func TestAgent_DailyLimit(t *testing.T) {
 	env.agent.HandleMessage(context.Background(), 5, 5, "hi again")
 	assert.Len(t, env.model.requests, 3)
 	assert.Contains(t, env.sender.texts(), "next day")
+}
+
+func TestAgent_GroupConversationsArePerPerson(t *testing.T) {
+	const group, kid, ivan = int64(-1001), int64(555), int64(777)
+	env := newProfileEnv(t, ParticipantProfile(), 0,
+		modelReply("end_turn", textBlock("Привет, Kid!")),
+		modelReply("end_turn", textBlock("Привет, Ivan!")),
+	)
+
+	env.agent.HandleGroupMessage(context.Background(), group, kid, 41, "Kid", "какие у меня задачи?")
+	env.agent.HandleGroupMessage(context.Background(), group, ivan, 42, "Ivan", "а у меня?")
+
+	first, second := env.model.requests[0], env.model.requests[1]
+	assert.Contains(t, first, "(Group chat message from Kid; everyone in the group sees your reply.) какие у меня задачи?")
+	assert.Contains(t, second, "Group chat message from Ivan")
+	assert.NotContains(t, second, "какие у меня задачи?", "people in one group must not share a conversation")
+	require.Len(t, env.sender.messages, 2)
+	assert.Equal(t, group, env.sender.messages[0].ChatID)
+	assert.Equal(t, 41, env.sender.messages[0].ReplyToMessageID)
+	assert.Equal(t, 42, env.sender.messages[1].ReplyToMessageID)
+}
+
+func TestAgent_GroupButtonsBelongToTheAsker(t *testing.T) {
+	const group, kid, ivan = int64(-1001), int64(555), int64(777)
+	env := newProfileEnv(t, ParticipantProfile(), 0,
+		modelReply("tool_use", toolUse("tu_1", "complete_my_chore", `{"chore_id":1}`)),
+		modelReply("end_turn", textBlock("Молодец!")),
+	)
+	env.store.On("GetActiveChores", mock.Anything).Return([]*store.Chore{
+		{ID: 1, Description: "Feed cat", ReminderID: "r1", User: &store.User{ID: 1, TelegramUserID: kid, FirstName: "Kid"}},
+	}, nil)
+
+	env.agent.HandleGroupMessage(context.Background(), group, kid, 41, "Kid", "покормил кота")
+	id := env.confirmationID(t)
+
+	owner, ok := env.agent.PendingOwner(group, id)
+	assert.True(t, ok)
+	assert.Equal(t, kid, owner)
+	_, ok = env.agent.PendingOwner(kid, id)
+	assert.False(t, ok, "the button belongs to the group chat only")
+
+	// Someone else pressing Confirm finds no pending action of their own.
+	env.agent.HandleDecision(context.Background(), group, ivan, id, true)
+	assert.Empty(t, env.executor.callbacks)
+
+	env.agent.HandleDecision(context.Background(), group, kid, id, true)
+	assert.Equal(t, []string{"chore_done:r1"}, env.executor.callbacks)
+	last := env.sender.messages[len(env.sender.messages)-1]
+	assert.Equal(t, "Молодец!", last.Text)
+	assert.Equal(t, 41, last.ReplyToMessageID)
+
+	env.now = env.now.Add(confirmationTTL + time.Minute)
+	_, ok = env.agent.PendingOwner(group, id)
+	assert.False(t, ok)
+}
+
+func TestAgent_DailyLimitIsPerPersonAcrossChats(t *testing.T) {
+	env := newProfileEnv(t, ParticipantProfile(), 1,
+		modelReply("end_turn", textBlock("1")),
+		modelReply("end_turn", textBlock("other kid")),
+	)
+	env.agent.HandleMessage(context.Background(), 5, 5, "hi")
+	env.agent.HandleGroupMessage(context.Background(), -1001, 5, 7, "Kid", "hi from the group")
+	assert.Len(t, env.model.requests, 1)
+	assert.Contains(t, env.sender.texts(), "limit of 1 messages for today")
+
+	env.agent.HandleGroupMessage(context.Background(), -1001, 6, 8, "Other", "hi")
+	assert.Len(t, env.model.requests, 2)
 }

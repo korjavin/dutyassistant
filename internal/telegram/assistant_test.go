@@ -2,8 +2,10 @@ package telegram
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf16"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -149,4 +151,92 @@ func TestHandleAssistantCallback_IgnoredWhenDisabledOrNotAdmin(t *testing.T) {
 	resp, err := bot.handleAssistantCallback(q)
 	assert.NoError(t, err)
 	assert.Nil(t, resp)
+}
+
+const (
+	testGroup   = int64(-100500)
+	testBotID   = int64(4242)
+	testBotName = "DutyBot"
+)
+
+func newGroupAssistantTestBot() (*Bot, *mocks.MockStore) {
+	bot, mockStore := newAssistantTestBot()
+	bot.groupID = testGroup
+	bot.self = tgbotapi.User{ID: testBotID, UserName: testBotName, IsBot: true}
+	return bot, mockStore
+}
+
+// groupMsg builds a group message mentioning @mention at the UTF-16 offset of
+// its first occurrence (Telegram entity offsets are in UTF-16 code units).
+func groupMsg(chatID, from int64, text, mention string) *tgbotapi.Message {
+	m := &tgbotapi.Message{MessageID: 77, Text: text, From: &tgbotapi.User{ID: from, FirstName: "Tg"}, Chat: &tgbotapi.Chat{ID: chatID, Type: "supergroup"}}
+	if i := strings.Index(text, mention); mention != "" && i >= 0 {
+		m.Entities = []tgbotapi.MessageEntity{{
+			Type:   "mention",
+			Offset: len(utf16.Encode([]rune(text[:i]))),
+			Length: len(utf16.Encode([]rune(mention))),
+		}}
+	}
+	return m
+}
+
+func TestGroupMention_Detection(t *testing.T) {
+	bot, _ := newGroupAssistantTestBot()
+
+	m := groupMsg(testGroup, 1, "🙂 Привет @dutybot что у меня сегодня?", "@dutybot")
+	assert.True(t, bot.isGroupMention(m), "username match is case-insensitive")
+	assert.Equal(t, "🙂 Привет что у меня сегодня?", bot.stripMentions(m))
+
+	assert.False(t, bot.isGroupMention(groupMsg(testGroup, 1, "привет @OtherBot", "@OtherBot")))
+	assert.False(t, bot.isGroupMention(groupMsg(testGroup, 1, "привет всем", "")))
+	assert.False(t, bot.isGroupMention(groupMsg(-1, 1, "@DutyBot hi", "@DutyBot")), "only the main group")
+
+	fromBot := groupMsg(testGroup, 1, "@DutyBot hi", "@DutyBot")
+	fromBot.From.IsBot = true
+	assert.False(t, bot.isGroupMention(fromBot))
+
+	textMention := groupMsg(testGroup, 1, "Дежурный бот, кто сегодня?", "")
+	textMention.Entities = []tgbotapi.MessageEntity{{Type: "text_mention", Offset: 0, Length: 12, User: &tgbotapi.User{ID: testBotID}}}
+	assert.True(t, bot.isGroupMention(textMention))
+	assert.Equal(t, "Дежурный бот, кто сегодня?", bot.stripMentions(textMention))
+
+	bot.groupID = 0
+	assert.False(t, bot.isGroupMention(m), "no group configured")
+}
+
+func TestHandleAssistantMessage_GroupMention(t *testing.T) {
+	bot, mockStore := newGroupAssistantTestBot()
+
+	// Admin without the Anthropic provider gets the hint as a reply.
+	resp, handled := bot.handleAssistantMessage(groupMsg(testGroup, assistantTestAdmin, "@DutyBot назначь Ване посуду", "@DutyBot"))
+	require.True(t, handled)
+	msg := resp.(tgbotapi.MessageConfig)
+	assert.Equal(t, assistantUnavailableMessage, msg.Text)
+	assert.Equal(t, testGroup, msg.ChatID)
+	assert.Equal(t, 77, msg.ReplyToMessageID)
+
+	// A bare mention or a message without one is not for the assistant.
+	_, handled = bot.handleAssistantMessage(groupMsg(testGroup, assistantTestAdmin, "@DutyBot", "@DutyBot"))
+	assert.False(t, handled)
+	_, handled = bot.handleAssistantMessage(groupMsg(testGroup, assistantTestAdmin, "назначь Ване посуду", ""))
+	assert.False(t, handled)
+
+	// Unregistered participants are asked to /start.
+	enableTestAssistants(bot, mockStore, 5)
+	mockStore.On("GetUserByTelegramID", mock.Anything, int64(999)).Return(nil, nil)
+	resp, handled = bot.handleAssistantMessage(groupMsg(testGroup, 999, "@DutyBot что у меня?", "@DutyBot"))
+	require.True(t, handled)
+	assert.Equal(t, assistantNotRegistered, resp.(tgbotapi.MessageConfig).Text)
+}
+
+func TestHandleMessage_GroupMentionBypassesSomeoneElsesSession(t *testing.T) {
+	bot, _ := newGroupAssistantTestBot()
+	// Another user's session in the group must not swallow the admin's mention.
+	bot.handlers.SessionManager.StartSession(testGroup, 999, handlers.SessionType("unknown_type"))
+
+	resp, err := bot.handleMessage(groupMsg(testGroup, assistantTestAdmin, "@DutyBot привет", "@DutyBot"))
+
+	assert.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, assistantUnavailableMessage, resp.(tgbotapi.MessageConfig).Text)
 }

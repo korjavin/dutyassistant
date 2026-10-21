@@ -16,8 +16,9 @@ import (
 type Bot struct {
 	api      *tgbotapi.BotAPI
 	handlers *handlers.Handlers
-	groupID  int64 // DISH_GROUP ID for access control
-	ownerID  int64 // Owner ID for access control
+	groupID  int64         // DISH_GROUP ID for access control
+	ownerID  int64         // Owner ID for access control
+	self     tgbotapi.User // the bot's own account, to spot mentions in the group
 
 	// Free-text assistants for the admin and for participants; nil when disabled.
 	adminAssistant       *assistant.Agent
@@ -43,6 +44,7 @@ func NewBot(apiToken string, h *handlers.Handlers, groupID, ownerID int64) (*Bot
 		handlers: h,
 		groupID:  groupID,
 		ownerID:  ownerID,
+		self:     api.Self,
 	}, nil
 }
 
@@ -350,9 +352,15 @@ func (b *Bot) handleCallbackQuery(q *tgbotapi.CallbackQuery) (tgbotapi.Chattable
 func (b *Bot) handleMessage(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 	// Check if user is in an interactive session
 	session, exists := b.handlers.SessionManager.GetSession(m.Chat.ID)
+	// A mention of the bot in the group is for the assistant unless the
+	// sender is in the middle of their own session there.
+	if exists && session.UserID != m.From.ID && b.isGroupMention(m) {
+		exists = false
+	}
 	if !exists {
-		// No active session: free text in a private chat goes to the
-		// assistant (admin or participant); anything else is ignored.
+		// No active session: free text in a private chat, or a mention of
+		// the bot in the group, goes to the assistant (admin or participant);
+		// anything else is ignored.
 		if resp, handled := b.handleAssistantMessage(m); handled {
 			return resp, nil
 		}
