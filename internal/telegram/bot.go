@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -19,6 +20,8 @@ type Bot struct {
 	groupID  int64         // DISH_GROUP ID for access control
 	ownerID  int64         // Owner ID for access control
 	self     tgbotapi.User // the bot's own account, to spot mentions in the group
+	// migratedTo is the new DISH_GROUP ID already reported to the admin.
+	migratedTo int64
 
 	// Free-text assistants for the admin and for participants; nil when disabled.
 	adminAssistant       *assistant.Agent
@@ -73,7 +76,9 @@ func (b *Bot) SendMessageMarkdown(chatID int64, text string) error {
 
 // checkAccess verifies if a user has access to the bot.
 // Returns true if the user is the owner or a member of the DISH_GROUP.
-func (b *Bot) checkAccess(userID int64) bool {
+// chatID is where the message or button is; whoever writes in DISH_GROUP
+// itself is a member.
+func (b *Bot) checkAccess(userID, chatID int64) bool {
 	// Owner always has access
 	if b.ownerID != 0 && userID == b.ownerID {
 		slog.Info(fmt.Sprintf("User %d granted access as owner", userID), slog.String("component", "access"))
@@ -83,6 +88,10 @@ func (b *Bot) checkAccess(userID int64) bool {
 	// If no group is configured, allow access
 	if b.groupID == 0 {
 		slog.Info(fmt.Sprintf("User %d granted access (no group restriction)", userID), slog.String("component", "access"))
+		return true
+	}
+
+	if chatID == b.groupID {
 		return true
 	}
 
@@ -96,14 +105,66 @@ func (b *Bot) checkAccess(userID int64) bool {
 	})
 	if err != nil {
 		slog.Info(fmt.Sprintf("Error checking group membership for user %d: %v", userID, err), slog.String("component", "access"))
+		var apiErr *tgbotapi.Error
+		if errors.As(err, &apiErr) && apiErr.MigrateToChatID != 0 {
+			b.reportGroupMigration(apiErr.MigrateToChatID)
+		}
 		return false
 	}
 
-	// Allow if user is a member, administrator, or creator
+	// Allow if user is a member, administrator, or creator (or a member
+	// with restrictions)
 	status := chatMember.Status
-	allowed := status == "member" || status == "administrator" || status == "creator"
+	allowed := status == "member" || status == "administrator" || status == "creator" ||
+		(status == "restricted" && chatMember.IsMember)
 	slog.Info(fmt.Sprintf("User %d status in group: %s, access granted: %v", userID, status, allowed), slog.String("component", "access"))
 	return allowed
+}
+
+// addressedToBot reports whether a message may need the bot's attention:
+// anything in a private chat, a command, a mention of the bot, or text for
+// the sender's own interactive session in that chat.
+func (b *Bot) addressedToBot(m *tgbotapi.Message) bool {
+	if m.Chat == nil || m.Chat.IsPrivate() || m.IsCommand() || b.mentionsBot(m) {
+		return true
+	}
+	session, ok := b.handlers.SessionManager.GetSession(m.Chat.ID)
+	return ok && m.From != nil && session.UserID == m.From.ID
+}
+
+// handleGroupMigration handles the service messages Telegram sends when a
+// basic group is upgraded to a supergroup (it gets a new ID; this happens
+// e.g. when a bot is made admin). It returns true for such messages.
+func (b *Bot) handleGroupMigration(m *tgbotapi.Message) bool {
+	var oldID, newID int64
+	switch {
+	case m.MigrateToChatID != 0:
+		oldID, newID = m.Chat.ID, m.MigrateToChatID
+	case m.MigrateFromChatID != 0:
+		oldID, newID = m.MigrateFromChatID, m.Chat.ID
+	default:
+		return false
+	}
+	if b.groupID != 0 && oldID == b.groupID {
+		b.reportGroupMigration(newID)
+	}
+	return true
+}
+
+// reportGroupMigration tells the admin (once) that DISH_GROUP is outdated.
+func (b *Bot) reportGroupMigration(newID int64) {
+	if b.migratedTo == newID {
+		return
+	}
+	b.migratedTo = newID
+	text := fmt.Sprintf("⚠️ The group DISH_GROUP=%d was upgraded to a supergroup by Telegram and now has the ID %d. "+
+		"Set DISH_GROUP=%d and restart the bot; until then group messages and access checks fail.", b.groupID, newID, newID)
+	slog.Error(text, slog.String("component", "access"))
+	if b.ownerID != 0 && b.api != nil {
+		if _, err := b.api.Send(tgbotapi.NewMessage(b.ownerID, text)); err != nil {
+			slog.Error(fmt.Sprintf("Error notifying admin about the group migration: %v", err))
+		}
+	}
 }
 
 // Start begins listening for and processing updates from Telegram.
@@ -139,8 +200,19 @@ func (b *Bot) handleUpdate(update tgbotapi.Update) {
 		chatID = update.CallbackQuery.Message.Chat.ID
 	}
 
+	if m := update.Message; m != nil {
+		if b.handleGroupMigration(m) {
+			return
+		}
+		// Ordinary chatter in a group is not for the bot: no access check,
+		// no reply.
+		if !b.addressedToBot(m) {
+			return
+		}
+	}
+
 	// Verify user has access
-	if userID != 0 && !b.checkAccess(userID) {
+	if userID != 0 && !b.checkAccess(userID, chatID) {
 		slog.Info(fmt.Sprintf("Access denied for user %d", userID))
 		ownerMention := ""
 		if b.ownerID != 0 {
