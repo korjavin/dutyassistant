@@ -66,6 +66,13 @@ func (b *Bot) handleAssistantMessage(m *tgbotapi.Message) (tgbotapi.Chattable, b
 	text, group := m.Text, false
 	if !m.Chat.IsPrivate() {
 		if !b.isGroupMention(m) {
+			// The admin mentioning the bot elsewhere most likely means
+			// DISH_GROUP points to another chat; tell them which ID this is.
+			if b.mentionsBot(m) && b.handlers.IsAdmin(m.From.ID) {
+				msg := tgbotapi.NewMessage(m.Chat.ID, b.wrongGroupMessage(m.Chat.ID))
+				msg.ReplyToMessageID = m.MessageID
+				return msg, true
+			}
 			return nil, false
 		}
 		text, group = b.stripMentions(m), true
@@ -116,12 +123,28 @@ func (b *Bot) handleAssistantMessage(m *tgbotapi.Message) (tgbotapi.Chattable, b
 }
 
 // isGroupMention reports whether m was written in the main group and
-// mentions the bot (@username, or a mention of its account).
+// mentions the bot.
 func (b *Bot) isGroupMention(m *tgbotapi.Message) bool {
-	if b.groupID == 0 || m.Chat == nil || m.Chat.ID != b.groupID || m.From == nil || m.From.IsBot || b.self.ID == 0 {
+	return b.groupID != 0 && m.Chat != nil && m.Chat.ID == b.groupID && b.mentionsBot(m)
+}
+
+// mentionsBot reports whether a person's message mentions the bot
+// (@username, or a mention of its account).
+func (b *Bot) mentionsBot(m *tgbotapi.Message) bool {
+	if m.From == nil || m.From.IsBot || b.self.ID == 0 {
 		return false
 	}
 	return len(b.mentionEntities(m)) > 0
+}
+
+// wrongGroupMessage explains to the admin why a mention in chatID is ignored.
+func (b *Bot) wrongGroupMessage(chatID int64) string {
+	configured := "DISH_GROUP is not set"
+	if b.groupID != 0 {
+		configured = fmt.Sprintf("DISH_GROUP=%d", b.groupID)
+	}
+	return fmt.Sprintf("ℹ️ I answer mentions only in the household group (%s). This chat's ID is %d: "+
+		"if this is the household group, set DISH_GROUP=%d and restart the bot.", configured, chatID, chatID)
 }
 
 // mentionEntities returns the entities in m that mention the bot.

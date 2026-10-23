@@ -240,3 +240,80 @@ func TestHandleMessage_GroupMentionBypassesSomeoneElsesSession(t *testing.T) {
 	require.NotNil(t, resp)
 	assert.Equal(t, assistantUnavailableMessage, resp.(tgbotapi.MessageConfig).Text)
 }
+
+func TestHandleAssistantMessage_AdminMentionInOtherChatExplainsGroupID(t *testing.T) {
+	bot, _ := newGroupAssistantTestBot()
+	const otherChat = int64(-1009876)
+
+	resp, handled := bot.handleAssistantMessage(groupMsg(otherChat, assistantTestAdmin, "@DutyBot привет", "@DutyBot"))
+	require.True(t, handled)
+	msg := resp.(tgbotapi.MessageConfig)
+	assert.Contains(t, msg.Text, "DISH_GROUP=-100500")
+	assert.Contains(t, msg.Text, "set DISH_GROUP=-1009876")
+	assert.Equal(t, 77, msg.ReplyToMessageID)
+
+	// Participants are not told anything there.
+	_, handled = bot.handleAssistantMessage(groupMsg(otherChat, 999, "@DutyBot привет", "@DutyBot"))
+	assert.False(t, handled)
+
+	bot.groupID = 0
+	resp, _ = bot.handleAssistantMessage(groupMsg(otherChat, assistantTestAdmin, "@DutyBot привет", "@DutyBot"))
+	assert.Contains(t, resp.(tgbotapi.MessageConfig).Text, "DISH_GROUP is not set")
+}
+
+func TestAddressedToBot(t *testing.T) {
+	bot, _ := newGroupAssistantTestBot()
+
+	assert.False(t, bot.addressedToBot(groupMsg(testGroup, 999, "всем привет", "")), "group chatter")
+	assert.True(t, bot.addressedToBot(groupMsg(testGroup, 999, "@DutyBot привет", "@DutyBot")))
+	cmd := groupMsg(testGroup, 999, "/status", "")
+	cmd.Entities = []tgbotapi.MessageEntity{{Type: "bot_command", Offset: 0, Length: 7}}
+	assert.True(t, bot.addressedToBot(cmd))
+	private := groupMsg(999, 999, "привет", "")
+	private.Chat.Type = "private"
+	assert.True(t, bot.addressedToBot(private))
+
+	// Text for the sender's own session in the group still goes through.
+	bot.handlers.SessionManager.StartSession(testGroup, 999, handlers.SessionTypeSpendSviniya)
+	assert.True(t, bot.addressedToBot(groupMsg(testGroup, 999, "мороженое", "")))
+	assert.False(t, bot.addressedToBot(groupMsg(testGroup, 888, "мороженое", "")))
+}
+
+func TestHandleUpdate_GroupChatterIsIgnoredWithoutAccessCheck(t *testing.T) {
+	bot, _ := newGroupAssistantTestBot()
+	// bot.api is nil: an access check or a reply would panic.
+	assert.NotPanics(t, func() {
+		bot.handleUpdate(tgbotapi.Update{Message: groupMsg(-1009876, 999, "всем привет", "")})
+		bot.handleUpdate(tgbotapi.Update{Message: groupMsg(testGroup, 999, "всем привет", "")})
+	})
+}
+
+func TestCheckAccess_MessagesFromTheGroupNeedNoLookup(t *testing.T) {
+	bot, _ := newGroupAssistantTestBot()
+	// bot.api is nil, so this must not call getChatMember.
+	assert.True(t, bot.checkAccess(999, testGroup))
+	assert.True(t, bot.checkAccess(assistantTestAdmin, 1))
+}
+
+func TestHandleGroupMigration(t *testing.T) {
+	bot, _ := newGroupAssistantTestBot()
+	const newID = int64(-1001234567890)
+
+	assert.False(t, bot.handleGroupMigration(groupMsg(testGroup, 1, "hi", "")))
+
+	toMsg := groupMsg(testGroup, 1, "", "")
+	toMsg.MigrateToChatID = newID
+	assert.True(t, bot.handleGroupMigration(toMsg))
+	assert.Equal(t, newID, bot.migratedTo)
+
+	other := groupMsg(newID, 1, "", "")
+	other.MigrateFromChatID = -42 // some other group: handled, not reported
+	bot.migratedTo = 0
+	assert.True(t, bot.handleGroupMigration(other))
+	assert.Zero(t, bot.migratedTo)
+
+	fromMsg := groupMsg(newID, 1, "", "")
+	fromMsg.MigrateFromChatID = testGroup
+	assert.True(t, bot.handleGroupMigration(fromMsg))
+	assert.Equal(t, newID, bot.migratedTo)
+}
