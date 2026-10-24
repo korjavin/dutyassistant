@@ -329,6 +329,8 @@ func (b *Bot) handleCommand(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 		return b.handlers.HandleSpend(m)
 	case "text_candidate_chore":
 		return b.handlers.HandleTextCandidateChore(m)
+	case "report":
+		return b.handlers.HandleReport(m)
 	default:
 		msg := tgbotapi.NewMessage(m.Chat.ID, "Unknown command. Use /help for a list of commands.")
 		return msg, nil
@@ -414,6 +416,8 @@ func (b *Bot) handleCallbackQuery(q *tgbotapi.CallbackQuery) (tgbotapi.Chattable
 		return b.handlers.HandleCancelFlow(q)
 	case "reg_ok", "reg_no":
 		return b.handlers.HandleRegistrationCallback(q)
+	case "rep_done", "rep_ok", "rep_no":
+		return b.handlers.HandleReportCallback(q)
 	default:
 		slog.Info(fmt.Sprintf("Unknown callback action: %s", action))
 		return nil, nil
@@ -430,9 +434,14 @@ func (b *Bot) handleMessage(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 		exists = false
 	}
 	if !exists {
-		// No active session: free text in a private chat, or a mention of
-		// the bot in the group, goes to the assistant (admin or participant);
-		// anything else is ignored.
+		// No active session: a participant's voice message, or text while
+		// their daily report is open, is part of the report.
+		if resp, handled := b.handlers.HandleDailyReportMessage(m); handled {
+			return resp, nil
+		}
+		// Otherwise free text in a private chat, or a mention of the bot in
+		// the group, goes to the assistant (admin or participant); anything
+		// else is ignored.
 		if resp, handled := b.handleAssistantMessage(m); handled {
 			return resp, nil
 		}

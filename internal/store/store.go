@@ -151,6 +151,33 @@ func (c *RecurringChore) RunsLeft(loc *time.Location) int {
 	return n
 }
 
+// Daily report statuses.
+const (
+	// DailyReportCollecting: the participant is still sending messages.
+	DailyReportCollecting = "collecting"
+	// DailyReportSubmitted: finished, waiting for (or without) an AI assessment.
+	DailyReportSubmitted = "submitted"
+	// DailyReportProposed: the admin has a proposed score to confirm or reject.
+	DailyReportProposed = "proposed"
+	DailyReportApproved = "approved"
+	DailyReportRejected = "rejected"
+)
+
+// DailyReport is a participant's evening report of merits and failures
+// (voice transcripts and texts), which the LLM turns into a proposed score.
+type DailyReport struct {
+	ID             int64
+	UserID         int64
+	UserName       string // populated on reads
+	TelegramUserID int64  // populated on reads
+	ReportDate     time.Time
+	Text           string // all parts, one per line
+	Parts          int
+	Status         string
+	ProposedScore  int // 0 = none
+	Analysis       string
+}
+
 // Registration request statuses.
 const (
 	RegistrationPending  = "pending"
@@ -221,6 +248,23 @@ type Store interface {
 	GetParticipantsForRating(ctx context.Context) ([]*User, error)
 	GetCurrentMonthParticipantRatings(ctx context.Context, now time.Time) ([]*ParticipantDailyRating, error)
 	GetMonthlyParticipantTotals(ctx context.Context, year int, month time.Month) ([]*ParticipantMonthlyTotal, error)
+	// SaveParticipantRating upserts one participant's score without touching the others.
+	SaveParticipantRating(ctx context.Context, rating *ParticipantDailyRating) error
+
+	// Daily reports (participants' evening reports, scored by the LLM)
+	// EnsureDailyReport returns the participant's report for date, creating an empty one if needed.
+	EnsureDailyReport(ctx context.Context, userID int64, date time.Time) (*DailyReport, error)
+	GetDailyReport(ctx context.Context, userID int64, date time.Time) (*DailyReport, error)
+	GetDailyReportByID(ctx context.Context, id int64) (*DailyReport, error)
+	ListDailyReports(ctx context.Context, date time.Time) ([]*DailyReport, error)
+	// AppendDailyReport adds a part to a report that is still collecting; false if it is not.
+	AppendDailyReport(ctx context.Context, id int64, text string) (bool, error)
+	// SetDailyReportStatus moves a report from one status to another; false if it was not in from.
+	SetDailyReportStatus(ctx context.Context, id int64, from, to string) (bool, error)
+	// SaveDailyReportProposal stores the proposed score and analysis and marks the report proposed.
+	SaveDailyReportProposal(ctx context.Context, id int64, score int, analysis string) error
+	// GetChoresCompletedBetween returns the user's chores completed in [start, end).
+	GetChoresCompletedBetween(ctx context.Context, userID int64, start, end time.Time) ([]*Chore, error)
 
 	// Queue management methods
 	AddToVolunteerQueue(ctx context.Context, userID int64, days int) error

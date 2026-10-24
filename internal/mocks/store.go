@@ -487,3 +487,72 @@ func (m *MockStore) DeleteRegistrationRequest(ctx context.Context, telegramUserI
 	args := m.Called(ctx, telegramUserID)
 	return args.Error(0)
 }
+
+// SaveParticipantRating mocks the SaveParticipantRating method.
+func (m *MockStore) SaveParticipantRating(ctx context.Context, rating *store.ParticipantDailyRating) error {
+	args := m.Called(ctx, rating)
+	return args.Error(0)
+}
+
+// EnsureDailyReport mocks the EnsureDailyReport method.
+func (m *MockStore) EnsureDailyReport(ctx context.Context, userID int64, date time.Time) (*store.DailyReport, error) {
+	args := m.Called(ctx, userID, date)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*store.DailyReport), args.Error(1)
+}
+
+// GetDailyReport mocks the GetDailyReport method.
+func (m *MockStore) GetDailyReport(ctx context.Context, userID int64, date time.Time) (*store.DailyReport, error) {
+	args := m.Called(ctx, userID, date)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*store.DailyReport), args.Error(1)
+}
+
+// GetDailyReportByID mocks the GetDailyReportByID method.
+func (m *MockStore) GetDailyReportByID(ctx context.Context, id int64) (*store.DailyReport, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*store.DailyReport), args.Error(1)
+}
+
+// ListDailyReports mocks the ListDailyReports method.
+func (m *MockStore) ListDailyReports(ctx context.Context, date time.Time) ([]*store.DailyReport, error) {
+	args := m.Called(ctx, date)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*store.DailyReport), args.Error(1)
+}
+
+// AppendDailyReport mocks the AppendDailyReport method.
+func (m *MockStore) AppendDailyReport(ctx context.Context, id int64, text string) (bool, error) {
+	args := m.Called(ctx, id, text)
+	return args.Bool(0), args.Error(1)
+}
+
+// SetDailyReportStatus mocks the SetDailyReportStatus method.
+func (m *MockStore) SetDailyReportStatus(ctx context.Context, id int64, from, to string) (bool, error) {
+	args := m.Called(ctx, id, from, to)
+	return args.Bool(0), args.Error(1)
+}
+
+// SaveDailyReportProposal mocks the SaveDailyReportProposal method.
+func (m *MockStore) SaveDailyReportProposal(ctx context.Context, id int64, score int, analysis string) error {
+	args := m.Called(ctx, id, score, analysis)
+	return args.Error(0)
+}
+
+// GetChoresCompletedBetween mocks the GetChoresCompletedBetween method.
+func (m *MockStore) GetChoresCompletedBetween(ctx context.Context, userID int64, start, end time.Time) ([]*store.Chore, error) {
+	args := m.Called(ctx, userID, start, end)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*store.Chore), args.Error(1)
+}

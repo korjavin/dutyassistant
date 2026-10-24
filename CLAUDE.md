@@ -20,6 +20,15 @@ Key files:
 - `internal/store/sqlite/ratings.go` - DB queries for saving/loading ratings
 - `internal/store/store.go` - `ParticipantDailyRating` (HasEar bool) and `ParticipantMonthlyTotal` (EarCount int) structs
 
+## Daily Reports (merits and failures)
+
+At 20:40 Berlin (cron in `main.go`, 10 min before the admin's 20:50 rating prompt) `SendDailyReportRequests` DMs every rating participant (same set as `filterRatingParticipants`) asking for today's "report of merits and failures". Code: `internal/telegram/handlers/daily_report.go`; table `daily_reports` (one row per participant per day; status `collecting` → `submitted` → `proposed` → `approved`/`rejected`).
+- Routing (`bot.go` → `handleMessage`, no active session): `HandleDailyReportMessage` takes a participant's **voice / audio / video note** in a private chat at any time (opens today's report if needed) and **text only while the report is `collecting`**; anything else falls through to the assistant. `/report` opens the report manually.
+- Voice is downloaded from Telegram and transcribed by `llm.Transcriber` (OpenAI-compatible `/audio/transcriptions`, `TRANSCRIPTION_*` env, falls back to `OPENAI_API_KEY`/`OPENAI_URL`): the Claude API has no audio input. Transcription runs in a goroutine, serialized per report; the participant sees "I heard: …".
+- ✅ Done (`rep_done:<id>`, owner only) → `submitted` → `assessReport`: `llm.Client.AssessDailyReport` (prompt + `complete`, JSON `{score, analysis}`) gets the report plus facts (duty, chores completed today, pending/overdue chores). The admin gets the analysis with ✅ Confirm N / ❌ Reject (`rep_ok:<id>` / `rep_no:<id>`, admin only). Without an LLM (or on error) the report is sent unscored, no buttons.
+- Confirm saves only that participant's score (`SaveParticipantRating`, unlike `SaveDailyParticipantRatings` which replaces the whole day) and, once every participant is rated for the day, posts the usual daily + monthly summary to the group. Confirm is refused after 21:00 on the month's last day (winners already announced).
+- 21:30 cron `FinalizeDailyReports` submits reports with content whose authors never pressed Done.
+
 ## Registration (admin approval)
 
 Who can talk to the bot at all is decided by `checkAccess` in `internal/telegram/bot.go`: the owner (`ADMIN_ID`) and members of `DISH_GROUP` (everyone, if no group is configured). Group messages that are not addressed to the bot (no command, no mention, not the sender's own session) are dropped before the access check (`addressedToBot`), so chatter never gets an "Access denied" reply. Messages from inside `DISH_GROUP` need no `getChatMember` lookup. When Telegram upgrades the group to a supergroup (new ID, e.g. after making the bot admin), the admin is DMed the new ID to put in `DISH_GROUP` (`handleGroupMigration` / `reportGroupMigration`), and an admin mention in a chat that isn't `DISH_GROUP` is answered with that chat's ID. On top of that, `/start` from an unknown Telegram user does **not** create a user: `HandleStart` → `requestRegistration` (`internal/telegram/handlers/registration.go`) stores a `registration_requests` row (`pending`) and DMs the admin the person's name, @username and Telegram ID with ✅ Approve / ❌ Reject buttons (`reg_ok:<tgID>` / `reg_no:<tgID>`, admin-only).
@@ -190,6 +199,7 @@ The bot uses SQLite with the following key tables:
 - `chore_assignments` - Active chore assignments
 - `participant_ratings` - Daily participant scores with optional ear modifier (`has_ear` column)
 - `sviniya_balances` - Sviniya award balances (user_id PK, balance INTEGER DEFAULT 0)
+- `daily_reports` - Participants' evening reports (text/transcripts), status, LLM-proposed score and analysis (UNIQUE user_id, report_date)
 - `registration_requests` - Pending/rejected `/start` requests awaiting admin approval (telegram_user_id PK, names, status, requested_at)
 
 ## Timezone Handling
@@ -198,6 +208,7 @@ All scheduled operations use Europe/Berlin timezone:
 - Daily assignment: 07:30 AM
 - Daily completion: 21:00 PM
 - Weekly stats: Sunday 21:10 PM
+- Daily report requests: 20:40 PM (unsent reports forwarded at 21:30)
 - Rating prompts: Daily 20:50 PM
 
 ## Security Considerations

@@ -63,6 +63,20 @@ func main() {
 
 	llmProvider := resolveLLMProvider(os.Getenv("LLM_PROVIDER"), anthropicAPIKey)
 
+	// Speech-to-text for voice reports (the Claude API does not take audio).
+	// Without its own key it reuses the OpenAI key and URL.
+	transcriptionAPIKey := getEnv("TRANSCRIPTION_API_KEY", "")
+	transcriptionURL := getEnv("TRANSCRIPTION_URL", "")
+	if transcriptionAPIKey == "" {
+		transcriptionAPIKey = openaiAPIKey
+		if transcriptionURL == "" {
+			transcriptionURL = openaiURL
+		}
+	}
+	transcriptionTimeout := parseInt64(getEnv("TRANSCRIPTION_TIMEOUT_SECONDS", "60"), 60)
+	transcriptionModel := getEnv("TRANSCRIPTION_MODEL", "whisper-1")
+	transcriptionLanguage := getEnv("TRANSCRIPTION_LANGUAGE", "")
+
 	// Initialize database
 	slog.Info(fmt.Sprint("Initializing database at", dbPath))
 	ctx := context.Background()
@@ -106,6 +120,19 @@ func main() {
 		telegramHandlers = handlers.NewWithAdminID(store, sched, dishGroupID, adminID, llmClient)
 	} else {
 		telegramHandlers = handlers.New(store, sched, dishGroupID, llmClient)
+	}
+
+	// Daily reports: the LLM proposes scores, the transcriber handles voice.
+	// Avoid passing typed-nil pointers into the interfaces.
+	if llmClient != nil {
+		telegramHandlers.ReportAnalyzer = llmClient
+	}
+	if transcriber := llm.NewTranscriber(transcriptionAPIKey, transcriptionURL, int(transcriptionTimeout), transcriptionModel, transcriptionLanguage); transcriber != nil {
+		telegramHandlers.Transcriber = transcriber
+		model, url := transcriber.Config()
+		slog.Info(fmt.Sprintf("Voice transcription: Enabled (Model: %s, BaseURL: %s)", model, url))
+	} else {
+		slog.Info("Voice transcription: Disabled (set TRANSCRIPTION_API_KEY or OPENAI_API_KEY); daily reports accept text only")
 	}
 
 	// Initialize and start Telegram bot
@@ -283,6 +310,39 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Daily at 20:40 Berlin - Ask participants for their report of merits and failures
+	_, err = c.AddFunc("40 20 * * *", func() {
+		slog.Info("Running daily report requests (20:40 Berlin)", slog.String("component", "cron"))
+		if adminID == 0 {
+			slog.Info("Daily report requests skipped: ADMIN_ID is not configured", slog.String("component", "cron"))
+			return
+		}
+		n, err := telegramHandlers.SendDailyReportRequests(context.Background(), time.Now().In(berlinLoc))
+		if err != nil {
+			slog.Error(fmt.Sprintf("ERROR: Failed to send daily report requests: %v", err), slog.String("component", "cron"))
+			return
+		}
+		slog.Info(fmt.Sprintf("Sent %d daily report request(s)", n), slog.String("component", "cron"))
+	})
+	if err != nil {
+		slog.Error(fmt.Sprintf("Failed to schedule daily report requests job: %v", err))
+		os.Exit(1)
+	}
+
+	// Daily at 21:30 Berlin - Send the admin the reports whose authors forgot to press Done
+	_, err = c.AddFunc("30 21 * * *", func() {
+		n, err := telegramHandlers.FinalizeDailyReports(context.Background(), time.Now().In(berlinLoc))
+		if err != nil {
+			slog.Error(fmt.Sprintf("ERROR: Failed to finalize daily reports: %v", err), slog.String("component", "cron"))
+			return
+		}
+		slog.Info(fmt.Sprintf("Finalized %d unsent daily report(s) (21:30 Berlin)", n), slog.String("component", "cron"))
+	})
+	if err != nil {
+		slog.Error(fmt.Sprintf("Failed to schedule daily report finalization job: %v", err))
+		os.Exit(1)
+	}
+
 	// Daily at 20:50 Berlin - Ask the admin to rate active participants
 	_, err = c.AddFunc("50 20 * * *", func() {
 		slog.Info("Running daily participant rating reminder (20:50 Berlin)", slog.String("component", "cron"))
@@ -365,12 +425,14 @@ func main() {
 	// Start cron scheduler
 	c.Start()
 	slog.Info("═══════════════════════════════════════════════════════════")
-	slog.Info("Cron scheduler started with 5 jobs:")
+	slog.Info("Cron scheduler started with 7 jobs:")
 	slog.Info("  1. Daily at 07:30 AM Berlin - Assign today's duty and send notifications")
 	slog.Info("  2. Daily at 21:00 PM Berlin - Mark today's duty as completed")
-	slog.Info("  3. Daily at 20:50 PM Berlin - Send participant rating reminder to the admin")
-	slog.Info("  4. Daily at 21:00 PM Berlin - Publish month-end participant rating winners on the last calendar day")
-	slog.Info("  5. Sunday at 21:10 PM Berlin - Send weekly stats")
+	slog.Info("  3. Daily at 20:40 PM Berlin - Ask participants for their daily report")
+	slog.Info("  4. Daily at 20:50 PM Berlin - Send participant rating reminder to the admin")
+	slog.Info("  5. Daily at 21:30 PM Berlin - Send the admin unsent daily reports")
+	slog.Info("  6. Daily at 21:00 PM Berlin - Publish month-end participant rating winners on the last calendar day")
+	slog.Info("  7. Sunday at 21:10 PM Berlin - Send weekly stats")
 	slog.Info(fmt.Sprintf("Current Berlin time: %s", time.Now().In(berlinLoc).Format("2006-01-02 15:04:05 MST")))
 	slog.Info("═══════════════════════════════════════════════════════════")
 

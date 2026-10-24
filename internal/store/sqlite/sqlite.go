@@ -150,6 +150,21 @@ func (s *SQLiteStore) migrate(ctx context.Context) error {
 			status TEXT NOT NULL DEFAULT 'pending',
 			requested_at TEXT NOT NULL
 		);
+
+		CREATE TABLE IF NOT EXISTS daily_reports (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			report_date TEXT NOT NULL,
+			text TEXT NOT NULL DEFAULT '',
+			parts INTEGER NOT NULL DEFAULT 0,
+			status TEXT NOT NULL DEFAULT 'collecting',
+			proposed_score INTEGER NOT NULL DEFAULT 0,
+			analysis TEXT NOT NULL DEFAULT '',
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL,
+			UNIQUE(user_id, report_date),
+			FOREIGN KEY(user_id) REFERENCES users(id)
+		);
 	`
 	if _, err := s.db.ExecContext(ctx, schema); err != nil {
 		return err

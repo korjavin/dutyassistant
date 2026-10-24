@@ -69,6 +69,13 @@ services:
       - OPENAI_TIMEOUT_SECONDS=${OPENAI_TIMEOUT_SECONDS:-10}
       - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
       - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE:-0.7}
+      # Speech-to-text for voice daily reports (OpenAI-compatible /audio/transcriptions).
+      # Empty key = reuse OPENAI_API_KEY and OPENAI_URL; no key at all = text-only reports.
+      - TRANSCRIPTION_API_KEY=${TRANSCRIPTION_API_KEY:-}
+      - TRANSCRIPTION_URL=${TRANSCRIPTION_URL:-}
+      - TRANSCRIPTION_MODEL=${TRANSCRIPTION_MODEL:-whisper-1}
+      - TRANSCRIPTION_LANGUAGE=${TRANSCRIPTION_LANGUAGE:-}
+      - TRANSCRIPTION_TIMEOUT_SECONDS=${TRANSCRIPTION_TIMEOUT_SECONDS:-60}
 
     # Traefik reverse proxy labels for automatic SSL and routing
     labels:

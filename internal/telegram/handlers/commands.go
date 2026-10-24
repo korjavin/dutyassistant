@@ -30,7 +30,8 @@ const (
 		"/chore - View your currently assigned chores.\n" +
 		"/takechore - Volunteer to take an available chore assigned to someone else.\n" +
 		"/sviniya - View all sviniya balances.\n" +
-		"/spend - Spend a sviniya."
+		"/spend - Spend a sviniya.\n" +
+		"/report - Send today's report of merits and failures (voice or text)."
 
 	adminHelpMessageSection = "\n\n*Admin Commands:*\n" +
 		"/chore <description> - Assign a chore to a random user; end with /<name> to pick the person and/or /<N>d to repeat every N days.\n" +

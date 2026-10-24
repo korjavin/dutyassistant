@@ -436,6 +436,42 @@ func (m *MockStore) DeleteRegistrationRequest(ctx context.Context, telegramUserI
 	return nil
 }
 
+func (m *MockStore) SaveParticipantRating(ctx context.Context, rating *store.ParticipantDailyRating) error {
+	return nil
+}
+
+func (m *MockStore) EnsureDailyReport(ctx context.Context, userID int64, date time.Time) (*store.DailyReport, error) {
+	return nil, nil
+}
+
+func (m *MockStore) GetDailyReport(ctx context.Context, userID int64, date time.Time) (*store.DailyReport, error) {
+	return nil, nil
+}
+
+func (m *MockStore) GetDailyReportByID(ctx context.Context, id int64) (*store.DailyReport, error) {
+	return nil, nil
+}
+
+func (m *MockStore) ListDailyReports(ctx context.Context, date time.Time) ([]*store.DailyReport, error) {
+	return nil, nil
+}
+
+func (m *MockStore) AppendDailyReport(ctx context.Context, id int64, text string) (bool, error) {
+	return false, nil
+}
+
+func (m *MockStore) SetDailyReportStatus(ctx context.Context, id int64, from, to string) (bool, error) {
+	return false, nil
+}
+
+func (m *MockStore) SaveDailyReportProposal(ctx context.Context, id int64, score int, analysis string) error {
+	return nil
+}
+
+func (m *MockStore) GetChoresCompletedBetween(ctx context.Context, userID int64, start, end time.Time) ([]*store.Chore, error) {
+	return nil, nil
+}
+
 func TestSendDailyChoreSummary_NoOverdue(t *testing.T) {
 	mockStore := new(MockStore)
 	var sentText string
