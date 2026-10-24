@@ -68,6 +68,7 @@ func TestTranscriber(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/audio/transcriptions", r.URL.Path)
 		assert.Equal(t, "Bearer stt-key", r.Header.Get("Authorization"))
+		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 		require.NoError(t, r.ParseMultipartForm(1<<20))
 		assert.Equal(t, "whisper-1", r.FormValue("model"))
 		assert.Equal(t, "ru", r.FormValue("language"))

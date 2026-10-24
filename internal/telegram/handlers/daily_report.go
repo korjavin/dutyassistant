@@ -387,7 +387,8 @@ func (h *Handlers) submitReport(ctx context.Context, q *tgbotapi.CallbackQuery, 
 	}
 	slog.Info(fmt.Sprintf("[Report] %s submitted the report for %s", report.UserName, report.ReportDate.Format("2006-01-02")))
 	h.sendText(chatID, "🙏 Thanks! Your report is sent to the admin.")
-	go h.assessReport(report.ID)
+	// The assessment outlives this button press; keep it running on its own.
+	go h.assessReport(context.WithoutCancel(ctx), report.ID)
 	return removeButton
 }
 
@@ -412,7 +413,7 @@ func (h *Handlers) FinalizeDailyReports(ctx context.Context, date time.Time) (in
 			continue
 		}
 		h.sendText(r.TelegramUserID, "📨 I've sent what you told me today to the admin.")
-		h.assessReport(r.ID)
+		h.assessReport(ctx, r.ID)
 		n++
 	}
 	return n, nil
@@ -421,8 +422,8 @@ func (h *Handlers) FinalizeDailyReports(ctx context.Context, date time.Time) (in
 // assessReport asks the LLM for a proposed score and sends the report to the
 // admin: with Confirm / Reject buttons when there is a proposal, or as plain
 // information (rate manually) when the LLM is unavailable or fails.
-func (h *Handlers) assessReport(reportID int64) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+func (h *Handlers) assessReport(ctx context.Context, reportID int64) {
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
 
 	report, err := h.Store.GetDailyReportByID(ctx, reportID)
