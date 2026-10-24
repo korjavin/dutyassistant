@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
@@ -284,6 +285,15 @@ func (a *Agent) handleMessage(ctx context.Context, chatID, userID int64, replyTo
 	conv.replyTo = replyTo
 	to := target{chatID: chatID, replyTo: replyTo}
 	now := a.cfg.Now()
+	// A plain "yes" / "no" (typed or spoken) answers the pending buttons.
+	if p := conv.pending; p != nil && !now.After(p.expires) {
+		if approved, ok := parseDecision(text); ok {
+			conv.pending = nil
+			conv.lastActive = now
+			a.decide(ctx, conv, to, userID, p, approved)
+			return
+		}
+	}
 	if !a.allow(userID, now) {
 		a.sendHTML(to, fmt.Sprintf("😴 That's my limit of %d messages for today. Talk to you tomorrow! Meanwhile /help shows the commands.", a.cfg.DailyLimit), nil)
 		return
@@ -326,7 +336,12 @@ func (a *Agent) HandleDecision(ctx context.Context, chatID, userID int64, pendin
 	}
 	conv.pending = nil
 	conv.lastActive = a.cfg.Now()
+	a.decide(ctx, conv, to, userID, p, approved)
+}
 
+// decide runs or drops the actions of p, which the caller already took out
+// of conv.pending. conv.mu must be held.
+func (a *Agent) decide(ctx context.Context, conv *conversation, to target, userID int64, p *pending, approved bool) {
 	results := p.results
 	if !approved {
 		for _, pa := range p.actions {
@@ -353,6 +368,50 @@ func (a *Agent) HandleDecision(ctx context.Context, chatID, userID int64, pendin
 	conv.messages = append(conv.messages, anthropic.NewUserMessage(results...))
 
 	a.run(ctx, conv, to, userID)
+}
+
+// Words that, on their own, answer a pending confirmation. Replies are
+// often dictated, so short phrases like "да, подтверждаю" or "no, cancel"
+// count; anything with other words is a new request for the model.
+var (
+	yesWords = wordSet("да ага угу ок окей хорошо подтверждаю подтверди подтвердить подтверждено давай делай сделай конечно верно " +
+		"yes yeah yep yup ok okay sure confirm confirmed do it go ahead " +
+		"ja jawohl genau")
+	noWords = wordSet("нет не надо отмена отмени отменить отменяй стоп " +
+		"no nope cancel stop don't dont " +
+		"nein nicht abbrechen")
+)
+
+func wordSet(words string) map[string]bool {
+	set := make(map[string]bool)
+	for _, w := range strings.Fields(words) {
+		set[w] = true
+	}
+	return set
+}
+
+// parseDecision reports whether text is only a confirmation (approved) or
+// only a cancellation; ok is false for anything else.
+func parseDecision(text string) (approved, ok bool) {
+	text = strings.ReplaceAll(strings.ToLower(text), "’", "'")
+	words := strings.FieldsFunc(text, func(r rune) bool {
+		return !unicode.IsLetter(r) && r != '\''
+	})
+	if len(words) == 0 || len(words) > 4 {
+		return false, false
+	}
+	allYes, allNo := true, true
+	for _, w := range words {
+		allYes = allYes && yesWords[w]
+		allNo = allNo && noWords[w]
+	}
+	switch {
+	case allNo:
+		return false, true
+	case allYes:
+		return true, true
+	}
+	return false, false
 }
 
 func (a *Agent) deps(chatID, userID int64) deps {

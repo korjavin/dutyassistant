@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"sync"
 	"time"
@@ -29,6 +30,13 @@ type Handlers struct {
 	ChoreReminderManager *ChoreReminderManager // Chore reminder manager
 	LLMClient            llm.ClientInterface
 	ratingsMu            sync.Mutex
+
+	// Daily reports: ReportAnalyzer proposes scores (nil = reports go to the
+	// admin unscored), Transcriber handles voice messages (nil = text only).
+	ReportAnalyzer ReportAnalyzer
+	Transcriber    SpeechTranscriber
+	// FetchFile downloads a received file; nil means from Telegram (tests override it).
+	FetchFile func(ctx context.Context, fileID string) (io.ReadCloser, error)
 }
 
 // SetBot sets the bot API instance for the handlers.

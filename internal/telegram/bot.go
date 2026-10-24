@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/korjavin/dutyassistant/internal/assistant"
@@ -22,6 +23,9 @@ type Bot struct {
 	self     tgbotapi.User // the bot's own account, to spot mentions in the group
 	// migratedTo is the new DISH_GROUP ID already reported to the admin.
 	migratedTo int64
+
+	// voiceLocks keeps voice messages of one chat in order (chat ID -> *sync.Mutex).
+	voiceLocks sync.Map
 
 	// Free-text assistants for the admin and for participants; nil when disabled.
 	adminAssistant       *assistant.Agent
@@ -227,35 +231,43 @@ func (b *Bot) handleUpdate(update tgbotapi.Update) {
 
 	switch {
 	case update.Message != nil:
-		// Check if the user is in an active interactive session
-		session, inSession := b.handlers.SessionManager.GetSession(chatID)
-
-		// A bare cancel command has no arguments
-		isBareCancel := update.Message.IsCommand() && update.Message.Command() == "cancel" && strings.TrimSpace(update.Message.CommandArguments()) == ""
-		// Ensure the session belongs to the user who sent the message
-		isSessionOwner := inSession && session.UserID == userID
-
-		// If in a session, intercept bare /cancel to allow the session to abort gracefully
-		if isSessionOwner && isBareCancel {
-			response, err = b.handleMessage(update.Message)
-		} else if update.Message.IsCommand() {
-			response, err = b.handleCommand(update.Message)
-		} else {
-			// Handle non-command messages (e.g., for interactive sessions)
-			response, err = b.handleMessage(update.Message)
+		if handlers.HasVoice(update.Message) {
+			// Transcribed in the background, then handled like typed text.
+			b.handleVoice(update.Message)
+			return
 		}
+		response, err = b.routeMessage(update.Message)
 	case update.CallbackQuery != nil:
 		response, err = b.handleCallbackQuery(update.CallbackQuery)
 	}
 
+	b.respond(chatID, response, err)
+}
+
+// routeMessage sends a message to its session, command or free-text handler.
+func (b *Bot) routeMessage(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
+	// Check if the user is in an active interactive session
+	session, inSession := b.handlers.SessionManager.GetSession(m.Chat.ID)
+
+	// A bare cancel command has no arguments
+	isBareCancel := m.IsCommand() && m.Command() == "cancel" && strings.TrimSpace(m.CommandArguments()) == ""
+	// Ensure the session belongs to the user who sent the message
+	isSessionOwner := inSession && session.UserID == m.From.ID
+
+	// If in a session, intercept bare /cancel to allow the session to abort gracefully
+	if isSessionOwner && isBareCancel {
+		return b.handleMessage(m)
+	} else if m.IsCommand() {
+		return b.handleCommand(m)
+	}
+	// Handle non-command messages (e.g., for interactive sessions)
+	return b.handleMessage(m)
+}
+
+// respond sends a handler's response, or a generic error message to chatID.
+func (b *Bot) respond(chatID int64, response tgbotapi.Chattable, err error) {
 	if err != nil {
 		slog.Error(fmt.Sprintf("Error handling update: %v", err))
-		var chatID int64
-		if update.Message != nil {
-			chatID = update.Message.Chat.ID
-		} else if update.CallbackQuery != nil {
-			chatID = update.CallbackQuery.Message.Chat.ID
-		}
 		if chatID != 0 {
 			response = tgbotapi.NewMessage(chatID, "An unexpected error occurred. Please try again.")
 		} else {
@@ -329,6 +341,8 @@ func (b *Bot) handleCommand(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 		return b.handlers.HandleSpend(m)
 	case "text_candidate_chore":
 		return b.handlers.HandleTextCandidateChore(m)
+	case "report":
+		return b.handlers.HandleReport(m)
 	default:
 		msg := tgbotapi.NewMessage(m.Chat.ID, "Unknown command. Use /help for a list of commands.")
 		return msg, nil
@@ -414,6 +428,8 @@ func (b *Bot) handleCallbackQuery(q *tgbotapi.CallbackQuery) (tgbotapi.Chattable
 		return b.handlers.HandleCancelFlow(q)
 	case "reg_ok", "reg_no":
 		return b.handlers.HandleRegistrationCallback(q)
+	case "rep_done", "rep_ok", "rep_no":
+		return b.handlers.HandleReportCallback(q)
 	default:
 		slog.Info(fmt.Sprintf("Unknown callback action: %s", action))
 		return nil, nil
@@ -430,9 +446,14 @@ func (b *Bot) handleMessage(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 		exists = false
 	}
 	if !exists {
-		// No active session: free text in a private chat, or a mention of
-		// the bot in the group, goes to the assistant (admin or participant);
-		// anything else is ignored.
+		// No active session: a participant's voice message, or text while
+		// their daily report is open, is part of the report.
+		if resp, handled := b.handlers.HandleDailyReportMessage(m); handled {
+			return resp, nil
+		}
+		// Otherwise free text in a private chat, or a mention of the bot in
+		// the group, goes to the assistant (admin or participant); anything
+		// else is ignored.
 		if resp, handled := b.handleAssistantMessage(m); handled {
 			return resp, nil
 		}

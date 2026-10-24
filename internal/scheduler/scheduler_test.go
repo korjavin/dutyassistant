@@ -618,6 +618,42 @@ func (m *mockStore) DeleteRegistrationRequest(ctx context.Context, telegramUserI
 	return nil
 }
 
+func (m *mockStore) SaveParticipantRating(ctx context.Context, rating *store.ParticipantDailyRating) error {
+	return nil
+}
+
+func (m *mockStore) EnsureDailyReport(ctx context.Context, userID int64, date time.Time) (*store.DailyReport, error) {
+	return nil, nil
+}
+
+func (m *mockStore) GetDailyReport(ctx context.Context, userID int64, date time.Time) (*store.DailyReport, error) {
+	return nil, nil
+}
+
+func (m *mockStore) GetDailyReportByID(ctx context.Context, id int64) (*store.DailyReport, error) {
+	return nil, nil
+}
+
+func (m *mockStore) ListDailyReports(ctx context.Context, date time.Time) ([]*store.DailyReport, error) {
+	return nil, nil
+}
+
+func (m *mockStore) AppendDailyReport(ctx context.Context, id int64, text string) (bool, error) {
+	return false, nil
+}
+
+func (m *mockStore) SetDailyReportStatus(ctx context.Context, id int64, from, to string) (bool, error) {
+	return false, nil
+}
+
+func (m *mockStore) SaveDailyReportProposal(ctx context.Context, id int64, score int, analysis string) error {
+	return nil
+}
+
+func (m *mockStore) GetChoresCompletedBetween(ctx context.Context, userID int64, start, end time.Time) ([]*store.Chore, error) {
+	return nil, nil
+}
+
 // GetUserByID mocks the GetUserByID method.
 func (m *mockStore) GetUserByID(ctx context.Context, id int64) (*store.User, error) {
 	for _, u := range m.users {

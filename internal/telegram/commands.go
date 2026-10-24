@@ -19,6 +19,7 @@ var userCommands = []tgbotapi.BotCommand{
 	{Command: "takechore", Description: "Volunteer to take an available chore"},
 	{Command: "sviniya", Description: "View all sviniya balances"},
 	{Command: "spend", Description: "Spend a sviniya"},
+	{Command: "report", Description: "Send today's report of merits and failures"},
 }
 
 // adminOnlyCommands are the admin-only entries appended to the user list for
