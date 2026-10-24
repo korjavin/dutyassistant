@@ -128,7 +128,7 @@ func newReportTestEnv(t *testing.T, participants ...string) *reportTestEnv {
 	h.Bot = bot
 	h.ReportAnalyzer = env.analyzer
 	h.Transcriber = fakeTranscriber{text: "Помыла посуду"}
-	h.fetchFile = func(ctx context.Context, fileID string) (io.ReadCloser, error) {
+	h.FetchFile = func(ctx context.Context, fileID string) (io.ReadCloser, error) {
 		return io.NopCloser(strings.NewReader("OGG")), nil
 	}
 	env.h = h
@@ -180,19 +180,13 @@ func TestDailyReportFlow(t *testing.T) {
 	assert.Contains(t, env.tg.messagesTo(reportMashaTG)[0].Form.Get("text"), "Voice messages are welcome")
 	assert.Empty(t, env.tg.messagesTo(reportAdminTG))
 
-	// A voice message is transcribed and appended.
-	voice := privateMessage(reportMashaTG, "")
-	voice.Voice = &tgbotapi.Voice{FileID: "file-1", FileSize: 100}
-	resp, handled := h.HandleDailyReportMessage(voice)
+	// Messages while the report is open are appended (voice arrives here
+	// already transcribed by the bot).
+	resp, handled := h.HandleDailyReportMessage(privateMessage(reportMashaTG, "Помыла посуду"))
 	assert.True(t, handled)
-	assert.Nil(t, resp)
-	require.Eventually(t, func() bool { return env.report(t, reportMashaTG).Parts == 1 }, 2*time.Second, 10*time.Millisecond)
-	require.Eventually(t, func() bool { return len(env.tg.messagesTo(reportMashaTG)) == 2 }, 2*time.Second, 10*time.Millisecond)
-	ack := env.tg.messagesTo(reportMashaTG)[1].Form
-	assert.Contains(t, ack.Get("text"), "I heard: «Помыла посуду»")
-	assert.Contains(t, ack.Get("reply_markup"), "rep_done:")
+	assert.Contains(t, resp.(tgbotapi.MessageConfig).Text, "part 1")
+	assert.Contains(t, *resp.(tgbotapi.MessageConfig).ReplyMarkup.(tgbotapi.InlineKeyboardMarkup).InlineKeyboard[0][0].CallbackData, "rep_done:")
 
-	// Text while the report is open is appended too.
 	resp, handled = h.HandleDailyReportMessage(privateMessage(reportMashaTG, "Не сделала уроки"))
 	assert.True(t, handled)
 	assert.Contains(t, resp.(tgbotapi.MessageConfig).Text, "part 2")
@@ -224,12 +218,9 @@ func TestDailyReportFlow(t *testing.T) {
 	assert.Contains(t, env.analyzer.gotFacts, "Was not on duty today")
 	assert.Contains(t, env.analyzer.gotFacts, "Completed no chores today")
 
-	// After Done, text goes elsewhere and voice is refused.
+	// After Done, messages go elsewhere (the assistant).
 	_, handled = h.HandleDailyReportMessage(privateMessage(reportMashaTG, "А что у меня по делам?"))
 	assert.False(t, handled)
-	resp, handled = h.HandleDailyReportMessage(voice)
-	assert.True(t, handled)
-	assert.Equal(t, reportAlreadySentMessage, resp.(tgbotapi.MessageConfig).Text)
 
 	// Participants can't confirm.
 	resp, err = h.HandleReportCallback(callback(reportMashaTG, "rep_ok:"+strconvFormat(masha.ID)))
@@ -316,15 +307,45 @@ func TestDailyReport_NoTranscriber(t *testing.T) {
 	env := newReportTestEnv(t, "Masha")
 	env.h.Transcriber = nil
 
-	voice := privateMessage(reportMashaTG, "")
-	voice.Voice = &tgbotapi.Voice{FileID: "file-1"}
-	resp, handled := env.h.HandleDailyReportMessage(voice)
-	assert.True(t, handled)
-	assert.Equal(t, reportNoVoiceMessage, resp.(tgbotapi.MessageConfig).Text)
-
 	_, err := env.h.SendDailyReportRequests(context.Background(), TimeNow())
 	require.NoError(t, err)
 	assert.Contains(t, env.tg.messagesTo(reportMashaTG)[0].Form.Get("text"), "Write it as text")
+}
+
+func TestTranscribeVoice(t *testing.T) {
+	env := newReportTestEnv(t)
+	ctx := context.Background()
+	voice := privateMessage(reportMashaTG, "")
+	voice.Voice = &tgbotapi.Voice{FileID: "file-1", FileSize: 100}
+
+	assert.True(t, HasVoice(voice))
+	assert.False(t, HasVoice(privateMessage(reportMashaTG, "text")))
+
+	text, err := env.h.TranscribeVoice(ctx, voice)
+	require.NoError(t, err)
+	assert.Equal(t, "Помыла посуду", text)
+
+	// Video notes and audio files count too.
+	circle := privateMessage(reportMashaTG, "")
+	circle.VideoNote = &tgbotapi.VideoNote{FileID: "file-2"}
+	_, err = env.h.TranscribeVoice(ctx, circle)
+	require.NoError(t, err)
+
+	big := privateMessage(reportMashaTG, "")
+	big.Voice = &tgbotapi.Voice{FileID: "file-3", FileSize: maxVoiceBytes + 1}
+	_, err = env.h.TranscribeVoice(ctx, big)
+	assert.Error(t, err)
+
+	env.h.FetchFile = func(ctx context.Context, fileID string) (io.ReadCloser, error) {
+		return nil, errors.New("telegram is down")
+	}
+	_, err = env.h.TranscribeVoice(ctx, voice)
+	assert.ErrorContains(t, err, "telegram is down")
+
+	env.h.Transcriber = nil
+	assert.False(t, env.h.VoiceEnabled())
+	_, err = env.h.TranscribeVoice(ctx, voice)
+	assert.Error(t, err)
 }
 
 func TestFinalizeDailyReports(t *testing.T) {

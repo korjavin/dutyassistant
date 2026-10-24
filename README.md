@@ -55,9 +55,13 @@ With the Anthropic provider configured (`ANTHROPIC_API_KEY`), the admin can simp
 
 Participants can chat with the bot privately too, with their own limited set of abilities: ask about their chores and duties, mark their own chore as done, take over someone else's chore, volunteer for duty, or spend a sviniya — always with Confirm/Cancel buttons and only on their own behalf. `PARTICIPANT_ASSISTANT_DAILY_LIMIT` (default 20 messages per person per day) keeps costs in check; set it to `0` to turn participants off.
 
+## Voice Messages
+
+Every voice message, audio file or video note the bot receives is transcribed (`TRANSCRIPTION_*`, or `OPENAI_API_KEY`) and then handled exactly like the same text typed by the sender: an answer in an interactive flow, a request to the admin or participant assistant, or a part of the daily report. The bot first replies "🎧 I heard: «…»", so sending any voice message is also a quick check that the key works. While the assistant waits for ✅ Confirm / ❌ Cancel, a short reply such as "да, подтверждаю" or "нет, не надо" (spoken or typed) works like the button.
+
 ## Daily Reports (merits and failures)
 
-At 20:40 (10 minutes before the admin's rating prompt) every rating participant gets a DM asking for today's report of merits and failures. They can answer with voice messages (one or several; transcribed via `TRANSCRIPTION_*`) or text, and press ✅ Done. Participants can also send a voice message or `/report` at any time during the day. The LLM reads the report together with what the bot knows (duty, completed and overdue chores) and proposes a score from 1 (behaved badly) to 5 (excellent day) with a short analysis. The admin gets it with ✅ Confirm / ❌ Reject buttons; the score is saved only on Confirm, and once everyone has a score for the day the usual daily summary is posted to the group. Reports that were started but never sent are forwarded at 21:30. Without an LLM the admin gets the report without a score.
+At 20:40 (10 minutes before the admin's rating prompt) every rating participant gets a DM asking for today's report of merits and failures. They can answer with voice messages (one or several) or text, and press ✅ Done. `/report` opens a report at any time during the day. The LLM reads the report together with what the bot knows (duty, completed and overdue chores) and proposes a score from 1 (behaved badly) to 5 (excellent day) with a short analysis. The admin gets it with ✅ Confirm / ❌ Reject buttons; the score is saved only on Confirm, and once everyone has a score for the day the usual daily summary is posted to the group. Reports that were started but never sent are forwarded at 21:30. Without an LLM the admin gets the report without a score.
 
 ## Running with Docker
 

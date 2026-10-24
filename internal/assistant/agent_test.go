@@ -265,13 +265,66 @@ func TestAgent_NewMessageDropsPendingActions(t *testing.T) {
 
 	env.agent.HandleMessage(context.Background(), testChat, testAdmin, "включи отпуск")
 	id := env.confirmationID(t)
-	env.agent.HandleMessage(context.Background(), testChat, testAdmin, "нет, не надо")
+	env.agent.HandleMessage(context.Background(), testChat, testAdmin, "лучше со следующей недели")
 
 	assert.Contains(t, env.model.lastRequest(), "Not executed: the user sent a new message")
 	// The old buttons no longer work.
 	env.agent.HandleDecision(context.Background(), testChat, testAdmin, id, true)
 	assert.Empty(t, env.executor.commands)
 	assert.Contains(t, env.sender.texts(), "no longer valid")
+}
+
+func TestAgent_YesReplyConfirms(t *testing.T) {
+	env := newTestEnv(t,
+		modelReply("tool_use", toolUse("tu_1", "set_vacation_mode", `{"enabled":true}`)),
+		modelReply("end_turn", textBlock("Отпуск включён.")),
+	)
+	env.executor.reply["/vacation on"] = Result{Text: "🏖 Vacation mode enabled"}
+
+	env.agent.HandleMessage(context.Background(), testChat, testAdmin, "включи отпуск")
+	env.agent.HandleMessage(context.Background(), testChat, testAdmin, "Да, подтверждаю.")
+
+	assert.Equal(t, []string{"/vacation on"}, env.executor.commands)
+	assert.Contains(t, env.model.lastRequest(), "Executed. The bot replied to the user")
+	assert.NotContains(t, env.model.lastRequest(), "Да, подтверждаю")
+	assert.Contains(t, env.sender.texts(), "Отпуск включён.")
+}
+
+func TestAgent_NoReplyCancels(t *testing.T) {
+	env := newTestEnv(t,
+		modelReply("tool_use", toolUse("tu_1", "set_vacation_mode", `{"enabled":true}`)),
+	)
+
+	env.agent.HandleMessage(context.Background(), testChat, testAdmin, "включи отпуск")
+	env.agent.HandleMessage(context.Background(), testChat, testAdmin, "нет, не надо")
+
+	assert.Empty(t, env.executor.commands)
+	assert.Len(t, env.model.requests, 1)
+	assert.Contains(t, env.sender.texts(), "Cancelled, nothing was changed")
+}
+
+func TestParseDecision(t *testing.T) {
+	tests := []struct {
+		text         string
+		approved, ok bool
+	}{
+		{"да", true, true},
+		{"Да, подтверждаю.", true, true},
+		{"Yes, go ahead!", true, true},
+		{"ok", true, true},
+		{"Нет, не надо", false, true},
+		{"cancel", false, true},
+		{"Don’t", false, true},
+		{"да, но для Пети", false, false},
+		{"нет, пусть Маша", false, false},
+		{"", false, false},
+		{"да да да да да", false, false},
+	}
+	for _, tt := range tests {
+		approved, ok := parseDecision(tt.text)
+		assert.Equal(t, tt.ok, ok, tt.text)
+		assert.Equal(t, tt.approved, approved, tt.text)
+	}
 }
 
 func TestAgent_PrepareErrorGoesBackToModel(t *testing.T) {

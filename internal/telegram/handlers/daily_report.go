@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -46,7 +45,6 @@ const (
 	maxVoiceBytes = 20 << 20
 
 	reportAlreadySentMessage = "✅ Your report for today is already sent."
-	reportNoVoiceMessage     = "🎙 I can't listen to voice messages right now — please write your report as text."
 )
 
 // reportAudio is a voice-like attachment of a message.
@@ -160,16 +158,15 @@ func (h *Handlers) HandleReport(m *tgbotapi.Message) (tgbotapi.MessageConfig, er
 }
 
 // HandleDailyReportMessage takes a participant's private message as part of
-// today's report: voice messages always (they start a report if needed),
-// text only while a report is being collected. It returns false for messages
-// that are not report parts, so they can go elsewhere (e.g. the assistant).
+// today's report while the report is being collected (voice messages arrive
+// here already transcribed). It returns false for other messages, so they
+// can go elsewhere (e.g. the assistant).
 func (h *Handlers) HandleDailyReportMessage(m *tgbotapi.Message) (tgbotapi.Chattable, bool) {
 	if m.Chat == nil || !m.Chat.IsPrivate() || m.From == nil {
 		return nil, false
 	}
-	audio := reportAudioOf(m)
 	text := strings.TrimSpace(m.Text)
-	if audio == nil && text == "" {
+	if text == "" {
 		return nil, false
 	}
 
@@ -178,46 +175,19 @@ func (h *Handlers) HandleDailyReportMessage(m *tgbotapi.Message) (tgbotapi.Chatt
 	if err != nil || user == nil || !h.isReportParticipant(user) {
 		return nil, false
 	}
-	date := normalizeRatingDate(TimeNow())
-	report, err := h.Store.GetDailyReport(ctx, user.ID, date)
+	report, err := h.Store.GetDailyReport(ctx, user.ID, normalizeRatingDate(TimeNow()))
 	if err != nil {
 		slog.Error(fmt.Sprintf("[Report] Failed to load report for %s: %v", user.FirstName, err))
-		if audio == nil {
-			return nil, false
-		}
-		return tgbotapi.NewMessage(m.Chat.ID, genericErrorMessage), true
+		return nil, false
 	}
-
-	if audio == nil {
-		if report == nil || report.Status != store.DailyReportCollecting {
-			return nil, false
-		}
-		return h.appendReportPart(ctx, m.Chat.ID, report, text, false), true
+	if report == nil || report.Status != store.DailyReportCollecting {
+		return nil, false
 	}
-
-	if report == nil {
-		if report, err = h.Store.EnsureDailyReport(ctx, user.ID, date); err != nil {
-			slog.Error(fmt.Sprintf("[Report] Failed to open report for %s: %v", user.FirstName, err))
-			return tgbotapi.NewMessage(m.Chat.ID, genericErrorMessage), true
-		}
-	}
-	if report.Status != store.DailyReportCollecting {
-		return tgbotapi.NewMessage(m.Chat.ID, reportAlreadySentMessage), true
-	}
-	if h.Transcriber == nil {
-		return tgbotapi.NewMessage(m.Chat.ID, reportNoVoiceMessage), true
-	}
-	if audio.Size > maxVoiceBytes {
-		return tgbotapi.NewMessage(m.Chat.ID, "This recording is too large for me. Please send a shorter one."), true
-	}
-	// Downloading and transcribing takes a while; don't block other updates.
-	go h.transcribeReportPart(m.Chat.ID, report.ID, audio)
-	return nil, true
+	return h.appendReportPart(ctx, m.Chat.ID, report, text), true
 }
 
 // appendReportPart adds text to the report and returns the acknowledgement.
-// heard marks text recognized from a voice message, which is echoed back.
-func (h *Handlers) appendReportPart(ctx context.Context, chatID int64, report *store.DailyReport, text string, heard bool) tgbotapi.Chattable {
+func (h *Handlers) appendReportPart(ctx context.Context, chatID int64, report *store.DailyReport, text string) tgbotapi.Chattable {
 	if len(report.Text)+len(text) > maxReportChars {
 		msg := tgbotapi.NewMessage(chatID, "Your report is already long enough 🙂 Press ✅ Done to send it.")
 		msg.ReplyMarkup = reportDoneKeyboard(report.ID)
@@ -231,47 +201,38 @@ func (h *Handlers) appendReportPart(ctx context.Context, chatID int64, report *s
 	if !ok {
 		return tgbotapi.NewMessage(chatID, reportAlreadySentMessage)
 	}
-	var sb strings.Builder
-	if heard {
-		fmt.Fprintf(&sb, "🎧 I heard: «%s»\n\n", truncateRunes(text, 1500))
-	}
-	fmt.Fprintf(&sb, "📝 Got it (part %d). Add more, or press ✅ Done when you're finished.", report.Parts+1)
-	msg := tgbotapi.NewMessage(chatID, sb.String())
+	msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("📝 Got it (part %d). Add more, or press ✅ Done when you're finished.", report.Parts+1))
 	msg.ReplyMarkup = reportDoneKeyboard(report.ID)
 	return msg
 }
 
-// transcribeReportPart downloads a voice message, transcribes it and appends
-// it to the report. Parts of one report are processed in order.
-func (h *Handlers) transcribeReportPart(chatID, reportID int64, audio *reportAudio) {
-	lock := h.reportLock(reportID)
-	lock.Lock()
-	defer lock.Unlock()
+// HasVoice reports whether m carries a voice message, audio file or video note.
+func HasVoice(m *tgbotapi.Message) bool {
+	return reportAudioOf(m) != nil
+}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	defer cancel()
+// VoiceEnabled reports whether voice messages can be transcribed.
+func (h *Handlers) VoiceEnabled() bool {
+	return h.Transcriber != nil
+}
 
-	text, err := h.transcribe(ctx, audio)
-	if err != nil {
-		slog.Error(fmt.Sprintf("[Report] Failed to transcribe a voice message for report %d: %v", reportID, err))
-		h.sendText(chatID, "😕 I couldn't make out that voice message. Please try again, or write it as text.")
-		return
+// TranscribeVoice downloads and transcribes the voice message, audio file or
+// video note of m (used for the admin's voice requests to the assistant).
+func (h *Handlers) TranscribeVoice(ctx context.Context, m *tgbotapi.Message) (string, error) {
+	audio := reportAudioOf(m)
+	switch {
+	case audio == nil:
+		return "", fmt.Errorf("the message has no voice")
+	case h.Transcriber == nil:
+		return "", fmt.Errorf("transcription is not configured")
+	case audio.Size > maxVoiceBytes:
+		return "", fmt.Errorf("the recording is too large (%d bytes)", audio.Size)
 	}
-	if text == "" {
-		h.sendText(chatID, "🤔 I didn't hear any words in that recording. Please try again.")
-		return
-	}
-	report, err := h.Store.GetDailyReportByID(ctx, reportID)
-	if err != nil || report == nil {
-		slog.Error(fmt.Sprintf("[Report] Failed to reload report %d: %v", reportID, err))
-		h.sendText(chatID, genericErrorMessage)
-		return
-	}
-	h.send(h.appendReportPart(ctx, chatID, report, text, true))
+	return h.transcribe(ctx, audio)
 }
 
 func (h *Handlers) transcribe(ctx context.Context, audio *reportAudio) (string, error) {
-	fetch := h.fetchFile
+	fetch := h.FetchFile
 	if fetch == nil {
 		fetch = h.downloadTelegramFile
 	}
@@ -310,11 +271,6 @@ func (h *Handlers) downloadTelegramFile(ctx context.Context, fileID string) (io.
 		return nil, fmt.Errorf("could not download the file: status %d", resp.StatusCode)
 	}
 	return resp.Body, nil
-}
-
-func (h *Handlers) reportLock(reportID int64) *sync.Mutex {
-	lock, _ := h.reportLocks.LoadOrStore(reportID, &sync.Mutex{})
-	return lock.(*sync.Mutex)
 }
 
 func (h *Handlers) send(c tgbotapi.Chattable) {
@@ -518,14 +474,14 @@ func formatReportForAdmin(report *store.DailyReport, footer string) string {
 	if report.ProposedScore > 0 {
 		fmt.Fprintf(&sb, "🤖 Proposed score: <b>%d</b>/5\n", report.ProposedScore)
 		if report.Analysis != "" {
-			sb.WriteString(html.EscapeString(truncateRunes(report.Analysis, 1200)))
+			sb.WriteString(html.EscapeString(TruncateRunes(report.Analysis, 1200)))
 			sb.WriteString("\n")
 		}
 	} else {
 		fmt.Fprintf(&sb, "⚠️ No AI assessment (the LLM is unavailable). Rate %s in the daily ratings prompt.\n", name)
 	}
 	sb.WriteString("\n<b>Report:</b>\n<i>")
-	sb.WriteString(html.EscapeString(truncateRunes(report.Text, 2400)))
+	sb.WriteString(html.EscapeString(TruncateRunes(report.Text, 2400)))
 	sb.WriteString("</i>")
 	sb.WriteString(footer)
 	return sb.String()
@@ -651,7 +607,8 @@ func (h *Handlers) announceRatingsIfComplete(ctx context.Context, date time.Time
 	h.send(msg)
 }
 
-func truncateRunes(s string, n int) string {
+// TruncateRunes shortens s to at most n runes, adding "…" when cut.
+func TruncateRunes(s string, n int) string {
 	r := []rune(s)
 	if len(r) <= n {
 		return s

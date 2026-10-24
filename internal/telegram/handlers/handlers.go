@@ -35,9 +35,8 @@ type Handlers struct {
 	// admin unscored), Transcriber handles voice messages (nil = text only).
 	ReportAnalyzer ReportAnalyzer
 	Transcriber    SpeechTranscriber
-	// fetchFile downloads a received file; nil means from Telegram (tests override it).
-	fetchFile   func(ctx context.Context, fileID string) (io.ReadCloser, error)
-	reportLocks sync.Map // report ID -> *sync.Mutex
+	// FetchFile downloads a received file; nil means from Telegram (tests override it).
+	FetchFile func(ctx context.Context, fileID string) (io.ReadCloser, error)
 }
 
 // SetBot sets the bot API instance for the handlers.
