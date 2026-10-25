@@ -122,10 +122,15 @@ func main() {
 		telegramHandlers = handlers.New(store, sched, dishGroupID, llmClient)
 	}
 
-	// Daily reports: the LLM proposes scores, the transcriber handles voice.
+	// Daily reports: the LLM proposes scores, the transcriber handles voice
+	// and Claude reads images.
 	// Avoid passing typed-nil pointers into the interfaces.
 	if llmClient != nil {
 		telegramHandlers.ReportAnalyzer = llmClient
+		if llmClient.Provider() == llm.ProviderAnthropic {
+			// Photos are described by Claude and then handled like text.
+			telegramHandlers.ImageReader = llmClient
+		}
 	}
 	if transcriber := llm.NewTranscriber(transcriptionAPIKey, transcriptionURL, int(transcriptionTimeout), transcriptionModel, transcriptionLanguage); transcriber != nil {
 		telegramHandlers.Transcriber = transcriber

@@ -2,13 +2,9 @@ package handlers
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"html"
-	"io"
 	"log/slog"
-	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -29,11 +25,6 @@ type ReportAnalyzer interface {
 	AssessDailyReport(ctx context.Context, name, report, facts string) (*llm.ReportAssessment, error)
 }
 
-// SpeechTranscriber turns a voice message into text.
-type SpeechTranscriber interface {
-	Transcribe(ctx context.Context, audio io.Reader, filename string) (string, error)
-}
-
 const (
 	reportCallbackDone    = "rep_done"
 	reportCallbackApprove = "rep_ok"
@@ -41,35 +32,9 @@ const (
 
 	// maxReportChars caps a report so the admin message fits Telegram's limit.
 	maxReportChars = 6000
-	// maxVoiceBytes is the largest file the Telegram Bot API lets bots download.
-	maxVoiceBytes = 20 << 20
 
 	reportAlreadySentMessage = "✅ Your report for today is already sent."
 )
-
-// reportAudio is a voice-like attachment of a message.
-type reportAudio struct {
-	FileID   string
-	FileName string
-	Size     int
-}
-
-// reportAudioOf returns the voice message, audio file or video note of m, if any.
-func reportAudioOf(m *tgbotapi.Message) *reportAudio {
-	switch {
-	case m.Voice != nil:
-		return &reportAudio{FileID: m.Voice.FileID, FileName: "voice.ogg", Size: m.Voice.FileSize}
-	case m.Audio != nil:
-		name := m.Audio.FileName
-		if name == "" {
-			name = "audio.mp3"
-		}
-		return &reportAudio{FileID: m.Audio.FileID, FileName: name, Size: m.Audio.FileSize}
-	case m.VideoNote != nil:
-		return &reportAudio{FileID: m.VideoNote.FileID, FileName: "video_note.mp4", Size: m.VideoNote.FileSize}
-	}
-	return nil
-}
 
 // isReportParticipant reports whether the user is asked for daily reports:
 // the same people who get daily ratings.
@@ -204,73 +169,6 @@ func (h *Handlers) appendReportPart(ctx context.Context, chatID int64, report *s
 	msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("📝 Got it (part %d). Add more, or press ✅ Done when you're finished.", report.Parts+1))
 	msg.ReplyMarkup = reportDoneKeyboard(report.ID)
 	return msg
-}
-
-// HasVoice reports whether m carries a voice message, audio file or video note.
-func HasVoice(m *tgbotapi.Message) bool {
-	return reportAudioOf(m) != nil
-}
-
-// VoiceEnabled reports whether voice messages can be transcribed.
-func (h *Handlers) VoiceEnabled() bool {
-	return h.Transcriber != nil
-}
-
-// TranscribeVoice downloads and transcribes the voice message, audio file or
-// video note of m (used for the admin's voice requests to the assistant).
-func (h *Handlers) TranscribeVoice(ctx context.Context, m *tgbotapi.Message) (string, error) {
-	audio := reportAudioOf(m)
-	switch {
-	case audio == nil:
-		return "", fmt.Errorf("the message has no voice")
-	case h.Transcriber == nil:
-		return "", fmt.Errorf("transcription is not configured")
-	case audio.Size > maxVoiceBytes:
-		return "", fmt.Errorf("the recording is too large (%d bytes)", audio.Size)
-	}
-	return h.transcribe(ctx, audio)
-}
-
-func (h *Handlers) transcribe(ctx context.Context, audio *reportAudio) (string, error) {
-	fetch := h.FetchFile
-	if fetch == nil {
-		fetch = h.downloadTelegramFile
-	}
-	body, err := fetch(ctx, audio.FileID)
-	if err != nil {
-		return "", err
-	}
-	defer func() { _ = body.Close() }()
-	return h.Transcriber.Transcribe(ctx, io.LimitReader(body, maxVoiceBytes), audio.FileName)
-}
-
-// downloadTelegramFile streams a file the bot received.
-func (h *Handlers) downloadTelegramFile(ctx context.Context, fileID string) (io.ReadCloser, error) {
-	if h.Bot == nil {
-		return nil, fmt.Errorf("bot not configured")
-	}
-	fileURL, err := h.Bot.GetFileDirectURL(fileID)
-	if err != nil {
-		return nil, fmt.Errorf("could not get the file from Telegram: %w", err)
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fileURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("could not build the download request")
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		// The URL contains the bot token: keep it out of errors and logs.
-		var urlErr *url.Error
-		if errors.As(err, &urlErr) {
-			err = urlErr.Err
-		}
-		return nil, fmt.Errorf("could not download the file: %w", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		_ = resp.Body.Close()
-		return nil, fmt.Errorf("could not download the file: status %d", resp.StatusCode)
-	}
-	return resp.Body, nil
 }
 
 func (h *Handlers) send(c tgbotapi.Chattable) {

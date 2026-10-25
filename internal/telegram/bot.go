@@ -24,8 +24,8 @@ type Bot struct {
 	// migratedTo is the new DISH_GROUP ID already reported to the admin.
 	migratedTo int64
 
-	// voiceLocks keeps voice messages of one chat in order (chat ID -> *sync.Mutex).
-	voiceLocks sync.Map
+	// mediaLocks keeps voice/image messages of one chat in order (chat ID -> *sync.Mutex).
+	mediaLocks sync.Map
 
 	// Free-text assistants for the admin and for participants; nil when disabled.
 	adminAssistant       *assistant.Agent
@@ -126,10 +126,11 @@ func (b *Bot) checkAccess(userID, chatID int64) bool {
 }
 
 // addressedToBot reports whether a message may need the bot's attention:
-// anything in a private chat, a command, a mention of the bot, or text for
-// the sender's own interactive session in that chat.
+// anything in a private chat, a command, a mention of the bot, a reply to
+// one of the bot's messages, or text for the sender's own interactive
+// session in that chat.
 func (b *Bot) addressedToBot(m *tgbotapi.Message) bool {
-	if m.Chat == nil || m.Chat.IsPrivate() || m.IsCommand() || b.mentionsBot(m) {
+	if m.Chat == nil || m.Chat.IsPrivate() || m.IsCommand() || b.mentionsBot(m) || b.repliesToBot(m) {
 		return true
 	}
 	session, ok := b.handlers.SessionManager.GetSession(m.Chat.ID)
@@ -204,6 +205,9 @@ func (b *Bot) handleUpdate(update tgbotapi.Update) {
 		chatID = update.CallbackQuery.Message.Chat.ID
 	}
 
+	if update.Message != nil {
+		update.Message = withCaptionAsText(update.Message)
+	}
 	if m := update.Message; m != nil {
 		if b.handleGroupMigration(m) {
 			return
@@ -231,9 +235,9 @@ func (b *Bot) handleUpdate(update tgbotapi.Update) {
 
 	switch {
 	case update.Message != nil:
-		if handlers.HasVoice(update.Message) {
-			// Transcribed in the background, then handled like typed text.
-			b.handleVoice(update.Message)
+		if hasMedia(update.Message) && !update.Message.IsCommand() {
+			// Transcribed or described in the background, then handled like typed text.
+			b.handleMedia(update.Message)
 			return
 		}
 		response, err = b.routeMessage(update.Message)
