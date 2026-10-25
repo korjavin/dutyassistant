@@ -55,9 +55,16 @@ With the Anthropic provider configured (`ANTHROPIC_API_KEY`), the admin can simp
 
 Participants can chat with the bot privately too, with their own limited set of abilities: ask about their chores and duties, mark their own chore as done, take over someone else's chore, volunteer for duty, or spend a sviniya — always with Confirm/Cancel buttons and only on their own behalf. `PARTICIPANT_ASSISTANT_DAILY_LIMIT` (default 20 messages per person per day) keeps costs in check; set it to `0` to turn participants off.
 
-## Voice Messages
+## Voice Messages and Photos
 
-Every voice message, audio file or video note the bot receives is transcribed (`TRANSCRIPTION_*`, or `OPENAI_API_KEY`) and then handled exactly like the same text typed by the sender: an answer in an interactive flow, a request to the admin or participant assistant, or a part of the daily report. The bot first replies "🎧 I heard: «…»", so sending any voice message is also a quick check that the key works. While the assistant waits for ✅ Confirm / ❌ Cancel, a short reply such as "да, подтверждаю" or "нет, не надо" (spoken or typed) works like the button.
+The bot reads everything it gets the way it reads text:
+
+- **Voice messages, audio files and video notes** are transcribed (`TRANSCRIPTION_*`, or `OPENAI_API_KEY`); the bot replies "🎧 I heard: «…»".
+- **Photos and image files** are described by Claude (Anthropic provider), including any text visible in them; the bot replies "🖼 I see: …". A caption is read too.
+
+The result is then handled exactly like the same text typed by the sender: an answer in an interactive flow, a request to the admin or participant assistant, or a part of the daily report. Sending a voice message is also a quick check that the transcription key works. While the assistant waits for ✅ Confirm / ❌ Cancel, a short reply such as "да, подтверждаю" or "нет, не надо" (spoken or typed) works like the button.
+
+In the group the bot only reacts to messages addressed to it: an `@mention` (in text or a caption) or a **reply to one of the bot's messages** — typed, voice or photo. Other group messages are ignored and never transcribed.
 
 ## Daily Reports (merits and failures)
 

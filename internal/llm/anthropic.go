@@ -86,16 +86,22 @@ func (c *Client) Effort() string {
 	return string(c.effort)
 }
 
-// anthropicCompletion performs a single Messages API request and returns the
-// concatenated text blocks of the response.
+// anthropicCompletion performs a single text Messages API request and returns
+// the concatenated text blocks of the response.
 func (c *Client) anthropicCompletion(ctx context.Context, op, systemPrompt, userPrompt string) (string, error) {
+	return c.anthropicMessage(ctx, op, systemPrompt, anthropic.NewTextBlock(userPrompt))
+}
+
+// anthropicMessage sends one user message made of content blocks (text,
+// images) and returns the concatenated text blocks of the response.
+func (c *Client) anthropicMessage(ctx context.Context, op, systemPrompt string, content ...anthropic.ContentBlockParamUnion) (string, error) {
 	resp, err := c.anthropic.Messages.New(ctx, anthropic.MessageNewParams{
 		Model:        anthropic.Model(c.model),
 		MaxTokens:    anthropicMaxTokens,
 		System:       []anthropic.TextBlockParam{{Text: systemPrompt}},
 		OutputConfig: anthropic.OutputConfigParam{Effort: c.effort},
 		Messages: []anthropic.MessageParam{
-			anthropic.NewUserMessage(anthropic.NewTextBlock(userPrompt)),
+			anthropic.NewUserMessage(content...),
 		},
 	})
 	if err != nil {

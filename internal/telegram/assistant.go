@@ -123,9 +123,16 @@ func (b *Bot) handleAssistantMessage(m *tgbotapi.Message) (tgbotapi.Chattable, b
 }
 
 // isGroupMention reports whether m was written in the main group and
-// mentions the bot.
+// mentions the bot or replies to one of its messages.
 func (b *Bot) isGroupMention(m *tgbotapi.Message) bool {
-	return b.groupID != 0 && m.Chat != nil && m.Chat.ID == b.groupID && b.mentionsBot(m)
+	return b.groupID != 0 && m.Chat != nil && m.Chat.ID == b.groupID && (b.mentionsBot(m) || b.repliesToBot(m))
+}
+
+// repliesToBot reports whether m is a reply to one of the bot's messages.
+func (b *Bot) repliesToBot(m *tgbotapi.Message) bool {
+	r := m.ReplyToMessage
+	return r != nil && r.From != nil && b.self.ID != 0 && r.From.ID == b.self.ID &&
+		m.From != nil && !m.From.IsBot
 }
 
 // mentionsBot reports whether a person's message mentions the bot

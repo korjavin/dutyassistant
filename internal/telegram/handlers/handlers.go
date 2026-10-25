@@ -35,6 +35,8 @@ type Handlers struct {
 	// admin unscored), Transcriber handles voice messages (nil = text only).
 	ReportAnalyzer ReportAnalyzer
 	Transcriber    SpeechTranscriber
+	// ImageReader describes photos so they are handled like text (nil = images ignored).
+	ImageReader ImageReader
 	// FetchFile downloads a received file; nil means from Telegram (tests override it).
 	FetchFile func(ctx context.Context, fileID string) (io.ReadCloser, error)
 }
