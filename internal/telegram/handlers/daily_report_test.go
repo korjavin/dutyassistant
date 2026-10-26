@@ -279,16 +279,30 @@ func TestRatingReasons(t *testing.T) {
 	const vanyaTG = reportMashaTG + 2
 	propose(reportMashaTG, 4, "Помыла посуду.", store.DailyReportApproved)
 	propose(reportPetyaTG, 5, "Вынес мусор.", store.DailyReportApproved)
-	propose(vanyaTG, 3, "Ничего особенного.", store.DailyReportRejected)
+	propose(vanyaTG, 4, "Ничего особенного.", store.DailyReportRejected)
+	masha, petya, vanya := env.users[reportMashaTG].ID, env.users[reportPetyaTG].ID, env.users[vanyaTG].ID
 
-	rating := func(tgID int64, score int) *store.ParticipantDailyRating {
-		return &store.ParticipantDailyRating{ParticipantID: env.users[tgID].ID, Score: score, RatingDate: day}
+	rating := func(id int64, name string, score int) *store.ParticipantDailyRating {
+		return &store.ParticipantDailyRating{ParticipantID: id, ParticipantName: name, Score: score, RatingDate: day}
 	}
-	// Petya was then rated 3 by hand: his reason explains another score.
-	got := env.h.ratingReasons(ctx, day, []*store.ParticipantDailyRating{
-		rating(reportMashaTG, 4), rating(reportPetyaTG, 3), rating(vanyaTG, 3),
-	})
-	assert.Equal(t, map[int64]string{env.users[reportMashaTG].ID: "Помыла посуду."}, got)
+	// Masha's score was confirmed; Petya was then rated 3 by hand and
+	// Vanya's proposal was rejected and he got 2: the group sees what the
+	// bot suggested and why.
+	ratings := []*store.ParticipantDailyRating{rating(masha, "Masha", 4), rating(petya, "Petya", 3), rating(vanya, "Vanya", 2)}
+	got := env.h.ratingReasons(ctx, day, ratings)
+	assert.Equal(t, map[int64]ratingReason{
+		masha: {Text: "Помыла посуду."},
+		petya: {Text: "Вынес мусор.", Suggested: 5},
+		vanya: {Text: "Ничего особенного.", Suggested: 4},
+	}, got)
+
+	text := formatDailyAndMonthlySummary(ratings, nil, day, got)
+	assert.Contains(t, text, "Masha: 4 — <i>Помыла посуду.</i>\n")
+	assert.Contains(t, text, "Petya: 3 — 🤖 bot suggested 5: <i>Вынес мусор.</i>\n")
+	assert.Contains(t, text, "Vanya: 2 — 🤖 bot suggested 4: <i>Ничего особенного.</i>\n")
+
+	// Nobody without a rating or without an assessment gets a reason.
+	assert.Empty(t, env.h.ratingReasons(ctx, day, nil))
 }
 
 func TestDailyReport_RejectAndFallbacks(t *testing.T) {

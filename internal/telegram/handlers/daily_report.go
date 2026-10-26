@@ -425,7 +425,8 @@ func (h *Handlers) decideReport(ctx context.Context, q *tgbotapi.CallbackQuery, 
 		if !ok {
 			return edit("\n\nThis report was already handled.", false)
 		}
-		return edit(fmt.Sprintf("\n\n❌ <b>Rejected</b> — no score saved. Rate %s in the daily ratings prompt if needed.", name), false)
+		return edit(fmt.Sprintf("\n\n❌ <b>Rejected</b> — no score saved. Rate %s in the daily ratings prompt if needed; "+
+			"the group summary will show the bot's suggestion and reason next to your score.", name), false)
 	}
 
 	if !reportConfirmWindowOpen(report.ReportDate, TimeNow()) {
@@ -518,11 +519,20 @@ func (h *Handlers) announceRatingsIfComplete(ctx context.Context, date time.Time
 	h.send(msg)
 }
 
-// ratingReasons returns the group summaries of date's confirmed reports by
-// participant ID, for the daily summary. A summary is used only when the
-// saved score is the one it explains (the admin may rate differently in the
-// manual prompt).
-func (h *Handlers) ratingReasons(ctx context.Context, date time.Time, ratings []*store.ParticipantDailyRating) map[int64]string {
+// ratingReason is the bot's explanation of a participant's day for the
+// group summary.
+type ratingReason struct {
+	Text string
+	// Suggested is the bot's proposed score when the saved score differs
+	// from it (0 = the admin kept the bot's score), so the group sees both.
+	Suggested int
+}
+
+// ratingReasons returns the group summaries of date's assessed reports by
+// participant ID, for the daily summary. When the saved score is not the one
+// the bot proposed (the admin rejected it or rated by hand), the reason is
+// still shown, marked with the bot's suggested score.
+func (h *Handlers) ratingReasons(ctx context.Context, date time.Time, ratings []*store.ParticipantDailyRating) map[int64]ratingReason {
 	reports, err := h.Store.ListDailyReports(ctx, normalizeRatingDate(date))
 	if err != nil {
 		slog.Error(fmt.Sprintf("[Report] Failed to load reports for the summary: %v", err))
@@ -534,11 +544,17 @@ func (h *Handlers) ratingReasons(ctx context.Context, date time.Time, ratings []
 			scores[r.ParticipantID] = r.Score
 		}
 	}
-	reasons := make(map[int64]string)
+	reasons := make(map[int64]ratingReason)
 	for _, r := range reports {
-		if r.Status == store.DailyReportApproved && r.GroupSummary != "" && scores[r.UserID] == r.ProposedScore {
-			reasons[r.UserID] = r.GroupSummary
+		score, rated := scores[r.UserID]
+		if !rated || r.ProposedScore == 0 || r.GroupSummary == "" {
+			continue
 		}
+		reason := ratingReason{Text: r.GroupSummary}
+		if score != r.ProposedScore {
+			reason.Suggested = r.ProposedScore
+		}
+		reasons[r.UserID] = reason
 	}
 	return reasons
 }

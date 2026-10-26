@@ -503,8 +503,9 @@ func buildRatingsCalendarTable(participants []ratingSessionParticipant, ratings 
 }
 
 // formatDailyAndMonthlySummary renders the group message with the day's scores
-// (each followed by its reason, if any) and the month's standings.
-func formatDailyAndMonthlySummary(dailyRatings []*store.ParticipantDailyRating, totals []*store.ParticipantMonthlyTotal, now time.Time, reasons map[int64]string) string {
+// (each followed by the bot's reason, if any, and its own score when the
+// admin gave another one) and the month's standings.
+func formatDailyAndMonthlySummary(dailyRatings []*store.ParticipantDailyRating, totals []*store.ParticipantMonthlyTotal, now time.Time, reasons map[int64]ratingReason) string {
 	normalizedNow := normalizeRatingDate(now)
 
 	var b strings.Builder
@@ -516,8 +517,12 @@ func formatDailyAndMonthlySummary(dailyRatings []*store.ParticipantDailyRating, 
 			scoreStr += "e"
 		}
 		fmt.Fprintf(&b, "%s: %s", html.EscapeString(rating.ParticipantName), scoreStr)
-		if reason := reasons[rating.ParticipantID]; reason != "" {
-			fmt.Fprintf(&b, " — <i>%s</i>", html.EscapeString(reason))
+		if reason := reasons[rating.ParticipantID]; reason.Text != "" {
+			b.WriteString(" — ")
+			if reason.Suggested > 0 {
+				fmt.Fprintf(&b, "🤖 bot suggested %d: ", reason.Suggested)
+			}
+			fmt.Fprintf(&b, "<i>%s</i>", html.EscapeString(reason.Text))
 		}
 		b.WriteString("\n")
 	}
