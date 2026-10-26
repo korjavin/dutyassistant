@@ -201,7 +201,13 @@ func assertToolList(t *testing.T, list []toolDef) {
 		assert.False(t, seen[tool.name], "duplicate tool %s", tool.name)
 		seen[tool.name] = true
 		assert.NotEmpty(t, tool.description, tool.name)
-		assert.True(t, (tool.read == nil) != (tool.prepare == nil), "%s must be exactly one of read/prepare", tool.name)
+		kinds := 0
+		for _, set := range []bool{tool.read != nil, tool.prepare != nil, tool.apply != nil} {
+			if set {
+				kinds++
+			}
+		}
+		assert.Equal(t, 1, kinds, "%s must be exactly one of read/prepare/apply", tool.name)
 		for _, r := range tool.required {
 			assert.Contains(t, tool.properties, r, "%s requires undeclared %s", tool.name, r)
 		}
@@ -263,7 +269,7 @@ func TestParticipantTools_NoAdminCapabilities(t *testing.T) {
 		_, isAdminTool := findTool(adminTools, tool.name)
 		if isAdminTool {
 			// Shared read tools are fine; shared data-changing tools are not.
-			assert.False(t, tool.mutating(), "%s is an admin action exposed to participants", tool.name)
+			assert.False(t, tool.mutating() || tool.apply != nil, "%s is an admin action exposed to participants", tool.name)
 		}
 	}
 }

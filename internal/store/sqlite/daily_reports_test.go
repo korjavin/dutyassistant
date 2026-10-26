@@ -58,12 +58,13 @@ func TestDailyReports(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, ok)
 
-	require.NoError(t, s.SaveDailyReportProposal(ctx, report.ID, 3, "Mixed day."))
+	require.NoError(t, s.SaveDailyReportProposal(ctx, report.ID, 3, "Mixed day.", "Did the dishes, skipped homework."))
 	got, err = s.GetDailyReport(ctx, user.ID, day)
 	require.NoError(t, err)
 	assert.Equal(t, store.DailyReportProposed, got.Status)
 	assert.Equal(t, 3, got.ProposedScore)
 	assert.Equal(t, "Mixed day.", got.Analysis)
+	assert.Equal(t, "Did the dishes, skipped homework.", got.GroupSummary)
 
 	// Another day is a separate report.
 	_, err = s.EnsureDailyReport(ctx, user.ID, day.AddDate(0, 0, 1))
@@ -122,4 +123,25 @@ func TestGetChoresCompletedBetween(t *testing.T) {
 	done, err = s.GetChoresCompletedBetween(ctx, user.ID, now.Add(time.Hour), now.Add(2*time.Hour))
 	require.NoError(t, err)
 	assert.Empty(t, done)
+}
+
+func TestSettings(t *testing.T) {
+	s := setupTestDB(t)
+	ctx := context.Background()
+
+	got, err := s.GetSetting(ctx, store.SettingReportRules)
+	require.NoError(t, err)
+	assert.Empty(t, got)
+
+	require.NoError(t, s.SetSetting(ctx, store.SettingReportRules, "1. Be kind."))
+	require.NoError(t, s.SetSetting(ctx, store.SettingReportRules, "1. Be kinder."))
+	got, err = s.GetSetting(ctx, store.SettingReportRules)
+	require.NoError(t, err)
+	assert.Equal(t, "1. Be kinder.", got)
+
+	// Settings share the table with vacation mode without clashing.
+	require.NoError(t, s.SetVacationMode(ctx, true))
+	got, err = s.GetSetting(ctx, store.SettingReportRules)
+	require.NoError(t, err)
+	assert.Equal(t, "1. Be kinder.", got)
 }

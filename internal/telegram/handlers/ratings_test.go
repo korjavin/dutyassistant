@@ -729,7 +729,7 @@ func TestFormatDailyAndMonthlySummary(t *testing.T) {
 		{ParticipantName: "Cara", TotalScore: 8},
 	}
 
-	result := formatDailyAndMonthlySummary(dailyRatings, totals, now)
+	result := formatDailyAndMonthlySummary(dailyRatings, totals, now, nil)
 	expected := "<b>Daily Ratings for 2026-03-13</b>\n" +
 		"Alice: 5\n" +
 		"Bob: 4\n\n" +
@@ -1171,7 +1171,7 @@ func TestFormatDailyAndMonthlySummary_WithEars(t *testing.T) {
 		{ParticipantName: "Bob", TotalScore: 40, EarCount: 0},
 	}
 
-	result := formatDailyAndMonthlySummary(dailyRatings, totals, now)
+	result := formatDailyAndMonthlySummary(dailyRatings, totals, now, nil)
 	assert.Contains(t, result, "Alice: 5e")
 	assert.Contains(t, result, "Bob: 4")
 	assert.NotContains(t, result, "Bob: 4e")

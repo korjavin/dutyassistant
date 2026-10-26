@@ -543,8 +543,20 @@ func (m *MockStore) SetDailyReportStatus(ctx context.Context, id int64, from, to
 }
 
 // SaveDailyReportProposal mocks the SaveDailyReportProposal method.
-func (m *MockStore) SaveDailyReportProposal(ctx context.Context, id int64, score int, analysis string) error {
-	args := m.Called(ctx, id, score, analysis)
+func (m *MockStore) SaveDailyReportProposal(ctx context.Context, id int64, score int, analysis, groupSummary string) error {
+	args := m.Called(ctx, id, score, analysis, groupSummary)
+	return args.Error(0)
+}
+
+// GetSetting mocks the GetSetting method.
+func (m *MockStore) GetSetting(ctx context.Context, key string) (string, error) {
+	args := m.Called(ctx, key)
+	return args.String(0), args.Error(1)
+}
+
+// SetSetting mocks the SetSetting method.
+func (m *MockStore) SetSetting(ctx context.Context, key, value string) error {
+	args := m.Called(ctx, key, value)
 	return args.Error(0)
 }
 

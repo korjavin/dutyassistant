@@ -85,16 +85,17 @@ type fakeAnalyzer struct {
 	err       error
 	gotReport string
 	gotFacts  string
+	gotRules  string
 }
 
-func (f *fakeAnalyzer) AssessDailyReport(ctx context.Context, name, report, facts string) (*llm.ReportAssessment, error) {
+func (f *fakeAnalyzer) AssessDailyReport(ctx context.Context, name, report, facts, rules string) (*llm.ReportAssessment, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.gotReport, f.gotFacts = report, facts
+	f.gotReport, f.gotFacts, f.gotRules = report, facts, rules
 	if f.err != nil {
 		return nil, f.err
 	}
-	return &llm.ReportAssessment{Score: f.score, Analysis: "Помогала по дому <молодец>."}, nil
+	return &llm.ReportAssessment{Score: f.score, Analysis: "Помогала по дому <молодец>.", GroupSummary: name + " помогал(а) <дома>."}, nil
 }
 
 type reportTestEnv struct {
@@ -170,6 +171,7 @@ func callback(fromID int64, data string) *tgbotapi.CallbackQuery {
 func TestDailyReportFlow(t *testing.T) {
 	env := newReportTestEnv(t, "Masha", "Petya")
 	h, ctx := env.h, context.Background()
+	require.NoError(t, env.store.SetSetting(ctx, store.SettingReportRules, "1. Будь добрее к нечищеным зубам."))
 
 	// 20:40: both participants (not the admin) are asked for a report.
 	n, err := h.SendDailyReportRequests(ctx, TimeNow())
@@ -211,12 +213,14 @@ func TestDailyReportFlow(t *testing.T) {
 	assert.Contains(t, adminMsg.Get("text"), "Daily report: Masha")
 	assert.Contains(t, adminMsg.Get("text"), "Proposed score: <b>4</b>/5")
 	assert.Contains(t, adminMsg.Get("text"), "&lt;молодец&gt;")
+	assert.Contains(t, adminMsg.Get("text"), "For the group: <i>Masha помогал(а) &lt;дома&gt;.</i>")
 	assert.Contains(t, adminMsg.Get("reply_markup"), "rep_ok:"+strconvFormat(masha.ID))
 	assert.Contains(t, adminMsg.Get("reply_markup"), "Confirm 4")
 	assert.Equal(t, store.DailyReportProposed, env.report(t, reportMashaTG).Status)
 	assert.Contains(t, env.analyzer.gotReport, "Не сделала уроки")
 	assert.Contains(t, env.analyzer.gotFacts, "Was not on duty today")
 	assert.Contains(t, env.analyzer.gotFacts, "Completed no chores today")
+	assert.Equal(t, "1. Будь добрее к нечищеным зубам.", env.analyzer.gotRules)
 
 	// After Done, messages go elsewhere (the assistant).
 	_, handled = h.HandleDailyReportMessage(privateMessage(reportMashaTG, "А что у меня по делам?"))
@@ -255,8 +259,36 @@ func TestDailyReportFlow(t *testing.T) {
 	group := env.tg.messagesTo(reportGroupID)
 	require.Len(t, group, 1)
 	assert.Contains(t, group[0].Form.Get("text"), "Daily Ratings for "+reportTestDate)
-	assert.Contains(t, group[0].Form.Get("text"), "Masha: 4")
-	assert.Contains(t, group[0].Form.Get("text"), "Petya: 5")
+	assert.Contains(t, group[0].Form.Get("text"), "Masha: 4 — <i>Masha помогал(а) &lt;дома&gt;.</i>")
+	assert.Contains(t, group[0].Form.Get("text"), "Petya: 5 — <i>Petya помогал(а) &lt;дома&gt;.</i>")
+}
+
+func TestRatingReasons(t *testing.T) {
+	env := newReportTestEnv(t, "Masha", "Petya", "Vanya")
+	ctx := context.Background()
+	day := normalizeRatingDate(TimeNow())
+	propose := func(tgID int64, score int, summary, status string) {
+		r, err := env.store.EnsureDailyReport(ctx, env.users[tgID].ID, day)
+		require.NoError(t, err)
+		require.NoError(t, env.store.SaveDailyReportProposal(ctx, r.ID, score, "analysis", summary))
+		if status != store.DailyReportProposed {
+			_, err = env.store.SetDailyReportStatus(ctx, r.ID, store.DailyReportProposed, status)
+			require.NoError(t, err)
+		}
+	}
+	const vanyaTG = reportMashaTG + 2
+	propose(reportMashaTG, 4, "Помыла посуду.", store.DailyReportApproved)
+	propose(reportPetyaTG, 5, "Вынес мусор.", store.DailyReportApproved)
+	propose(vanyaTG, 3, "Ничего особенного.", store.DailyReportRejected)
+
+	rating := func(tgID int64, score int) *store.ParticipantDailyRating {
+		return &store.ParticipantDailyRating{ParticipantID: env.users[tgID].ID, Score: score, RatingDate: day}
+	}
+	// Petya was then rated 3 by hand: his reason explains another score.
+	got := env.h.ratingReasons(ctx, day, []*store.ParticipantDailyRating{
+		rating(reportMashaTG, 4), rating(reportPetyaTG, 3), rating(vanyaTG, 3),
+	})
+	assert.Equal(t, map[int64]string{env.users[reportMashaTG].ID: "Помыла посуду."}, got)
 }
 
 func TestDailyReport_RejectAndFallbacks(t *testing.T) {
@@ -293,7 +325,7 @@ func TestDailyReport_RejectAndFallbacks(t *testing.T) {
 	assert.Equal(t, store.DailyReportSubmitted, env.report(t, reportMashaTG).Status)
 
 	// Reject on a proposal saves nothing.
-	require.NoError(t, env.store.SaveDailyReportProposal(ctx, r.ID, 2, "Fought."))
+	require.NoError(t, env.store.SaveDailyReportProposal(ctx, r.ID, 2, "Fought.", ""))
 	resp, err = h.HandleReportCallback(callback(reportAdminTG, "rep_no:"+strconvFormat(r.ID)))
 	require.NoError(t, err)
 	assert.Contains(t, resp.(tgbotapi.EditMessageTextConfig).Text, "Rejected")

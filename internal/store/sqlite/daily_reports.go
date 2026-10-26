@@ -11,7 +11,7 @@ import (
 
 const dailyReportColumns = `
 	r.id, r.user_id, u.first_name, u.telegram_user_id, r.report_date, r.text, r.parts,
-	r.status, r.proposed_score, r.analysis
+	r.status, r.proposed_score, r.analysis, r.group_summary
 	FROM daily_reports r
 	JOIN users u ON u.id = r.user_id`
 
@@ -133,12 +133,12 @@ func (s *SQLiteStore) SetDailyReportStatus(ctx context.Context, id int64, from, 
 	return rowsChanged(res)
 }
 
-// SaveDailyReportProposal stores the LLM's proposed score and analysis and
-// marks the report as proposed.
-func (s *SQLiteStore) SaveDailyReportProposal(ctx context.Context, id int64, score int, analysis string) error {
+// SaveDailyReportProposal stores the LLM's proposed score, analysis and
+// group summary and marks the report as proposed.
+func (s *SQLiteStore) SaveDailyReportProposal(ctx context.Context, id int64, score int, analysis, groupSummary string) error {
 	_, err := s.db.ExecContext(ctx, `
-		UPDATE daily_reports SET proposed_score = ?, analysis = ?, status = ?, updated_at = ? WHERE id = ?
-	`, score, analysis, store.DailyReportProposed, time.Now().UTC().Format(time.RFC3339), id)
+		UPDATE daily_reports SET proposed_score = ?, analysis = ?, group_summary = ?, status = ?, updated_at = ? WHERE id = ?
+	`, score, analysis, groupSummary, store.DailyReportProposed, time.Now().UTC().Format(time.RFC3339), id)
 	if err != nil {
 		return fmt.Errorf("could not save daily report proposal: %w", err)
 	}
@@ -167,7 +167,7 @@ func scanDailyReport(row rowScanner) (*store.DailyReport, error) {
 	report := &store.DailyReport{}
 	var dateStr string
 	err := row.Scan(&report.ID, &report.UserID, &report.UserName, &report.TelegramUserID, &dateStr,
-		&report.Text, &report.Parts, &report.Status, &report.ProposedScore, &report.Analysis)
+		&report.Text, &report.Parts, &report.Status, &report.ProposedScore, &report.Analysis, &report.GroupSummary)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil

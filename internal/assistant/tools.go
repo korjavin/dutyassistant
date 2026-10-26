@@ -31,8 +31,10 @@ type preparedAction struct {
 	NoOp string
 }
 
-// toolDef describes one tool exposed to the model. Exactly one of read or
-// prepare is set: read tools run immediately, prepare tools need confirmation.
+// toolDef describes one tool exposed to the model. Exactly one of read,
+// prepare or apply is set: read tools run immediately, prepare tools need
+// confirmation, and apply tools change data immediately (only for settings
+// the admin wanted applied without buttons and that can be undone).
 type toolDef struct {
 	name        string
 	description string
@@ -40,9 +42,18 @@ type toolDef struct {
 	required    []string
 	read        func(ctx context.Context, d deps, input []byte) (string, error)
 	prepare     func(ctx context.Context, d deps, input []byte) (*preparedAction, error)
+	apply       func(ctx context.Context, d deps, input []byte) (string, error)
 }
 
 func (t toolDef) mutating() bool { return t.prepare != nil }
+
+// runNow runs a tool that needs no confirmation (read or apply).
+func (t toolDef) runNow(ctx context.Context, d deps, input []byte) (string, error) {
+	if t.apply != nil {
+		return t.apply(ctx, d, input)
+	}
+	return t.read(ctx, d, input)
+}
 
 func str(desc string) map[string]any { return map[string]any{"type": "string", "description": desc} }
 
@@ -239,6 +250,30 @@ var adminTools = []toolDef{
 		},
 		required: []string{"enabled"},
 		prepare:  prepareVacation,
+	},
+	{
+		name: "get_report_rules",
+		description: "Show how the AI scores participants' daily reports (merits and failures) and writes the one-line reason for the group chat: " +
+			"the fixed built-in guidance and the admin's editable house rules.",
+		read: readReportRules,
+	},
+	{
+		name: "update_report_rules",
+		description: "Change the admin's house rules for scoring daily reports and writing the group reason, e.g. when the admin says " +
+			"'be kinder if they don't manage to brush their teeth' or 'in the group, be shorter'. Call get_report_rules first, then pass the COMPLETE new rules: " +
+			"the current ones with the admin's amendment merged in. Keep the other rules, reword or drop a rule the amendment contradicts, no duplicates, " +
+			"nothing the built-in guidance already says. A short numbered list of instructions to the assessor, in the admin's language. " +
+			"Applies immediately (no buttons) to reports assessed from now on; the previous version is kept for undo_report_rules. Empty rules remove all house rules.",
+		properties: map[string]any{
+			"rules": str("The complete new house rules."),
+		},
+		required: []string{"rules"},
+		apply:    applyReportRules,
+	},
+	{
+		name:        "undo_report_rules",
+		description: "Restore the house rules for daily reports from before the last change (calling it again re-applies that change). Applies immediately.",
+		apply:       undoReportRules,
 	},
 }
 

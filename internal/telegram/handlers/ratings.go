@@ -132,7 +132,7 @@ func (h *Handlers) HandleDailyRatingsInteractive(m *tgbotapi.Message) (tgbotapi.
 		normalizedNow := normalizeRatingDate(ratingDate)
 		totals, err := h.Store.GetMonthlyParticipantTotals(context.Background(), normalizedNow.Year(), normalizedNow.Month())
 		if err == nil {
-			msgText := formatDailyAndMonthlySummary(ratings, totals, ratingDate)
+			msgText := formatDailyAndMonthlySummary(ratings, totals, ratingDate, h.ratingReasons(context.Background(), ratingDate, ratings))
 			msg := tgbotapi.NewMessage(h.GroupID, msgText)
 			msg.ParseMode = tgbotapi.ModeHTML
 			if _, sendErr := h.Bot.Send(msg); sendErr != nil {
@@ -502,7 +502,9 @@ func buildRatingsCalendarTable(participants []ratingSessionParticipant, ratings 
 	return strings.Join(lines, "\n")
 }
 
-func formatDailyAndMonthlySummary(dailyRatings []*store.ParticipantDailyRating, totals []*store.ParticipantMonthlyTotal, now time.Time) string {
+// formatDailyAndMonthlySummary renders the group message with the day's scores
+// (each followed by its reason, if any) and the month's standings.
+func formatDailyAndMonthlySummary(dailyRatings []*store.ParticipantDailyRating, totals []*store.ParticipantMonthlyTotal, now time.Time, reasons map[int64]string) string {
 	normalizedNow := normalizeRatingDate(now)
 
 	var b strings.Builder
@@ -513,7 +515,11 @@ func formatDailyAndMonthlySummary(dailyRatings []*store.ParticipantDailyRating, 
 		if rating.HasEar {
 			scoreStr += "e"
 		}
-		fmt.Fprintf(&b, "%s: %s\n", html.EscapeString(rating.ParticipantName), scoreStr)
+		fmt.Fprintf(&b, "%s: %s", html.EscapeString(rating.ParticipantName), scoreStr)
+		if reason := reasons[rating.ParticipantID]; reason != "" {
+			fmt.Fprintf(&b, " — <i>%s</i>", html.EscapeString(reason))
+		}
+		b.WriteString("\n")
 	}
 
 	fmt.Fprintf(&b, "\n<b>Monthly Standings (%s)</b>\n", normalizedNow.Format("January 2006"))

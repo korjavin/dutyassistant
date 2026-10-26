@@ -181,6 +181,7 @@ func (s *SQLiteStore) migrate(ctx context.Context) error {
 		`ALTER TABLE participant_ratings ADD COLUMN has_ear INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE recurring_chores ADD COLUMN assignee_user_id INTEGER`,
 		`ALTER TABLE recurring_chores ADD COLUMN ends_at TEXT`,
+		`ALTER TABLE daily_reports ADD COLUMN group_summary TEXT NOT NULL DEFAULT ''`,
 	}
 
 	for _, alteration := range alterations {
@@ -949,6 +950,29 @@ func (s *SQLiteStore) IsVacationMode(ctx context.Context) (bool, error) {
 		return false, fmt.Errorf("could not get vacation mode: %w", err)
 	}
 	return value == "true", nil
+}
+
+// GetSetting returns a free-form setting, or "" if it was never set.
+func (s *SQLiteStore) GetSetting(ctx context.Context, key string) (string, error) {
+	var value string
+	err := s.db.QueryRowContext(ctx, `SELECT value FROM settings WHERE key = ?`, key).Scan(&value)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("could not get setting %s: %w", key, err)
+	}
+	return value, nil
+}
+
+// SetSetting stores a free-form setting.
+func (s *SQLiteStore) SetSetting(ctx context.Context, key, value string) error {
+	_, err := s.db.ExecContext(ctx, `INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)`,
+		key, value, time.Now().UTC().Format(time.RFC3339))
+	if err != nil {
+		return fmt.Errorf("could not set setting %s: %w", key, err)
+	}
+	return nil
 }
 
 // GetUserByID retrieves a user by their internal ID.
