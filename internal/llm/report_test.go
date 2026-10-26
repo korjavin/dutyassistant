@@ -22,6 +22,7 @@ func TestParseReportAssessment(t *testing.T) {
 	}{
 		{name: "plain JSON", content: `{"score": 4, "analysis": "Good day."}`, want: &ReportAssessment{Score: 4, Analysis: "Good day."}},
 		{name: "code fence", content: "```json\n{\"score\": 2, \"analysis\": \" Skipped chores. \"}\n```", want: &ReportAssessment{Score: 2, Analysis: "Skipped chores."}},
+		{name: "group summary", content: `{"score": 5, "analysis": "Great.", "group_summary": " Helped everyone. "}`, want: &ReportAssessment{Score: 5, Analysis: "Great.", GroupSummary: "Helped everyone."}},
 		{name: "no JSON", content: "I think 5", wantErr: true},
 		{name: "score too high", content: `{"score": 6, "analysis": "x"}`, wantErr: true},
 		{name: "score missing", content: `{"analysis": "x"}`, wantErr: true},
@@ -44,24 +45,33 @@ func TestAssessDailyReport(t *testing.T) {
 	var gotReq chatRequest
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&gotReq))
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"score\": 5, \"analysis\": \"Helped everyone.\"}"}}]}`))
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"score\": 5, \"analysis\": \"Helped everyone.\", \"group_summary\": \"Helped at home.\"}"}}]}`))
 	}))
 	defer server.Close()
 
 	c := NewClient("key", server.URL, 5, "test-model", nil)
-	got, err := c.AssessDailyReport(context.Background(), "Masha", "Я помыла посуду", "- Was on duty today.\n")
+	got, err := c.AssessDailyReport(context.Background(), "Masha", "Я помыла посуду", "- Was on duty today.\n", "")
 	require.NoError(t, err)
-	assert.Equal(t, &ReportAssessment{Score: 5, Analysis: "Helped everyone."}, got)
+	assert.Equal(t, &ReportAssessment{Score: 5, Analysis: "Helped everyone.", GroupSummary: "Helped at home."}, got)
 
 	require.Len(t, gotReq.Messages, 2)
 	assert.Equal(t, dailyReportSystemPrompt, gotReq.Messages[0].Content)
+	assert.Contains(t, gotReq.Messages[0].Content, `"group_summary"`)
 	assert.Contains(t, gotReq.Messages[1].Content, "Participant: Masha")
 	assert.Contains(t, gotReq.Messages[1].Content, "- Was on duty today.")
 	assert.Contains(t, gotReq.Messages[1].Content, "<report>\nЯ помыла посуду\n</report>")
 
 	var nilClient *Client
-	_, err = nilClient.AssessDailyReport(context.Background(), "Masha", "x", "")
+	_, err = nilClient.AssessDailyReport(context.Background(), "Masha", "x", "", "")
 	assert.Error(t, err)
+
+	// The admin's house rules go into the system prompt, after the fixed part.
+	_, err = c.AssessDailyReport(context.Background(), "Masha", "x", "", "  1. Не снижай за нечищеные зубы.\n")
+	require.NoError(t, err)
+	system := gotReq.Messages[0].Content
+	assert.True(t, strings.HasPrefix(system, dailyReportSystemPrompt))
+	assert.Contains(t, system, "<house_rules>\n1. Не снижай за нечищеные зубы.\n</house_rules>")
+	assert.Equal(t, dailyReportSystemPrompt, dailyReportSystem(" \n "))
 }
 
 func TestTranscriber(t *testing.T) {

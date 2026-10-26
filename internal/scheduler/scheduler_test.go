@@ -646,7 +646,15 @@ func (m *mockStore) SetDailyReportStatus(ctx context.Context, id int64, from, to
 	return false, nil
 }
 
-func (m *mockStore) SaveDailyReportProposal(ctx context.Context, id int64, score int, analysis string) error {
+func (m *mockStore) SaveDailyReportProposal(ctx context.Context, id int64, score int, analysis, groupSummary string) error {
+	return nil
+}
+
+func (m *mockStore) GetSetting(ctx context.Context, key string) (string, error) {
+	return "", nil
+}
+
+func (m *mockStore) SetSetting(ctx context.Context, key, value string) error {
 	return nil
 }
 

@@ -176,7 +176,16 @@ type DailyReport struct {
 	Status         string
 	ProposedScore  int // 0 = none
 	Analysis       string
+	GroupSummary   string // one-line reason for the score, shown in the group
 }
+
+// Settings keys of the admin's house rules for daily report assessment
+// (free text, edited through the admin assistant) and the version before
+// the last change, kept for undo.
+const (
+	SettingReportRules         = "report_rules"
+	SettingReportRulesPrevious = "report_rules_previous"
+)
 
 // Registration request statuses.
 const (
@@ -261,8 +270,8 @@ type Store interface {
 	AppendDailyReport(ctx context.Context, id int64, text string) (bool, error)
 	// SetDailyReportStatus moves a report from one status to another; false if it was not in from.
 	SetDailyReportStatus(ctx context.Context, id int64, from, to string) (bool, error)
-	// SaveDailyReportProposal stores the proposed score and analysis and marks the report proposed.
-	SaveDailyReportProposal(ctx context.Context, id int64, score int, analysis string) error
+	// SaveDailyReportProposal stores the proposed score, analysis and group summary and marks the report proposed.
+	SaveDailyReportProposal(ctx context.Context, id int64, score int, analysis, groupSummary string) error
 	// GetChoresCompletedBetween returns the user's chores completed in [start, end).
 	GetChoresCompletedBetween(ctx context.Context, userID int64, start, end time.Time) ([]*Chore, error)
 
@@ -284,6 +293,10 @@ type Store interface {
 	// Vacation mode methods
 	SetVacationMode(ctx context.Context, enabled bool) error
 	IsVacationMode(ctx context.Context) (bool, error)
+
+	// Free-form settings: GetSetting returns "" for a key that was never set.
+	GetSetting(ctx context.Context, key string) (string, error)
+	SetSetting(ctx context.Context, key, value string) error
 
 	// Recurring Chore methods
 	CreateRecurringChore(ctx context.Context, chore *RecurringChore) error

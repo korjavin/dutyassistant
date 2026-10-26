@@ -20,9 +20,10 @@ import (
 // the LLM proposes a score 1-5 with a short analysis and the admin confirms
 // or rejects it with buttons; only a confirmed score is saved as the rating.
 
-// ReportAnalyzer proposes a daily score from a participant's report.
+// ReportAnalyzer proposes a daily score from a participant's report,
+// following the admin's house rules (may be empty).
 type ReportAnalyzer interface {
-	AssessDailyReport(ctx context.Context, name, report, facts string) (*llm.ReportAssessment, error)
+	AssessDailyReport(ctx context.Context, name, report, facts, rules string) (*llm.ReportAssessment, error)
 }
 
 const (
@@ -32,6 +33,8 @@ const (
 
 	// maxReportChars caps a report so the admin message fits Telegram's limit.
 	maxReportChars = 6000
+	// maxGroupSummaryRunes caps the one-line reason shown in the group.
+	maxGroupSummaryRunes = 300
 
 	reportAlreadySentMessage = "✅ Your report for today is already sent."
 )
@@ -287,15 +290,22 @@ func (h *Handlers) assessReport(ctx context.Context, reportID int64) {
 	}
 
 	if h.ReportAnalyzer != nil {
-		assessment, err := h.ReportAnalyzer.AssessDailyReport(ctx, report.UserName, report.Text, h.reportFacts(ctx, report))
+		rules, err := h.Store.GetSetting(ctx, store.SettingReportRules)
+		if err != nil {
+			// Better a score without the house rules than none at all.
+			slog.Error(fmt.Sprintf("[Report] Failed to load the report rules: %v", err))
+		}
+		assessment, err := h.ReportAnalyzer.AssessDailyReport(ctx, report.UserName, report.Text, h.reportFacts(ctx, report), rules)
 		switch {
 		case err != nil:
 			slog.Error(fmt.Sprintf("[Report] LLM assessment of report %d failed: %v", reportID, err))
 		default:
-			if err := h.Store.SaveDailyReportProposal(ctx, reportID, assessment.Score, assessment.Analysis); err != nil {
+			summary := TruncateRunes(assessment.GroupSummary, maxGroupSummaryRunes)
+			if err := h.Store.SaveDailyReportProposal(ctx, reportID, assessment.Score, assessment.Analysis, summary); err != nil {
 				slog.Error(fmt.Sprintf("[Report] Failed to save the proposal for report %d: %v", reportID, err))
 			} else {
 				report.Status, report.ProposedScore, report.Analysis = store.DailyReportProposed, assessment.Score, assessment.Analysis
+				report.GroupSummary = summary
 			}
 		}
 	}
@@ -375,6 +385,9 @@ func formatReportForAdmin(report *store.DailyReport, footer string) string {
 			sb.WriteString(html.EscapeString(TruncateRunes(report.Analysis, 1200)))
 			sb.WriteString("\n")
 		}
+		if report.GroupSummary != "" {
+			fmt.Fprintf(&sb, "👥 For the group: <i>%s</i>\n", html.EscapeString(report.GroupSummary))
+		}
 	} else {
 		fmt.Fprintf(&sb, "⚠️ No AI assessment (the LLM is unavailable). Rate %s in the daily ratings prompt.\n", name)
 	}
@@ -412,7 +425,8 @@ func (h *Handlers) decideReport(ctx context.Context, q *tgbotapi.CallbackQuery, 
 		if !ok {
 			return edit("\n\nThis report was already handled.", false)
 		}
-		return edit(fmt.Sprintf("\n\n❌ <b>Rejected</b> — no score saved. Rate %s in the daily ratings prompt if needed.", name), false)
+		return edit(fmt.Sprintf("\n\n❌ <b>Rejected</b> — no score saved. Rate %s in the daily ratings prompt if needed; "+
+			"the group summary will show the bot's suggestion and reason next to your score.", name), false)
 	}
 
 	if !reportConfirmWindowOpen(report.ReportDate, TimeNow()) {
@@ -500,9 +514,49 @@ func (h *Handlers) announceRatingsIfComplete(ctx context.Context, date time.Time
 		slog.Error(fmt.Sprintf("[Report] Failed to load monthly totals: %v", err))
 		return
 	}
-	msg := tgbotapi.NewMessage(h.GroupID, formatDailyAndMonthlySummary(dayRatings, totals, day))
+	msg := tgbotapi.NewMessage(h.GroupID, formatDailyAndMonthlySummary(dayRatings, totals, day, h.ratingReasons(ctx, day, dayRatings)))
 	msg.ParseMode = tgbotapi.ModeHTML
 	h.send(msg)
+}
+
+// ratingReason is the bot's explanation of a participant's day for the
+// group summary.
+type ratingReason struct {
+	Text string
+	// Suggested is the bot's proposed score when the saved score differs
+	// from it (0 = the admin kept the bot's score), so the group sees both.
+	Suggested int
+}
+
+// ratingReasons returns the group summaries of date's assessed reports by
+// participant ID, for the daily summary. When the saved score is not the one
+// the bot proposed (the admin rejected it or rated by hand), the reason is
+// still shown, marked with the bot's suggested score.
+func (h *Handlers) ratingReasons(ctx context.Context, date time.Time, ratings []*store.ParticipantDailyRating) map[int64]ratingReason {
+	reports, err := h.Store.ListDailyReports(ctx, normalizeRatingDate(date))
+	if err != nil {
+		slog.Error(fmt.Sprintf("[Report] Failed to load reports for the summary: %v", err))
+		return nil
+	}
+	scores := make(map[int64]int, len(ratings))
+	for _, r := range ratings {
+		if r != nil {
+			scores[r.ParticipantID] = r.Score
+		}
+	}
+	reasons := make(map[int64]ratingReason)
+	for _, r := range reports {
+		score, rated := scores[r.UserID]
+		if !rated || r.ProposedScore == 0 || r.GroupSummary == "" {
+			continue
+		}
+		reason := ratingReason{Text: r.GroupSummary}
+		if score != r.ProposedScore {
+			reason.Suggested = r.ProposedScore
+		}
+		reasons[r.UserID] = reason
+	}
+	return reasons
 }
 
 // TruncateRunes shortens s to at most n runes, adding "…" when cut.
