@@ -432,7 +432,7 @@ func (b *Bot) handleCallbackQuery(q *tgbotapi.CallbackQuery) (tgbotapi.Chattable
 		return b.handlers.HandleCancelFlow(q)
 	case "reg_ok", "reg_no":
 		return b.handlers.HandleRegistrationCallback(q)
-	case "rep_done", "rep_ok", "rep_no":
+	case "rep_done", "rep_ok", "rep_set", "rep_no":
 		return b.handlers.HandleReportCallback(q)
 	default:
 		slog.Info(fmt.Sprintf("Unknown callback action: %s", action))
@@ -447,12 +447,6 @@ func (b *Bot) handleMessage(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 	// A mention of the bot in the group is for the assistant unless the
 	// sender is in the middle of their own session there.
 	if exists && session.UserID != m.From.ID && b.isGroupMention(m) {
-		exists = false
-	}
-	// The rating prompt stays open until the end of the day so scores can be
-	// corrected; only replies made of scores belong to it. Free text (e.g.
-	// feedback on a report assessment) goes on to the assistant.
-	if exists && session.Type == handlers.SessionTypeDailyRatings && !m.IsCommand() && !handlers.LooksLikeRatingScores(m.Text) {
 		exists = false
 	}
 	if !exists {
@@ -474,8 +468,6 @@ func (b *Bot) handleMessage(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 	switch session.Type {
 	case handlers.SessionTypeChoreCreation:
 		return b.handlers.HandleChoreInteractive(m)
-	case handlers.SessionTypeDailyRatings:
-		return b.handlers.HandleDailyRatingsInteractive(m)
 	case handlers.SessionTypeEditChore:
 		return b.handlers.HandleEditChoreInteractive(m)
 	case handlers.SessionTypeSpendSviniya:

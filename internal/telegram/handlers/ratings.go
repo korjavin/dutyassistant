@@ -15,141 +15,12 @@ import (
 	"github.com/korjavin/dutyassistant/internal/store"
 )
 
-const (
-	ratingSessionParticipantsKey = "participants"
-	ratingSessionDateKey         = "rating_date"
-	ratingTimezoneName           = "Europe/Berlin"
-)
+const ratingTimezoneName = "Europe/Berlin"
 
+// ratingSessionParticipant is a participant's column in the ratings calendar.
 type ratingSessionParticipant struct {
 	ID   int64
 	Name string
-}
-
-// PrepareDailyRatingsReminder starts the daily rating session and returns the prompt when participants exist.
-func (h *Handlers) PrepareDailyRatingsReminder(chatID, userID int64, ratingDate time.Time) (*tgbotapi.MessageConfig, bool, error) {
-	isAdmin, err := h.checkAdmin(userID)
-	if err != nil {
-		return nil, false, err
-	}
-	if !isAdmin {
-		msg := tgbotapi.NewMessage(chatID, adminOnlyMessage)
-		return &msg, true, nil
-	}
-	if session, exists := h.SessionManager.GetSession(chatID); exists && session.Type != SessionTypeDailyRatings {
-		msg := tgbotapi.NewMessage(chatID, "Finish your current admin workflow before submitting participant ratings.")
-		return &msg, true, nil
-	}
-
-	participants, err := h.Store.GetParticipantsForRating(context.Background())
-	if err != nil {
-		return nil, false, err
-	}
-	participants = h.filterRatingParticipants(participants)
-	if len(participants) == 0 {
-		return nil, false, nil
-	}
-
-	h.SessionManager.StartSession(chatID, userID, SessionTypeDailyRatings)
-	session, _ := h.SessionManager.GetSession(chatID)
-	session.SetData(ratingSessionParticipantsKey, sessionParticipants(participants))
-	session.SetData(ratingSessionDateKey, normalizeRatingDate(ratingDate))
-
-	msg := tgbotapi.NewMessage(chatID, buildDailyRatingsPrompt(participants, ratingDate))
-	return &msg, true, nil
-}
-
-// StartDailyRatingsSession prepares the admin prompt and stores the participant order in session state.
-func (h *Handlers) StartDailyRatingsSession(chatID, userID int64, ratingDate time.Time) (tgbotapi.MessageConfig, error) {
-	msg, ok, err := h.PrepareDailyRatingsReminder(chatID, userID, ratingDate)
-	if err != nil {
-		return tgbotapi.NewMessage(chatID, genericErrorMessage), nil
-	}
-	if !ok {
-		return tgbotapi.NewMessage(chatID, "No active participants are available for rating right now."), nil
-	}
-	return *msg, nil
-}
-
-// HandleDailyRatingsInteractive validates and saves a daily participant rating reply.
-func (h *Handlers) HandleDailyRatingsInteractive(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
-	session, exists := h.SessionManager.GetSession(m.Chat.ID)
-	if !exists || session.Type != SessionTypeDailyRatings {
-		return nil, nil
-	}
-
-	if session.UserID != m.From.ID {
-		return nil, nil
-	}
-
-	isAdmin, err := h.checkAdmin(m.From.ID)
-	if err != nil || !isAdmin {
-		return nil, nil
-	}
-
-	if m.IsCommand() && m.Command() == "cancel" {
-		h.SessionManager.EndSession(m.Chat.ID)
-		return tgbotapi.NewMessage(m.Chat.ID, "Rating prompt closed."), nil
-	}
-
-	participants, ok := sessionParticipantsFromSession(session)
-	if !ok || len(participants) == 0 {
-		h.SessionManager.EndSession(m.Chat.ID)
-		return tgbotapi.NewMessage(m.Chat.ID, "The rating session expired. Please start a new rating prompt."), nil
-	}
-
-	ratingDate, ok := ratingDateFromSession(session)
-	if !ok {
-		h.SessionManager.EndSession(m.Chat.ID)
-		return tgbotapi.NewMessage(m.Chat.ID, "The rating session expired. Please start a new rating prompt."), nil
-	}
-
-	h.ratingsMu.Lock()
-	defer h.ratingsMu.Unlock()
-
-	if !ratingSubmissionWindowOpen(ratingDate, TimeNow()) {
-		h.SessionManager.EndSession(m.Chat.ID)
-		return tgbotapi.NewMessage(m.Chat.ID, "The rating session expired. Please start a new rating prompt."), nil
-	}
-
-	scores, parseErr := parseParticipantScores(m.Text, len(participants))
-	if parseErr != nil {
-		h.SessionManager.TouchSession(m.Chat.ID)
-		return tgbotapi.NewMessage(m.Chat.ID, formatRatingValidationError(parseErr.Error(), participants, ratingDate)), nil
-	}
-
-	ratings := make([]*store.ParticipantDailyRating, 0, len(participants))
-	for i, participant := range participants {
-		ratings = append(ratings, &store.ParticipantDailyRating{
-			ParticipantID:   participant.ID,
-			ParticipantName: participant.Name,
-			RatingDate:      ratingDate,
-			Score:           scores[i].Score,
-			HasEar:          scores[i].HasEar,
-		})
-	}
-
-	if err := h.Store.SaveDailyParticipantRatings(context.Background(), ratingDate, ratings); err != nil {
-		return tgbotapi.NewMessage(m.Chat.ID, genericErrorMessage), nil
-	}
-
-	if h.Bot != nil && h.GroupID != 0 {
-		normalizedNow := normalizeRatingDate(ratingDate)
-		totals, err := h.Store.GetMonthlyParticipantTotals(context.Background(), normalizedNow.Year(), normalizedNow.Month())
-		if err == nil {
-			msgText := formatDailyAndMonthlySummary(ratings, totals, ratingDate, h.ratingReasons(context.Background(), ratingDate, ratings))
-			msg := tgbotapi.NewMessage(h.GroupID, msgText)
-			msg.ParseMode = tgbotapi.ModeHTML
-			if _, sendErr := h.Bot.Send(msg); sendErr != nil {
-				slog.Error("error sending daily ratings group notification", "err", sendErr)
-			}
-		} else {
-			slog.Error("error fetching monthly participant totals for group notification", "err", err)
-		}
-	}
-
-	h.SessionManager.TouchSession(m.Chat.ID)
-	return tgbotapi.NewMessage(m.Chat.ID, formatRatingSuccess(participants, ratingDate)), nil
 }
 
 // HandleRatingsCalendar renders the current month's participant ratings for admins.
@@ -179,107 +50,6 @@ func (h *Handlers) HandleRatingsCalendar(m *tgbotapi.Message) (tgbotapi.MessageC
 	msg := tgbotapi.NewMessage(m.Chat.ID, text)
 	msg.ParseMode = tgbotapi.ModeHTML
 	return msg, nil
-}
-
-func buildDailyRatingsPrompt(participants []*store.User, ratingDate time.Time) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "Daily participant ratings for %s\n\n", normalizeRatingDate(ratingDate).Format("2006-01-02"))
-	b.WriteString(formatParticipantOrder(sessionParticipants(participants)))
-	b.WriteString("\n\nReply with ")
-	b.WriteString(strconv.Itoa(len(participants)))
-	b.WriteString(" score(s) in this order, separated by spaces.\nUse 5e for an ear award.\nExample: ")
-
-	for i := range participants {
-		if i > 0 {
-			b.WriteString(" ")
-		}
-		b.WriteString("5")
-	}
-
-	return b.String()
-}
-
-// LooksLikeRatingScores reports whether text is a reply to the rating prompt:
-// only score tokens such as "4", "5e" or a mistyped "55". Anything else (a
-// sentence, a voice transcript) is not meant for the open rating session.
-func LooksLikeRatingScores(text string) bool {
-	fields := strings.Fields(text)
-	if len(fields) == 0 {
-		return false
-	}
-	for _, field := range fields {
-		digits := strings.TrimSuffix(strings.ToLower(field), "e")
-		if digits == "" || len(digits) > 2 {
-			return false
-		}
-		for _, r := range digits {
-			if r < '0' || r > '9' {
-				return false
-			}
-		}
-	}
-	return true
-}
-
-type parsedScore struct {
-	Score  int
-	HasEar bool
-}
-
-func parseParticipantScores(text string, expected int) ([]parsedScore, error) {
-	fields := strings.Fields(text)
-	if len(fields) != expected {
-		return nil, fmt.Errorf("expected %d score(s), received %d", expected, len(fields))
-	}
-
-	scores := make([]parsedScore, 0, len(fields))
-	for _, field := range fields {
-		hasEar := false
-		raw := field
-		if strings.HasSuffix(strings.ToLower(field), "e") {
-			raw = field[:len(field)-1]
-			hasEar = true
-		}
-		score, err := strconv.Atoi(raw)
-		if err != nil {
-			return nil, fmt.Errorf("all scores must be integers between 1 and 5 (use 5e for ear)")
-		}
-		if score < 1 || score > 5 {
-			return nil, fmt.Errorf("scores must be between 1 and 5")
-		}
-		if hasEar && score != 5 {
-			return nil, fmt.Errorf("ear modifier (e) can only be used with score 5")
-		}
-		scores = append(scores, parsedScore{Score: score, HasEar: hasEar})
-	}
-
-	return scores, nil
-}
-
-func formatRatingValidationError(reason string, participants []ratingSessionParticipant, ratingDate time.Time) string {
-	return fmt.Sprintf(
-		"Could not save ratings for %s: %s\n\nParticipant order:\n%s\n\nReply with %d score(s) in that order, separated by spaces.",
-		normalizeRatingDate(ratingDate).Format("2006-01-02"),
-		reason,
-		formatParticipantOrder(participants),
-		len(participants),
-	)
-}
-
-func formatRatingSuccess(participants []ratingSessionParticipant, ratingDate time.Time) string {
-	return fmt.Sprintf(
-		"Saved ratings for %s.\n\nParticipant order:\n%s\n\nSend another set of scores in the same order to overwrite today's ratings.",
-		normalizeRatingDate(ratingDate).Format("2006-01-02"),
-		formatParticipantOrder(participants),
-	)
-}
-
-func formatParticipantOrder(participants []ratingSessionParticipant) string {
-	lines := make([]string, 0, len(participants))
-	for i, participant := range participants {
-		lines = append(lines, fmt.Sprintf("%d. %s", i+1, participant.Name))
-	}
-	return strings.Join(lines, "\n")
 }
 
 // BuildMonthlyRatingsWinnersAnnouncement renders the month-end digest on the last calendar day only.
@@ -398,30 +168,6 @@ func mergeCalendarParticipants(participants []*store.User, ratings []*store.Part
 	return merged
 }
 
-func sessionParticipantsFromSession(session *Session) ([]ratingSessionParticipant, bool) {
-	raw, ok := session.GetData(ratingSessionParticipantsKey)
-	if !ok {
-		return nil, false
-	}
-
-	participants, ok := raw.([]ratingSessionParticipant)
-	return participants, ok
-}
-
-func ratingDateFromSession(session *Session) (time.Time, bool) {
-	raw, ok := session.GetData(ratingSessionDateKey)
-	if !ok {
-		return time.Time{}, false
-	}
-
-	date, ok := raw.(time.Time)
-	if !ok {
-		return time.Time{}, false
-	}
-
-	return normalizeRatingDate(date), true
-}
-
 func normalizeRatingDate(date time.Time) time.Time {
 	loc, err := time.LoadLocation(ratingTimezoneName)
 	if err != nil {
@@ -435,24 +181,6 @@ func normalizeRatingDate(date time.Time) time.Time {
 func isLastDayOfMonth(date time.Time) bool {
 	normalized := normalizeRatingDate(date)
 	return normalized.AddDate(0, 0, 1).Month() != normalized.Month()
-}
-
-func ratingSubmissionWindowOpen(ratingDate time.Time, now time.Time) bool {
-	normalizedDate := normalizeRatingDate(ratingDate)
-	if !normalizeRatingDate(now).Equal(normalizedDate) {
-		return false
-	}
-	if !isLastDayOfMonth(normalizedDate) {
-		return true
-	}
-
-	loc, err := time.LoadLocation(ratingTimezoneName)
-	if err != nil {
-		loc = time.UTC
-	}
-	localNow := now.In(loc)
-	cutoff := time.Date(localNow.Year(), localNow.Month(), localNow.Day(), 21, 0, 0, 0, loc)
-	return localNow.Before(cutoff)
 }
 
 func formatRatingsCalendar(participants []*store.User, ratings []*store.ParticipantDailyRating, now time.Time) string {

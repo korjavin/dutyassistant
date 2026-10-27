@@ -173,13 +173,14 @@ func TestDailyReportFlow(t *testing.T) {
 	h, ctx := env.h, context.Background()
 	require.NoError(t, env.store.SetSetting(ctx, store.SettingReportRules, "1. Будь добрее к нечищеным зубам."))
 
-	// 20:40: both participants (not the admin) are asked for a report.
+	// 20:00: both participants (not the admin) are asked for a report.
 	n, err := h.SendDailyReportRequests(ctx, TimeNow())
 	require.NoError(t, err)
 	assert.Equal(t, 2, n)
 	require.Len(t, env.tg.messagesTo(reportMashaTG), 1)
 	assert.Contains(t, env.tg.messagesTo(reportMashaTG)[0].Form.Get("text"), "report of merits and failures")
 	assert.Contains(t, env.tg.messagesTo(reportMashaTG)[0].Form.Get("text"), "Voice messages are welcome")
+	assert.Contains(t, env.tg.messagesTo(reportMashaTG)[0].Form.Get("text"), "by 20:45")
 	assert.Empty(t, env.tg.messagesTo(reportAdminTG))
 
 	// Messages while the report is open are appended (voice arrives here
@@ -216,6 +217,9 @@ func TestDailyReportFlow(t *testing.T) {
 	assert.Contains(t, adminMsg.Get("text"), "For the group: <i>Masha помогал(а) &lt;дома&gt;.</i>")
 	assert.Contains(t, adminMsg.Get("reply_markup"), "rep_ok:"+strconvFormat(masha.ID))
 	assert.Contains(t, adminMsg.Get("reply_markup"), "Confirm 4")
+	assert.Contains(t, adminMsg.Get("reply_markup"), "rep_set:"+strconvFormat(masha.ID)+":5e")
+	assert.Contains(t, adminMsg.Get("reply_markup"), "5👂")
+	assert.NotContains(t, adminMsg.Get("reply_markup"), "Reject")
 	assert.Equal(t, store.DailyReportProposed, env.report(t, reportMashaTG).Status)
 	assert.Contains(t, env.analyzer.gotReport, "Не сделала уроки")
 	assert.Contains(t, env.analyzer.gotFacts, "Was not on duty today")
@@ -234,17 +238,23 @@ func TestDailyReportFlow(t *testing.T) {
 	// The admin confirms: only Masha's score is saved, no group post yet.
 	resp, err = h.HandleReportCallback(callback(reportAdminTG, "rep_ok:"+strconvFormat(masha.ID)))
 	require.NoError(t, err)
-	assert.Contains(t, resp.(tgbotapi.EditMessageTextConfig).Text, "Confirmed</b>: Masha gets 4")
+	edit := resp.(tgbotapi.EditMessageTextConfig)
+	assert.Contains(t, edit.Text, "Confirmed</b>: Masha gets 4")
+	// The score buttons stay, with the saved score marked, so it can be changed.
+	require.NotNil(t, edit.ReplyMarkup)
+	require.Len(t, edit.ReplyMarkup.InlineKeyboard, 1)
+	assert.Equal(t, "✓4", edit.ReplyMarkup.InlineKeyboard[0][3].Text)
 	ratings, err := env.store.GetCurrentMonthParticipantRatings(ctx, TimeNow())
 	require.NoError(t, err)
 	require.Len(t, ratings, 1)
 	assert.Equal(t, 4, ratings[0].Score)
+	assert.Equal(t, store.DailyReportApproved, env.report(t, reportMashaTG).Status)
 	assert.Empty(t, env.tg.messagesTo(reportGroupID))
 
-	// A second press does nothing.
+	// A second press keeps the score.
 	resp, err = h.HandleReportCallback(callback(reportAdminTG, "rep_ok:"+strconvFormat(masha.ID)))
 	require.NoError(t, err)
-	assert.Contains(t, resp.(tgbotapi.EditMessageTextConfig).Text, "already handled")
+	assert.Contains(t, resp.(tgbotapi.EditMessageTextConfig).Text, "Masha gets 4")
 
 	// Petya reports too; once he is confirmed, the group gets the summary.
 	env.analyzer.score = 5
@@ -261,6 +271,26 @@ func TestDailyReportFlow(t *testing.T) {
 	assert.Contains(t, group[0].Form.Get("text"), "Daily Ratings for "+reportTestDate)
 	assert.Contains(t, group[0].Form.Get("text"), "Masha: 4 — <i>Masha помогал(а) &lt;дома&gt;.</i>")
 	assert.Contains(t, group[0].Form.Get("text"), "Petya: 5 — <i>Petya помогал(а) &lt;дома&gt;.</i>")
+
+	// Pressing the same score again does not repost the summary.
+	_, err = h.HandleReportCallback(callback(reportAdminTG, "rep_set:"+strconvFormat(petya.ID)+":5"))
+	require.NoError(t, err)
+	require.Len(t, env.tg.messagesTo(reportGroupID), 1)
+
+	// The admin gives Petya an ear: the correction is posted again.
+	resp, err = h.HandleReportCallback(callback(reportAdminTG, "rep_set:"+strconvFormat(petya.ID)+":5e"))
+	require.NoError(t, err)
+	assert.Contains(t, resp.(tgbotapi.EditMessageTextConfig).Text, "Petya gets 5👂")
+	group = env.tg.messagesTo(reportGroupID)
+	require.Len(t, group, 2)
+	assert.Contains(t, group[1].Form.Get("text"), "Petya: 5e")
+	ratings, err = env.store.GetCurrentMonthParticipantRatings(ctx, TimeNow())
+	require.NoError(t, err)
+	for _, r := range ratings {
+		if r.ParticipantID == petya.UserID {
+			assert.True(t, r.HasEar)
+		}
+	}
 }
 
 func TestRatingReasons(t *testing.T) {
@@ -285,9 +315,9 @@ func TestRatingReasons(t *testing.T) {
 	rating := func(id int64, name string, score int) *store.ParticipantDailyRating {
 		return &store.ParticipantDailyRating{ParticipantID: id, ParticipantName: name, Score: score, RatingDate: day}
 	}
-	// Masha's score was confirmed; Petya was then rated 3 by hand and
-	// Vanya's proposal was rejected and he got 2: the group sees what the
-	// bot suggested and why.
+	// Masha's score was confirmed; the admin picked 3 for Petya and 2 for
+	// Vanya (an older, rejected proposal): the group sees what the bot
+	// suggested and why.
 	ratings := []*store.ParticipantDailyRating{rating(masha, "Masha", 4), rating(petya, "Petya", 3), rating(vanya, "Vanya", 2)}
 	got := env.h.ratingReasons(ctx, day, ratings)
 	assert.Equal(t, map[int64]ratingReason{
@@ -305,7 +335,7 @@ func TestRatingReasons(t *testing.T) {
 	assert.Empty(t, env.h.ratingReasons(ctx, day, nil))
 }
 
-func TestDailyReport_RejectAndFallbacks(t *testing.T) {
+func TestDailyReport_FallbacksAndScoreButtons(t *testing.T) {
 	env := newReportTestEnv(t, "Masha")
 	h, ctx := env.h, context.Background()
 
@@ -324,29 +354,68 @@ func TestDailyReport_RejectAndFallbacks(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, resp.(tgbotapi.MessageConfig).Text, "nothing to send yet")
 
+	// Scores can't be given while the report is being written.
+	resp, err = h.HandleReportCallback(callback(reportAdminTG, "rep_set:"+strconvFormat(r.ID)+":4"))
+	require.NoError(t, err)
+	assert.Contains(t, resp.(tgbotapi.EditMessageTextConfig).Text, "still being written")
+
 	_, handled = h.HandleDailyReportMessage(privateMessage(reportMashaTG, "Подрался с братом"))
 	require.True(t, handled)
 
-	// The LLM fails: the admin gets the report unscored, without buttons.
+	// The LLM fails: the admin gets the report unscored, with score buttons only.
 	env.analyzer.err = errors.New("boom")
 	_, err = h.HandleReportCallback(callback(reportMashaTG, "rep_done:"+strconvFormat(r.ID)))
 	require.NoError(t, err)
 	require.Eventually(t, func() bool { return len(env.tg.messagesTo(reportAdminTG)) == 1 }, 2*time.Second, 10*time.Millisecond)
 	adminMsg := env.tg.messagesTo(reportAdminTG)[0].Form
 	assert.Contains(t, adminMsg.Get("text"), "No AI assessment")
+	assert.Contains(t, adminMsg.Get("text"), "Pick a score below")
 	assert.Contains(t, adminMsg.Get("text"), "Подрался с братом")
-	assert.Empty(t, adminMsg.Get("reply_markup"))
+	assert.Contains(t, adminMsg.Get("reply_markup"), "rep_set:"+strconvFormat(r.ID)+":1")
+	assert.NotContains(t, adminMsg.Get("reply_markup"), "Confirm")
 	assert.Equal(t, store.DailyReportSubmitted, env.report(t, reportMashaTG).Status)
 
-	// Reject on a proposal saves nothing.
+	// Confirm without a proposal just shows the buttons.
+	resp, err = h.HandleReportCallback(callback(reportAdminTG, "rep_ok:"+strconvFormat(r.ID)))
+	require.NoError(t, err)
+	assert.NotContains(t, resp.(tgbotapi.EditMessageTextConfig).Text, "Confirmed")
+
+	// Reject on an older message saves nothing and shows the score buttons.
 	require.NoError(t, env.store.SaveDailyReportProposal(ctx, r.ID, 2, "Fought.", ""))
 	resp, err = h.HandleReportCallback(callback(reportAdminTG, "rep_no:"+strconvFormat(r.ID)))
 	require.NoError(t, err)
-	assert.Contains(t, resp.(tgbotapi.EditMessageTextConfig).Text, "Rejected")
-	assert.Equal(t, store.DailyReportRejected, env.report(t, reportMashaTG).Status)
+	edit := resp.(tgbotapi.EditMessageTextConfig)
+	assert.Contains(t, edit.Text, "Pick a score below")
+	require.NotNil(t, edit.ReplyMarkup)
+	assert.Equal(t, store.DailyReportProposed, env.report(t, reportMashaTG).Status)
 	ratings, err := env.store.GetCurrentMonthParticipantRatings(ctx, TimeNow())
 	require.NoError(t, err)
 	assert.Empty(t, ratings)
+
+	// Bad score buttons and participants' taps are ignored.
+	for _, data := range []string{"rep_set:" + strconvFormat(r.ID) + ":6", "rep_set:" + strconvFormat(r.ID) + ":4e", "rep_set:" + strconvFormat(r.ID)} {
+		resp, err = h.HandleReportCallback(callback(reportAdminTG, data))
+		require.NoError(t, err)
+		assert.Nil(t, resp, data)
+	}
+	resp, err = h.HandleReportCallback(callback(reportMashaTG, "rep_set:"+strconvFormat(r.ID)+":5"))
+	require.NoError(t, err)
+	assert.Nil(t, resp)
+
+	// The admin picks another score than the proposal.
+	resp, err = h.HandleReportCallback(callback(reportAdminTG, "rep_set:"+strconvFormat(r.ID)+":3"))
+	require.NoError(t, err)
+	assert.Contains(t, resp.(tgbotapi.EditMessageTextConfig).Text, "Masha gets 3")
+	ratings, err = env.store.GetCurrentMonthParticipantRatings(ctx, TimeNow())
+	require.NoError(t, err)
+	require.Len(t, ratings, 1)
+	assert.Equal(t, 3, ratings[0].Score)
+	assert.False(t, ratings[0].HasEar)
+	// Masha is the only participant: the group gets the summary with the
+	// bot's suggestion next to the admin's score.
+	group := env.tg.messagesTo(reportGroupID)
+	require.Len(t, group, 1)
+	assert.Contains(t, group[0].Form.Get("text"), "Masha: 3")
 }
 
 func TestDailyReport_NoTranscriber(t *testing.T) {
@@ -403,13 +472,49 @@ func TestFinalizeDailyReports(t *testing.T) {
 	_, handled := h.HandleDailyReportMessage(privateMessage(reportMashaTG, "Убрала комнату"))
 	require.True(t, handled)
 
-	// Masha's report has content and is sent; Petya's is empty and stays open.
+	// Both reports go to the admin: Masha's as it is, Petya's as missing.
+	n, err := h.FinalizeDailyReports(ctx, TimeNow())
+	require.NoError(t, err)
+	assert.Equal(t, 2, n)
+	assert.Equal(t, store.DailyReportProposed, env.report(t, reportMashaTG).Status)
+	assert.Equal(t, store.DailyReportProposed, env.report(t, reportPetyaTG).Status)
+	assert.Empty(t, env.analyzer.gotReport, "Petya's day is assessed without a report")
+	admin := env.tg.messagesTo(reportAdminTG)
+	require.Len(t, admin, 2)
+	assert.Contains(t, admin[1].Form.Get("text"), "Daily report: Petya")
+	assert.Contains(t, admin[1].Form.Get("text"), "<b>Report:</b> <i>not sent</i>")
+	assert.Contains(t, admin[1].Form.Get("reply_markup"), "Confirm 4")
+	petyaDMs := env.tg.messagesTo(reportPetyaTG)
+	assert.Contains(t, petyaDMs[len(petyaDMs)-1].Form.Get("text"), "No report from you today")
+
+	// A second run has nothing left to do.
+	n, err = h.FinalizeDailyReports(ctx, TimeNow())
+	require.NoError(t, err)
+	assert.Equal(t, 0, n)
+}
+
+func TestFinalizeDailyReports_MissingReportWithoutLLM(t *testing.T) {
+	env := newReportTestEnv(t, "Masha")
+	env.h.ReportAnalyzer = nil
+	h, ctx := env.h, context.Background()
+
+	// Masha was never asked (no row yet) and sent nothing: she still gets
+	// a proposal of 3, so the admin can confirm the day.
 	n, err := h.FinalizeDailyReports(ctx, TimeNow())
 	require.NoError(t, err)
 	assert.Equal(t, 1, n)
-	assert.Equal(t, store.DailyReportProposed, env.report(t, reportMashaTG).Status)
-	assert.Equal(t, store.DailyReportCollecting, env.report(t, reportPetyaTG).Status)
-	assert.Len(t, env.tg.messagesTo(reportAdminTG), 1)
+	r := env.report(t, reportMashaTG)
+	assert.Equal(t, store.DailyReportProposed, r.Status)
+	assert.Equal(t, missingReportScore, r.ProposedScore)
+	admin := env.tg.messagesTo(reportAdminTG)
+	require.Len(t, admin, 1)
+	assert.Contains(t, admin[0].Form.Get("reply_markup"), "Confirm 3")
+
+	_, err = h.HandleReportCallback(callback(reportAdminTG, "rep_ok:"+strconvFormat(r.ID)))
+	require.NoError(t, err)
+	group := env.tg.messagesTo(reportGroupID)
+	require.Len(t, group, 1)
+	assert.Contains(t, group[0].Form.Get("text"), "Masha: 3 — <i>No report today.</i>")
 }
 
 func TestReportConfirmWindowOpen(t *testing.T) {

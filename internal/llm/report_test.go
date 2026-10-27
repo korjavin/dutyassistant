@@ -113,3 +113,20 @@ func TestTranscriber_Errors(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "400")
 }
+
+func TestAssessDailyReport_MissingReport(t *testing.T) {
+	var gotReq chatRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&gotReq))
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"score\": 3, \"analysis\": \"No report.\", \"group_summary\": \"No report today.\"}"}}]}`))
+	}))
+	defer server.Close()
+
+	c := NewClient("key", server.URL, 5, "test-model", nil)
+	got, err := c.AssessDailyReport(context.Background(), "Masha", " ", "- Completed no chores today.\n", "")
+	require.NoError(t, err)
+	assert.Equal(t, 3, got.Score)
+	require.Len(t, gotReq.Messages, 2)
+	assert.Contains(t, gotReq.Messages[1].Content, "Report: none, the participant did not send a report today.")
+	assert.NotContains(t, gotReq.Messages[1].Content, "<report>")
+}

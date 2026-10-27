@@ -10,7 +10,6 @@ type SessionType string
 
 const (
 	SessionTypeChoreCreation SessionType = "chore_creation"
-	SessionTypeDailyRatings  SessionType = "daily_ratings"
 	SessionTypeEditChore     SessionType = "edit_chore"
 	SessionTypeSpendSviniya  SessionType = "spend_sviniya"
 )
@@ -128,13 +127,5 @@ func sessionExpired(session *Session, now time.Time, olderThan time.Duration) bo
 	if session == nil {
 		return true
 	}
-
-	if session.Type == SessionTypeDailyRatings {
-		ratingDate, ok := ratingDateFromSession(session)
-		if ok {
-			return !ratingSubmissionWindowOpen(ratingDate, now)
-		}
-	}
-
 	return now.Sub(session.CreatedAt) > olderThan
 }
