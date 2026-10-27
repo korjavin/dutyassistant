@@ -1214,3 +1214,23 @@ func TestFormatMonthlyRatingsWinnersDigest_NoEars(t *testing.T) {
 	assert.Contains(t, result, "1st: Alice with 14 point(s)")
 	assert.Contains(t, result, "1. Alice - 14 point(s) across 4 rated day(s)")
 }
+
+func TestLooksLikeRatingScores(t *testing.T) {
+	for text, want := range map[string]bool{
+		"5 4 3":          true,
+		"5e 4 3":         true,
+		"5E":             true,
+		"55 4":           true,
+		" 4\n5 ":         true,
+		"":               false,
+		"   ":            false,
+		"e":              false,
+		"5 4 good":       false,
+		"Запомни, что 5": false,
+		"100":            false,
+		"/cancel":        false,
+		"4.5 3":          false,
+	} {
+		assert.Equal(t, want, LooksLikeRatingScores(text), "%q", text)
+	}
+}

@@ -317,3 +317,51 @@ func TestHandleGroupMigration(t *testing.T) {
 	assert.True(t, bot.handleGroupMigration(fromMsg))
 	assert.Equal(t, newID, bot.migratedTo)
 }
+
+// The rating prompt stays open all evening; free text such as feedback on a
+// report assessment must reach the assistant instead of being parsed as scores.
+func TestHandleMessage_RatingSessionLetsFreeTextThrough(t *testing.T) {
+	bot, mockStore := newAssistantTestBot()
+	ratingDate := time.Date(2026, time.October, 27, 19, 0, 0, 0, time.UTC)
+	originalNow := handlers.TimeNow
+	handlers.TimeNow = func() time.Time { return ratingDate }
+	defer func() { handlers.TimeNow = originalNow }()
+
+	admin := &store.User{ID: 1, TelegramUserID: assistantTestAdmin, FirstName: "Admin", IsAdmin: true}
+	mockStore.On("GetUserByTelegramID", mock.Anything, assistantTestAdmin).Return(admin, nil)
+	mockStore.On("GetParticipantsForRating", mock.Anything).Return([]*store.User{
+		{ID: 10, FirstName: "Crusader"}, {ID: 11, FirstName: "Vasiliy"}, {ID: 12, FirstName: "Vladimir"},
+	}, nil).Once()
+	_, err := bot.handlers.StartDailyRatingsSession(assistantTestAdmin, assistantTestAdmin, ratingDate)
+	require.NoError(t, err)
+
+	privateMsg := func(text string) *tgbotapi.Message {
+		return &tgbotapi.Message{Text: text, From: &tgbotapi.User{ID: assistantTestAdmin}, Chat: &tgbotapi.Chat{ID: assistantTestAdmin, Type: "private"}}
+	}
+
+	resp, err := bot.handleMessage(privateMsg("Запомни, что когда дети очень заняты, одно просроченное дело не беда."))
+	require.NoError(t, err)
+	msg, ok := resp.(tgbotapi.MessageConfig)
+	require.True(t, ok)
+	assert.Equal(t, assistantUnavailableMessage, msg.Text, "free text goes to the assistant")
+	_, open := bot.handlers.SessionManager.GetSession(assistantTestAdmin)
+	assert.True(t, open, "the rating prompt stays open for scores")
+
+	// A reply made of scores is still validated by the rating session.
+	resp, err = bot.handleMessage(privateMsg("5 4"))
+	require.NoError(t, err)
+	msg, ok = resp.(tgbotapi.MessageConfig)
+	require.True(t, ok)
+	assert.Contains(t, msg.Text, "expected 3 score(s), received 2")
+
+	// A bare /cancel closes the prompt.
+	cancel := privateMsg("/cancel")
+	cancel.Entities = []tgbotapi.MessageEntity{{Type: "bot_command", Offset: 0, Length: 7}}
+	resp, err = bot.routeMessage(cancel)
+	require.NoError(t, err)
+	msg, ok = resp.(tgbotapi.MessageConfig)
+	require.True(t, ok)
+	assert.Equal(t, "Rating prompt closed.", msg.Text)
+	_, open = bot.handlers.SessionManager.GetSession(assistantTestAdmin)
+	assert.False(t, open)
+}

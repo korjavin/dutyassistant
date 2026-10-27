@@ -449,6 +449,12 @@ func (b *Bot) handleMessage(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 	if exists && session.UserID != m.From.ID && b.isGroupMention(m) {
 		exists = false
 	}
+	// The rating prompt stays open until the end of the day so scores can be
+	// corrected; only replies made of scores belong to it. Free text (e.g.
+	// feedback on a report assessment) goes on to the assistant.
+	if exists && session.Type == handlers.SessionTypeDailyRatings && !m.IsCommand() && !handlers.LooksLikeRatingScores(m.Text) {
+		exists = false
+	}
 	if !exists {
 		// No active session: a participant's voice message, or text while
 		// their daily report is open, is part of the report.

@@ -87,6 +87,11 @@ func (h *Handlers) HandleDailyRatingsInteractive(m *tgbotapi.Message) (tgbotapi.
 		return nil, nil
 	}
 
+	if m.IsCommand() && m.Command() == "cancel" {
+		h.SessionManager.EndSession(m.Chat.ID)
+		return tgbotapi.NewMessage(m.Chat.ID, "Rating prompt closed."), nil
+	}
+
 	participants, ok := sessionParticipantsFromSession(session)
 	if !ok || len(participants) == 0 {
 		h.SessionManager.EndSession(m.Chat.ID)
@@ -192,6 +197,28 @@ func buildDailyRatingsPrompt(participants []*store.User, ratingDate time.Time) s
 	}
 
 	return b.String()
+}
+
+// LooksLikeRatingScores reports whether text is a reply to the rating prompt:
+// only score tokens such as "4", "5e" or a mistyped "55". Anything else (a
+// sentence, a voice transcript) is not meant for the open rating session.
+func LooksLikeRatingScores(text string) bool {
+	fields := strings.Fields(text)
+	if len(fields) == 0 {
+		return false
+	}
+	for _, field := range fields {
+		digits := strings.TrimSuffix(strings.ToLower(field), "e")
+		if digits == "" || len(digits) > 2 {
+			return false
+		}
+		for _, r := range digits {
+			if r < '0' || r > '9' {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 type parsedScore struct {
