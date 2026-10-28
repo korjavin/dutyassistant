@@ -432,7 +432,7 @@ func (b *Bot) handleCallbackQuery(q *tgbotapi.CallbackQuery) (tgbotapi.Chattable
 		return b.handlers.HandleCancelFlow(q)
 	case "reg_ok", "reg_no":
 		return b.handlers.HandleRegistrationCallback(q)
-	case "rep_done", "rep_ok", "rep_no":
+	case "rep_done", "rep_ok", "rep_set", "rep_no":
 		return b.handlers.HandleReportCallback(q)
 	default:
 		slog.Info(fmt.Sprintf("Unknown callback action: %s", action))
@@ -468,8 +468,6 @@ func (b *Bot) handleMessage(m *tgbotapi.Message) (tgbotapi.Chattable, error) {
 	switch session.Type {
 	case handlers.SessionTypeChoreCreation:
 		return b.handlers.HandleChoreInteractive(m)
-	case handlers.SessionTypeDailyRatings:
-		return b.handlers.HandleDailyRatingsInteractive(m)
 	case handlers.SessionTypeEditChore:
 		return b.handlers.HandleEditChoreInteractive(m)
 	case handlers.SessionTypeSpendSviniya:

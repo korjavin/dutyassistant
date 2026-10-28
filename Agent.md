@@ -16,7 +16,7 @@ To run the Duty Assistant Bot, you need to set the following environment variabl
 | -------------------- | ------------------------------------- | -------- | -------------------- |
 | `GIN_MODE`           | The mode for the Gin web framework.   | No       | `debug`              |
 | `TELEGRAM_APITOKEN`  | The Telegram Bot API token.           | Yes      |                      |
-| `ADMIN_ID`          | Telegram user ID allowed to run admin-only commands and receive daily participant rating prompts. | No       | `0` |
+| `ADMIN_ID`          | Telegram user ID allowed to run admin-only commands and receive the daily reports to rate. | No       | `0` |
 | `DATABASE_PATH`      | The path to the SQLite database file. | No       | `/app/data/roster.db` |
 | `DISH_GROUP`        | Telegram chat ID for the main group, used for group duty and month-end participant rating announcements. | No       | `0` |
 | `DNS_NAME`           | The DNS name for the web interface.   | No       |                      |
@@ -91,7 +91,7 @@ The project uses GitHub Actions for automated builds and deployments. On push to
 
 ## Acceptance Verification
 
-Verified on 2026-03-13 for the monthly participant rating flow:
+Verified on 2026-03-13 for the monthly participant rating flow. Since 2026-10-27 the 20:50 prompt and the score-reply parsing are gone: daily scores are given with the buttons under each daily report (`internal/telegram/handlers/daily_report.go`, `TestDailyReportFlow`), so the tests named below for them no longer exist.
 
 - Stable daily prompt and admin reply parsing are covered by `TestStartDailyRatingsSession_BuildsStablePrompt` and `TestHandleDailyRatingsInteractive_ValidSubmission`, including the `5 2 1`-style score submission flow.
 - Same-day resubmission replacement is covered by `TestHandleDailyRatingsInteractive_OverwriteCorrection` and `TestSaveDailyParticipantRatings_CreateAndUpdate`, confirming ratings are overwritten instead of duplicated.

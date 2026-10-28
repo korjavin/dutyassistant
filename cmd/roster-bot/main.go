@@ -315,9 +315,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Daily at 20:40 Berlin - Ask participants for their report of merits and failures
-	_, err = c.AddFunc("40 20 * * *", func() {
-		slog.Info("Running daily report requests (20:40 Berlin)", slog.String("component", "cron"))
+	// Daily at 20:00 Berlin - Ask participants for their report of merits and failures
+	_, err = c.AddFunc("0 20 * * *", func() {
+		slog.Info("Running daily report requests (20:00 Berlin)", slog.String("component", "cron"))
 		if adminID == 0 {
 			slog.Info("Daily report requests skipped: ADMIN_ID is not configured", slog.String("component", "cron"))
 			return
@@ -334,49 +334,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Daily at 21:30 Berlin - Send the admin the reports whose authors forgot to press Done
-	_, err = c.AddFunc("30 21 * * *", func() {
+	// Daily at 20:45 Berlin (handlers.ReportDeadline) - Send the admin every
+	// report still open, and a "no report" assessment for those who sent
+	// nothing, so all ratings can be confirmed before 21:00
+	_, err = c.AddFunc("45 20 * * *", func() {
 		n, err := telegramHandlers.FinalizeDailyReports(context.Background(), time.Now().In(berlinLoc))
 		if err != nil {
 			slog.Error(fmt.Sprintf("ERROR: Failed to finalize daily reports: %v", err), slog.String("component", "cron"))
 			return
 		}
-		slog.Info(fmt.Sprintf("Finalized %d unsent daily report(s) (21:30 Berlin)", n), slog.String("component", "cron"))
+		slog.Info(fmt.Sprintf("Finalized %d unsent daily report(s) (20:45 Berlin)", n), slog.String("component", "cron"))
 	})
 	if err != nil {
 		slog.Error(fmt.Sprintf("Failed to schedule daily report finalization job: %v", err))
-		os.Exit(1)
-	}
-
-	// Daily at 20:50 Berlin - Ask the admin to rate active participants
-	_, err = c.AddFunc("50 20 * * *", func() {
-		slog.Info("Running daily participant rating reminder (20:50 Berlin)", slog.String("component", "cron"))
-
-		if adminID == 0 {
-			slog.Info("Participant rating reminder skipped: ADMIN_ID is not configured", slog.String("component", "cron"))
-			return
-		}
-
-		msg, ok, err := telegramHandlers.PrepareDailyRatingsReminder(adminID, adminID, time.Now().In(berlinLoc))
-		if err != nil {
-			slog.Error(fmt.Sprintf("ERROR: Failed to prepare participant rating reminder: %v", err), slog.String("component", "cron"))
-			return
-		}
-		if !ok {
-			slog.Info("Participant rating reminder skipped: no active non-admin participants to rate", slog.String("component", "cron"))
-			return
-		}
-
-		if _, err := bot.API().Send(*msg); err != nil {
-			telegramHandlers.SessionManager.EndSession(adminID)
-			slog.Error(fmt.Sprintf("ERROR: Failed to send participant rating reminder to admin %d: %v", adminID, err), slog.String("component", "cron"))
-			return
-		}
-
-		slog.Info(fmt.Sprintf("Successfully sent participant rating reminder to admin %d", adminID), slog.String("component", "cron"))
-	})
-	if err != nil {
-		slog.Error(fmt.Sprintf("Failed to schedule participant rating reminder job: %v", err))
 		os.Exit(1)
 	}
 
@@ -430,14 +400,13 @@ func main() {
 	// Start cron scheduler
 	c.Start()
 	slog.Info("═══════════════════════════════════════════════════════════")
-	slog.Info("Cron scheduler started with 7 jobs:")
+	slog.Info("Cron scheduler started with 6 jobs:")
 	slog.Info("  1. Daily at 07:30 AM Berlin - Assign today's duty and send notifications")
 	slog.Info("  2. Daily at 21:00 PM Berlin - Mark today's duty as completed")
-	slog.Info("  3. Daily at 20:40 PM Berlin - Ask participants for their daily report")
-	slog.Info("  4. Daily at 20:50 PM Berlin - Send participant rating reminder to the admin")
-	slog.Info("  5. Daily at 21:30 PM Berlin - Send the admin unsent daily reports")
-	slog.Info("  6. Daily at 21:00 PM Berlin - Publish month-end participant rating winners on the last calendar day")
-	slog.Info("  7. Sunday at 21:10 PM Berlin - Send weekly stats")
+	slog.Info("  3. Daily at 20:00 PM Berlin - Ask participants for their daily report")
+	slog.Info("  4. Daily at 20:45 PM Berlin - Send the admin open and missing daily reports to rate")
+	slog.Info("  5. Daily at 21:00 PM Berlin - Publish month-end participant rating winners on the last calendar day")
+	slog.Info("  6. Sunday at 21:10 PM Berlin - Send weekly stats")
 	slog.Info(fmt.Sprintf("Current Berlin time: %s", time.Now().In(berlinLoc).Format("2006-01-02 15:04:05 MST")))
 	slog.Info("═══════════════════════════════════════════════════════════")
 

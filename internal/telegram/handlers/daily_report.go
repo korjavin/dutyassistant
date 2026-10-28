@@ -15,10 +15,12 @@ import (
 	"github.com/korjavin/dutyassistant/internal/store"
 )
 
-// Daily reports of merits and failures: at 20:40 participants are asked (in
-// a DM) to tell what they did today, by voice or text. When they press Done,
-// the LLM proposes a score 1-5 with a short analysis and the admin confirms
-// or rejects it with buttons; only a confirmed score is saved as the rating.
+// Daily reports of merits and failures: at 20:00 participants are asked (in
+// a DM) to tell what they did today, by voice or text. When they press Done
+// (or at 20:45 for everyone else, with or without a report), the LLM
+// proposes a score 1-5 with a short analysis and the admin confirms it or
+// picks another score (or 5 with an ear) with buttons. This is the only way
+// daily ratings are given.
 
 // ReportAnalyzer proposes a daily score from a participant's report,
 // following the admin's house rules (may be empty).
@@ -29,7 +31,19 @@ type ReportAnalyzer interface {
 const (
 	reportCallbackDone    = "rep_done"
 	reportCallbackApprove = "rep_ok"
-	reportCallbackReject  = "rep_no"
+	// reportCallbackScore sets a score chosen by the admin: "rep_set:<id>:<score>",
+	// where score is 1-5 or "5e" (5 with an ear).
+	reportCallbackScore = "rep_set"
+	// reportCallbackReject is the Reject button of older messages; it now
+	// just shows the score buttons.
+	reportCallbackReject = "rep_no"
+
+	// ReportDeadline is when FinalizeDailyReports runs (cron in main.go):
+	// reports not sent by then go to the admin as they are, missing ones too.
+	ReportDeadline = "20:45"
+	// missingReportScore is proposed for a day without a report when the LLM
+	// can't assess it.
+	missingReportScore = 3
 
 	// maxReportChars caps a report so the admin message fits Telegram's limit.
 	maxReportChars = 6000
@@ -86,7 +100,7 @@ func (h *Handlers) reportRequestMessage(chatID int64, report *store.DailyReport)
 	}
 	text := "📝 Time for today's report of merits and failures!\n\n" +
 		"Tell me what you did today: what went well and what didn't. " + how + "\n" +
-		"When you're finished, press ✅ Done — the admin will look at it before today's ratings."
+		"When you're finished, press ✅ Done — please send it by " + ReportDeadline + ", the admin rates the day after that."
 	msg := tgbotapi.NewMessage(chatID, text)
 	if report.Parts > 0 {
 		msg.Text += fmt.Sprintf("\n\nI already have %d part(s) of your report — add more or press ✅ Done.", report.Parts)
@@ -188,12 +202,14 @@ func (h *Handlers) sendText(chatID int64, text string) {
 }
 
 // HandleReportCallback handles the report buttons: the participant's Done
-// ("rep_done:<id>") and the admin's Confirm / Reject ("rep_ok:<id>" / "rep_no:<id>").
+// ("rep_done:<id>") and the admin's Confirm ("rep_ok:<id>") or chosen score
+// ("rep_set:<id>:<score>").
 func (h *Handlers) HandleReportCallback(q *tgbotapi.CallbackQuery) (tgbotapi.Chattable, error) {
 	if q.From == nil || q.Message == nil {
 		return nil, nil
 	}
-	action, idStr, _ := strings.Cut(q.Data, ":")
+	action, rest, _ := strings.Cut(q.Data, ":")
+	idStr, scoreStr, _ := strings.Cut(rest, ":")
 	reportID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		return nil, nil
@@ -217,7 +233,34 @@ func (h *Handlers) HandleReportCallback(q *tgbotapi.CallbackQuery) (tgbotapi.Cha
 	if !h.IsAdmin(q.From.ID) {
 		return nil, nil // Ignore non-admin clicks silently
 	}
-	return h.decideReport(ctx, q, report, action == reportCallbackApprove), nil
+	switch action {
+	case reportCallbackApprove:
+		if report.ProposedScore == 0 {
+			return h.reportEdit(q, report, "", ""), nil
+		}
+		return h.rateReport(ctx, q, report, report.ProposedScore, false), nil
+	case reportCallbackScore:
+		score, hasEar, ok := parseScoreButton(scoreStr)
+		if !ok {
+			return nil, nil
+		}
+		return h.rateReport(ctx, q, report, score, hasEar), nil
+	case reportCallbackReject:
+		return h.reportEdit(q, report, "\n\nPick a score below.", ""), nil
+	}
+	return nil, nil
+}
+
+// parseScoreButton reads the score of a score button: "1".."5" or "5e".
+func parseScoreButton(s string) (score int, hasEar bool, ok bool) {
+	if s == "5e" {
+		return 5, true, true
+	}
+	score, err := strconv.Atoi(s)
+	if err != nil || score < 1 || score > 5 {
+		return 0, false, false
+	}
+	return score, false, true
 }
 
 // submitReport finishes collecting and sends the report for assessment.
@@ -249,16 +292,24 @@ func (h *Handlers) submitReport(ctx context.Context, q *tgbotapi.CallbackQuery, 
 	return removeButton
 }
 
-// FinalizeDailyReports submits the reports of date that have parts but whose
-// authors forgot to press Done, so the admin still gets them.
+// FinalizeDailyReports runs at the report deadline: it submits every
+// participant's report of date that is still open, so the admin can rate
+// everyone. Reports whose authors forgot to press Done go as they are; a
+// participant who told nothing gets a "no report" assessment.
 func (h *Handlers) FinalizeDailyReports(ctx context.Context, date time.Time) (int, error) {
-	reports, err := h.Store.ListDailyReports(ctx, normalizeRatingDate(date))
+	participants, err := h.Store.GetParticipantsForRating(ctx)
 	if err != nil {
 		return 0, err
 	}
+	day := normalizeRatingDate(date)
 	n := 0
-	for _, r := range reports {
-		if r.Status != store.DailyReportCollecting || r.Parts == 0 {
+	for _, p := range h.filterRatingParticipants(participants) {
+		r, err := h.Store.EnsureDailyReport(ctx, p.ID, day)
+		if err != nil {
+			slog.Error(fmt.Sprintf("[Report] Failed to open report for %s: %v", p.FirstName, err))
+			continue
+		}
+		if r.Status != store.DailyReportCollecting {
 			continue
 		}
 		ok, err := h.Store.SetDailyReportStatus(ctx, r.ID, store.DailyReportCollecting, store.DailyReportSubmitted)
@@ -269,7 +320,13 @@ func (h *Handlers) FinalizeDailyReports(ctx context.Context, date time.Time) (in
 		if !ok {
 			continue
 		}
-		h.sendText(r.TelegramUserID, "📨 I've sent what you told me today to the admin.")
+		if p.TelegramUserID != 0 {
+			if r.Parts > 0 {
+				h.sendText(p.TelegramUserID, "📨 I've sent what you told me today to the admin.")
+			} else {
+				h.sendText(p.TelegramUserID, "📭 No report from you today — the admin will rate your day without it.")
+			}
+		}
 		h.assessReport(ctx, r.ID)
 		n++
 	}
@@ -277,8 +334,8 @@ func (h *Handlers) FinalizeDailyReports(ctx context.Context, date time.Time) (in
 }
 
 // assessReport asks the LLM for a proposed score and sends the report to the
-// admin: with Confirm / Reject buttons when there is a proposal, or as plain
-// information (rate manually) when the LLM is unavailable or fails.
+// admin with the score buttons (and Confirm when there is a proposal). A day
+// without a report gets missingReportScore when the LLM can't assess it.
 func (h *Handlers) assessReport(ctx context.Context, reportID int64) {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
@@ -296,18 +353,14 @@ func (h *Handlers) assessReport(ctx context.Context, reportID int64) {
 			slog.Error(fmt.Sprintf("[Report] Failed to load the report rules: %v", err))
 		}
 		assessment, err := h.ReportAnalyzer.AssessDailyReport(ctx, report.UserName, report.Text, h.reportFacts(ctx, report), rules)
-		switch {
-		case err != nil:
+		if err != nil {
 			slog.Error(fmt.Sprintf("[Report] LLM assessment of report %d failed: %v", reportID, err))
-		default:
-			summary := TruncateRunes(assessment.GroupSummary, maxGroupSummaryRunes)
-			if err := h.Store.SaveDailyReportProposal(ctx, reportID, assessment.Score, assessment.Analysis, summary); err != nil {
-				slog.Error(fmt.Sprintf("[Report] Failed to save the proposal for report %d: %v", reportID, err))
-			} else {
-				report.Status, report.ProposedScore, report.Analysis = store.DailyReportProposed, assessment.Score, assessment.Analysis
-				report.GroupSummary = summary
-			}
+		} else {
+			h.saveProposal(ctx, report, assessment.Score, assessment.Analysis, TruncateRunes(assessment.GroupSummary, maxGroupSummaryRunes))
 		}
+	}
+	if report.Status != store.DailyReportProposed && isMissingReport(report) {
+		h.saveProposal(ctx, report, missingReportScore, "No report was sent today.", "No report today.")
 	}
 
 	if h.AdminID == 0 {
@@ -316,10 +369,22 @@ func (h *Handlers) assessReport(ctx context.Context, reportID int64) {
 	}
 	msg := tgbotapi.NewMessage(h.AdminID, formatReportForAdmin(report, ""))
 	msg.ParseMode = tgbotapi.ModeHTML
-	if report.Status == store.DailyReportProposed {
-		msg.ReplyMarkup = reportDecisionKeyboard(report)
-	}
+	msg.ReplyMarkup = reportScoreKeyboard(report, "")
 	h.send(msg)
+}
+
+// saveProposal stores a proposed score and updates report to match.
+func (h *Handlers) saveProposal(ctx context.Context, report *store.DailyReport, score int, analysis, summary string) {
+	if err := h.Store.SaveDailyReportProposal(ctx, report.ID, score, analysis, summary); err != nil {
+		slog.Error(fmt.Sprintf("[Report] Failed to save the proposal for report %d: %v", report.ID, err))
+		return
+	}
+	report.Status, report.ProposedScore, report.Analysis, report.GroupSummary = store.DailyReportProposed, score, analysis, summary
+}
+
+// isMissingReport reports whether the participant told nothing today.
+func isMissingReport(report *store.DailyReport) bool {
+	return strings.TrimSpace(report.Text) == ""
 }
 
 // reportFacts describes what the bot knows about the participant's day, so
@@ -366,11 +431,32 @@ func (h *Handlers) reportFacts(ctx context.Context, report *store.DailyReport) s
 	return sb.String()
 }
 
-func reportDecisionKeyboard(report *store.DailyReport) tgbotapi.InlineKeyboardMarkup {
-	return tgbotapi.NewInlineKeyboardMarkup(tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData(fmt.Sprintf("✅ Confirm %d", report.ProposedScore), fmt.Sprintf("%s:%d", reportCallbackApprove, report.ID)),
-		tgbotapi.NewInlineKeyboardButtonData("❌ Reject", fmt.Sprintf("%s:%d", reportCallbackReject, report.ID)),
-	))
+// reportScoreKeyboard has Confirm for the proposed score (until a score is
+// saved) and a row of scores 1-5 plus 5 with an ear; current ("4", "5e") is
+// the saved score, marked, and can still be changed.
+func reportScoreKeyboard(report *store.DailyReport, current string) tgbotapi.InlineKeyboardMarkup {
+	var rows [][]tgbotapi.InlineKeyboardButton
+	if current == "" && report.ProposedScore > 0 {
+		rows = append(rows, tgbotapi.NewInlineKeyboardRow(tgbotapi.NewInlineKeyboardButtonData(
+			fmt.Sprintf("✅ Confirm %d", report.ProposedScore), fmt.Sprintf("%s:%d", reportCallbackApprove, report.ID))))
+	}
+	var scores []tgbotapi.InlineKeyboardButton
+	for _, token := range []string{"1", "2", "3", "4", "5", "5e"} {
+		label := strings.Replace(token, "e", "👂", 1)
+		if token == current {
+			label = "✓" + label
+		}
+		scores = append(scores, tgbotapi.NewInlineKeyboardButtonData(label, fmt.Sprintf("%s:%d:%s", reportCallbackScore, report.ID, token)))
+	}
+	return tgbotapi.NewInlineKeyboardMarkup(append(rows, scores)...)
+}
+
+// scoreToken renders a score as on the buttons and in calendars: "4", "5e".
+func scoreToken(score int, hasEar bool) string {
+	if hasEar {
+		return strconv.Itoa(score) + "e"
+	}
+	return strconv.Itoa(score)
 }
 
 // formatReportForAdmin renders the report, the proposed score and the
@@ -389,77 +475,93 @@ func formatReportForAdmin(report *store.DailyReport, footer string) string {
 			fmt.Fprintf(&sb, "👥 For the group: <i>%s</i>\n", html.EscapeString(report.GroupSummary))
 		}
 	} else {
-		fmt.Fprintf(&sb, "⚠️ No AI assessment (the LLM is unavailable). Rate %s in the daily ratings prompt.\n", name)
+		sb.WriteString("⚠️ No AI assessment (the LLM is unavailable). Pick a score below.\n")
 	}
-	sb.WriteString("\n<b>Report:</b>\n<i>")
-	sb.WriteString(html.EscapeString(TruncateRunes(report.Text, 2400)))
-	sb.WriteString("</i>")
+	if isMissingReport(report) {
+		sb.WriteString("\n<b>Report:</b> <i>not sent</i>")
+	} else {
+		sb.WriteString("\n<b>Report:</b>\n<i>")
+		sb.WriteString(html.EscapeString(TruncateRunes(report.Text, 2400)))
+		sb.WriteString("</i>")
+	}
 	sb.WriteString(footer)
 	return sb.String()
 }
 
-// decideReport applies the admin's Confirm / Reject to a proposed score.
-func (h *Handlers) decideReport(ctx context.Context, q *tgbotapi.CallbackQuery, report *store.DailyReport, approve bool) tgbotapi.Chattable {
-	edit := func(footer string, keepButtons bool) tgbotapi.Chattable {
-		e := tgbotapi.NewEditMessageText(q.Message.Chat.ID, q.Message.MessageID, formatReportForAdmin(report, footer))
-		e.ParseMode = tgbotapi.ModeHTML
-		if keepButtons {
-			kb := reportDecisionKeyboard(report)
-			e.ReplyMarkup = &kb
-		}
-		return e
-	}
+// reportEdit re-renders the admin's report message with footer (HTML) and
+// the score buttons, current being the saved score ("" = none yet).
+func (h *Handlers) reportEdit(q *tgbotapi.CallbackQuery, report *store.DailyReport, footer, current string) tgbotapi.Chattable {
+	e := tgbotapi.NewEditMessageText(q.Message.Chat.ID, q.Message.MessageID, formatReportForAdmin(report, footer))
+	e.ParseMode = tgbotapi.ModeHTML
+	kb := reportScoreKeyboard(report, current)
+	e.ReplyMarkup = &kb
+	return e
+}
+
+// rateReport saves the admin's score for the report's participant and day
+// (the proposed one, or another picked with the buttons) and posts the day's
+// summary to the group once everyone is rated. Pressing another score
+// later changes it.
+func (h *Handlers) rateReport(ctx context.Context, q *tgbotapi.CallbackQuery, report *store.DailyReport, score int, hasEar bool) tgbotapi.Chattable {
 	name := html.EscapeString(report.UserName)
 	date := report.ReportDate.Format("2006-01-02")
+	token := scoreToken(score, hasEar)
 
-	if report.Status != store.DailyReportProposed {
-		return edit("\n\nThis report was already handled.", false)
+	if report.Status == store.DailyReportCollecting {
+		return h.reportEdit(q, report, "\n\nThis report is still being written.", "")
 	}
-
-	if !approve {
-		ok, err := h.Store.SetDailyReportStatus(ctx, report.ID, store.DailyReportProposed, store.DailyReportRejected)
-		if err != nil {
-			slog.Error(fmt.Sprintf("[Report] Failed to reject report %d: %v", report.ID, err))
-			return edit("\n\n❌ Failed to reject, please try again.", true)
-		}
-		if !ok {
-			return edit("\n\nThis report was already handled.", false)
-		}
-		return edit(fmt.Sprintf("\n\n❌ <b>Rejected</b> — no score saved. Rate %s in the daily ratings prompt if needed; "+
-			"the group summary will show the bot's suggestion and reason next to your score.", name), false)
-	}
-
 	if !reportConfirmWindowOpen(report.ReportDate, TimeNow()) {
-		return edit(fmt.Sprintf("\n\n⌛ Too late: the results for %s are already published.", report.ReportDate.Format("January 2006")), false)
+		e := tgbotapi.NewEditMessageText(q.Message.Chat.ID, q.Message.MessageID, formatReportForAdmin(report,
+			fmt.Sprintf("\n\n⌛ Too late: the results for %s are already published.", report.ReportDate.Format("January 2006"))))
+		e.ParseMode = tgbotapi.ModeHTML
+		return e
 	}
 
 	h.ratingsMu.Lock()
 	defer h.ratingsMu.Unlock()
 
-	ok, err := h.Store.SetDailyReportStatus(ctx, report.ID, store.DailyReportProposed, store.DailyReportApproved)
+	previous, err := h.dayRating(ctx, report.UserID, report.ReportDate)
 	if err != nil {
-		slog.Error(fmt.Sprintf("[Report] Failed to approve report %d: %v", report.ID, err))
-		return edit("\n\n❌ Failed to save the score, please try again.", true)
-	}
-	if !ok {
-		return edit("\n\nThis report was already handled.", false)
+		slog.Error(fmt.Sprintf("[Report] Failed to load the rating of report %d: %v", report.ID, err))
+		return h.reportEdit(q, report, "\n\n❌ Failed to save the score, please try again.", "")
 	}
 	err = h.Store.SaveParticipantRating(ctx, &store.ParticipantDailyRating{
 		ParticipantID:   report.UserID,
 		ParticipantName: report.UserName,
 		RatingDate:      report.ReportDate,
-		Score:           report.ProposedScore,
+		Score:           score,
+		HasEar:          hasEar,
 	})
 	if err != nil {
 		slog.Error(fmt.Sprintf("[Report] Failed to save the rating of report %d: %v", report.ID, err))
-		if _, revertErr := h.Store.SetDailyReportStatus(ctx, report.ID, store.DailyReportApproved, store.DailyReportProposed); revertErr != nil {
-			slog.Error(fmt.Sprintf("[Report] Failed to reopen report %d: %v", report.ID, revertErr))
-		}
-		return edit("\n\n❌ Failed to save the score, please try again.", true)
+		return h.reportEdit(q, report, "\n\n❌ Failed to save the score, please try again.", "")
 	}
-	slog.Info(fmt.Sprintf("[Report] Admin confirmed %d for %s on %s", report.ProposedScore, report.UserName, date))
-	h.announceRatingsIfComplete(ctx, report.ReportDate)
-	return edit(fmt.Sprintf("\n\n✅ <b>Confirmed</b>: %s gets %d for %s.", name, report.ProposedScore, date), false)
+	if report.Status != store.DailyReportApproved {
+		if _, err := h.Store.SetDailyReportStatus(ctx, report.ID, report.Status, store.DailyReportApproved); err != nil {
+			slog.Error(fmt.Sprintf("[Report] Failed to mark report %d approved: %v", report.ID, err))
+		}
+	}
+	slog.Info(fmt.Sprintf("[Report] Admin rated %s %s on %s", report.UserName, token, date))
+	if previous == nil || previous.Score != score || previous.HasEar != hasEar {
+		h.announceRatingsIfComplete(ctx, report.ReportDate)
+	}
+	shown := strings.Replace(token, "e", "👂", 1)
+	return h.reportEdit(q, report, fmt.Sprintf("\n\n✅ <b>Confirmed</b>: %s gets %s for %s. Tap another score to change it.", name, shown, date), token)
+}
+
+// dayRating returns the participant's saved rating for date, or nil.
+func (h *Handlers) dayRating(ctx context.Context, participantID int64, date time.Time) (*store.ParticipantDailyRating, error) {
+	ratings, err := h.Store.GetCurrentMonthParticipantRatings(ctx, date)
+	if err != nil {
+		return nil, err
+	}
+	day := normalizeRatingDate(date)
+	for _, r := range ratings {
+		if r != nil && r.ParticipantID == participantID && r.RatingDate.Equal(day) {
+			return r, nil
+		}
+	}
+	return nil, nil
 }
 
 // reportConfirmWindowOpen reports whether a score for date may still be
@@ -475,7 +577,7 @@ func reportConfirmWindowOpen(date, now time.Time) bool {
 }
 
 // announceRatingsIfComplete posts the daily and monthly summary to the group
-// once every participant has a score for date, like the manual rating flow.
+// once every participant has a score for date (again after a correction).
 // Callers hold ratingsMu.
 func (h *Handlers) announceRatingsIfComplete(ctx context.Context, date time.Time) {
 	if h.Bot == nil || h.GroupID == 0 {
@@ -530,8 +632,8 @@ type ratingReason struct {
 
 // ratingReasons returns the group summaries of date's assessed reports by
 // participant ID, for the daily summary. When the saved score is not the one
-// the bot proposed (the admin rejected it or rated by hand), the reason is
-// still shown, marked with the bot's suggested score.
+// the bot proposed (the admin picked another one), the reason is still
+// shown, marked with the bot's suggested score.
 func (h *Handlers) ratingReasons(ctx context.Context, date time.Time, ratings []*store.ParticipantDailyRating) map[int64]ratingReason {
 	reports, err := h.Store.ListDailyReports(ctx, normalizeRatingDate(date))
 	if err != nil {

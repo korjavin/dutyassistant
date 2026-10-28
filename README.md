@@ -26,7 +26,7 @@ To run the Duty Assistant Bot, you need to set the following environment variabl
 | -------------------- | ------------------------------------- | -------- | -------------------- |
 | `GIN_MODE`           | The mode for the Gin web framework.   | No       | `debug`              |
 | `TELEGRAM_APITOKEN`  | The Telegram Bot API token.           | Yes      |                      |
-| `ADMIN_ID`          | Telegram user ID allowed to run admin-only commands and receive daily participant rating prompts. | No       | `0` |
+| `ADMIN_ID`          | Telegram user ID allowed to run admin-only commands and receive the daily reports to rate. | No       | `0` |
 | `DATABASE_PATH`      | The path to the SQLite database file. | No       | `/app/data/roster.db` |
 | `DISH_GROUP`        | Telegram chat ID for the main group, used for group duty and month-end participant rating announcements. | No       | `0` |
 | `DNS_NAME`           | The DNS name for the web interface.   | No       |                      |
@@ -68,7 +68,9 @@ In the group the bot only reacts to messages addressed to it: an `@mention` (in 
 
 ## Daily Reports (merits and failures)
 
-At 20:40 (10 minutes before the admin's rating prompt) every rating participant gets a DM asking for today's report of merits and failures. They can answer with voice messages (one or several) or text, and press ✅ Done. `/report` opens a report at any time during the day. The LLM reads the report together with what the bot knows (duty, completed and overdue chores) and proposes a score from 1 (behaved badly) to 5 (excellent day) with a short analysis. The admin gets it with ✅ Confirm / ❌ Reject buttons; the score is saved only on Confirm, and once everyone has a score for the day the usual daily summary is posted to the group. Reports that were started but never sent are forwarded at 21:30. Without an LLM the admin gets the report without a score.
+Daily ratings come only from these reports. At 20:00 every rating participant gets a DM asking for today's report of merits and failures. They can answer with voice messages (one or several) or text, and press ✅ Done. `/report` opens a report at any time during the day. The LLM reads the report together with what the bot knows (duty, completed and overdue chores) and proposes a score from 1 (behaved badly) to 5 (excellent day) with a short analysis. The admin gets it with ✅ Confirm N and a row of score buttons `1 2 3 4 5 5👂`: Confirm saves the proposal, a score button saves another score, and `5👂` gives 5 with an ear. The buttons stay, so a score can be changed later (until the month's results are out). Once everyone has a score for the day the usual daily summary is posted to the group (again after a change).
+
+At 20:45 the bot sends the admin every report still open: started but never sent ones as they are, and for participants who told nothing a "no report" assessment (the LLM judges the day from the facts alone, or proposes 3 without an LLM), so everything can be confirmed before 21:00. Without an LLM a sent report comes without a proposal and the admin picks a score.
 
 ## Running with Docker
 
@@ -156,9 +158,8 @@ DM messages remain verbose and friendly with full sentences.
 
 ### Participant Rating Flow
 
-- Every day at 20:50 Europe/Berlin, the bot sends the configured admin a participant rating prompt when there are active non-admin participants to score.
-- The prompt lists participants in a stable order. Reply with one space-separated score per participant, using integers from 1 to 5. Use "5e" to award an ear for exceptional performance beyond the max score — the score counts as 5, but the ear is tracked and displayed separately.
-- Sending another reply later on the same day overwrites that day's participant ratings instead of creating duplicates.
+- Scores are given with the buttons under each participant's daily report (see Daily Reports): integers from 1 to 5, or `5👂` to award an ear for exceptional performance beyond the max score — the score counts as 5, but the ear is tracked and displayed separately.
+- Pressing another score later overwrites that day's rating instead of creating a duplicate.
 - `/ratings` shows the current month from day 1 through today, with missing scores displayed as `-` and ear-awarded scores displayed as `5e`.
 - At 21:00 Europe/Berlin on the last calendar day of the month, the bot posts the monthly participant totals and 1st, 2nd, and 3rd place winners to the group. The 1st place winner is automatically granted 1 sviniya.
 
