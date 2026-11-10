@@ -222,6 +222,8 @@ func TestDailyReportFlow(t *testing.T) {
 	assert.NotContains(t, adminMsg.Get("reply_markup"), "Reject")
 	assert.Equal(t, store.DailyReportProposed, env.report(t, reportMashaTG).Status)
 	assert.Contains(t, env.analyzer.gotReport, "Не сделала уроки")
+	assert.Contains(t, env.analyzer.gotFacts, "- Date: "+TimeNow().Format("2006-01-02, Monday"))
+	assert.NotContains(t, adminMsg.Get("text"), "Reply to this message", "no hint without the admin assistant")
 	assert.Contains(t, env.analyzer.gotFacts, "Was not on duty today")
 	assert.Contains(t, env.analyzer.gotFacts, "Completed no chores today")
 	assert.Equal(t, "1. Будь добрее к нечищеным зубам.", env.analyzer.gotRules)
@@ -527,4 +529,15 @@ func TestReportConfirmWindowOpen(t *testing.T) {
 	assert.True(t, reportConfirmWindowOpen(oct31, time.Date(2026, 10, 31, 20, 59, 0, 0, berlin)))
 	assert.False(t, reportConfirmWindowOpen(oct31, time.Date(2026, 10, 31, 21, 0, 0, 0, berlin)))
 	assert.False(t, reportConfirmWindowOpen(oct24, time.Date(2026, 11, 1, 9, 0, 0, 0, berlin)))
+}
+
+func TestFeedbackHint(t *testing.T) {
+	h := &Handlers{}
+	scored := &store.DailyReport{ProposedScore: 4, Analysis: "Хороший день."}
+	assert.Empty(t, h.feedbackHint(scored), "no hint without the admin assistant")
+
+	h.ReportFeedback = true
+	assert.Contains(t, h.feedbackHint(scored), "Reply to this message")
+	assert.Contains(t, formatReportForAdmin(scored, h.feedbackHint(scored)), "I'll remember it")
+	assert.Empty(t, h.feedbackHint(&store.DailyReport{}), "nothing to give feedback on without an AI assessment")
 }

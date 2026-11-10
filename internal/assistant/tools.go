@@ -259,10 +259,13 @@ var adminTools = []toolDef{
 	},
 	{
 		name: "update_report_rules",
-		description: "Change the admin's house rules for scoring daily reports and writing the group reason, e.g. when the admin says " +
-			"'be kinder if they don't manage to brush their teeth' or 'in the group, be shorter'. Call get_report_rules first, then pass the COMPLETE new rules: " +
-			"the current ones with the admin's amendment merged in. Keep the other rules, reword or drop a rule the amendment contradicts, no duplicates, " +
-			"nothing the built-in guidance already says. A short numbered list of instructions to the assessor, in the admin's language. " +
+		description: "Change the admin's house rules for scoring daily reports and writing the group reason: how to judge, what matters in this family, " +
+			"and facts the assessor must know, e.g. when the admin says 'be kinder if they don't manage to brush their teeth', 'in the group, be shorter', " +
+			"'homework counts more than chores' or 'Misha has a cast until Nov 20, don't count the dishes against him'. Also use it for the admin's feedback on " +
+			"a particular assessment ('too strict, he helped grandma'): turn it into a general rule for future days, not a note about that one day. " +
+			"Call get_report_rules first, then pass the COMPLETE new rules: the current ones with the amendment merged in. Keep the other rules, reword or drop " +
+			"a rule the amendment contradicts, no duplicates, nothing the built-in guidance already says; give temporary facts an end date and drop the expired ones. " +
+			"A short numbered list of instructions to the assessor, in the admin's language. " +
 			"Applies immediately (no buttons) to reports assessed from now on; the previous version is kept for undo_report_rules. Empty rules remove all house rules.",
 		properties: map[string]any{
 			"rules": str("The complete new house rules."),
@@ -274,6 +277,31 @@ var adminTools = []toolDef{
 		name:        "undo_report_rules",
 		description: "Restore the house rules for daily reports from before the last change (calling it again re-applies that change). Applies immediately.",
 		apply:       undoReportRules,
+	},
+	{
+		name: "get_assistant_memory",
+		description: "Show your own long-term memory: the admin's standing instructions to you and the facts you were asked to remember. " +
+			"It is already in your system prompt; read it before changing it.",
+		read: readAssistantMemory,
+	},
+	{
+		name: "update_assistant_memory",
+		description: "Change your own long-term memory, which is added to your instructions in every future conversation: the admin's lasting feedback " +
+			"on how you should work or answer ('always answer in Russian', 'don't ask me to confirm the group name', 'Vanya is Ivan') and facts about the family " +
+			"worth keeping ('grandma visits on Sundays'). Not for how daily reports are scored or the group reason (that is update_report_rules), " +
+			"not for one-off requests, never for secrets. Call get_assistant_memory first, then pass the COMPLETE new memory: the current text with the " +
+			"new item merged in. Keep the other items, reword or drop what it contradicts, no duplicates; give temporary facts an end date and drop the expired ones. " +
+			"A short list in the admin's language. Applies immediately (no buttons); the previous version is kept for undo_assistant_memory. Empty memory forgets everything.",
+		properties: map[string]any{
+			"memory": str("The complete new memory."),
+		},
+		required: []string{"memory"},
+		apply:    applyAssistantMemory,
+	},
+	{
+		name:        "undo_assistant_memory",
+		description: "Restore your memory from before the last change (calling it again re-applies that change). Applies immediately.",
+		apply:       undoAssistantMemory,
 	},
 }
 

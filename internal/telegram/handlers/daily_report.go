@@ -367,10 +367,19 @@ func (h *Handlers) assessReport(ctx context.Context, reportID int64) {
 		slog.Warn("[Report] ADMIN_ID not configured, nobody to send the report to")
 		return
 	}
-	msg := tgbotapi.NewMessage(h.AdminID, formatReportForAdmin(report, ""))
+	msg := tgbotapi.NewMessage(h.AdminID, formatReportForAdmin(report, h.feedbackHint(report)))
 	msg.ParseMode = tgbotapi.ModeHTML
 	msg.ReplyMarkup = reportScoreKeyboard(report, "")
 	h.send(msg)
+}
+
+// feedbackHint tells the admin they can teach the assessor by replying to
+// a report it scored, when the admin assistant is there to take it.
+func (h *Handlers) feedbackHint(report *store.DailyReport) string {
+	if !h.ReportFeedback || report.ProposedScore == 0 || report.Analysis == "" {
+		return ""
+	}
+	return "\n\n💬 <i>Reply to this message if I judged wrong: I'll remember it for the next reports.</i>"
 }
 
 // saveProposal stores a proposed score and updates report to match.
@@ -399,6 +408,7 @@ func (h *Handlers) reportFacts(ctx context.Context, report *store.DailyReport) s
 	now := TimeNow()
 
 	var sb strings.Builder
+	fmt.Fprintf(&sb, "- Date: %s.\n", d.Format("2006-01-02, Monday"))
 	if duty, err := h.Store.GetDutyByDate(ctx, d); err == nil && duty != nil && duty.UserID == report.UserID {
 		sb.WriteString("- Was on duty today.\n")
 	} else if err == nil {
@@ -491,7 +501,7 @@ func formatReportForAdmin(report *store.DailyReport, footer string) string {
 // reportEdit re-renders the admin's report message with footer (HTML) and
 // the score buttons, current being the saved score ("" = none yet).
 func (h *Handlers) reportEdit(q *tgbotapi.CallbackQuery, report *store.DailyReport, footer, current string) tgbotapi.Chattable {
-	e := tgbotapi.NewEditMessageText(q.Message.Chat.ID, q.Message.MessageID, formatReportForAdmin(report, footer))
+	e := tgbotapi.NewEditMessageText(q.Message.Chat.ID, q.Message.MessageID, formatReportForAdmin(report, footer+h.feedbackHint(report)))
 	e.ParseMode = tgbotapi.ModeHTML
 	kb := reportScoreKeyboard(report, current)
 	e.ReplyMarkup = &kb

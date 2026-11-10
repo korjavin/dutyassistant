@@ -170,7 +170,20 @@ func newProfileEnv(t *testing.T, profile Profile, dailyLimit int, responses ...s
 		Sender:     env.sender,
 		Now:        func() time.Time { return env.now },
 	})
+	env.store.On("GetSetting", mock.Anything, store.SettingAssistantMemory).Return("", nil).Maybe()
 	return env
+}
+
+// withMemory sets the assistant's stored long-term memory.
+func (e *testEnv) withMemory(memory string) {
+	var calls []*mock.Call
+	for _, c := range e.store.ExpectedCalls {
+		if c.Method != "GetSetting" {
+			calls = append(calls, c)
+		}
+	}
+	e.store.ExpectedCalls = calls
+	e.store.On("GetSetting", mock.Anything, store.SettingAssistantMemory).Return(memory, nil)
 }
 
 func (e *testEnv) withUsers(users ...*store.User) {
@@ -543,4 +556,36 @@ func TestAgent_DailyLimitIsPerPersonAcrossChats(t *testing.T) {
 
 	env.agent.HandleGroupMessage(context.Background(), -1001, 6, 8, "Other", "hi")
 	assert.Len(t, env.model.requests, 2)
+}
+
+func TestAgent_MemoryInSystemPrompt(t *testing.T) {
+	env := newTestEnv(t, modelReply("end_turn", textBlock("Ок")))
+	env.withMemory("- Ваню зовут Ivan.")
+
+	env.agent.HandleMessage(context.Background(), testChat, testAdmin, "привет")
+
+	first := env.model.requests[0]
+	assert.Contains(t, first, `\u003cmemory\u003e\n- Ваню зовут Ivan.\n\u003c/memory\u003e`)
+	assert.Contains(t, first, `"name":"update_assistant_memory"`)
+	assert.Equal(t, 1, strings.Count(first, `"cache_control"`), "one cache breakpoint, on the last system block")
+}
+
+func TestAgent_NoMemoryBlockWhenEmpty(t *testing.T) {
+	env := newTestEnv(t, modelReply("end_turn", textBlock("Ок")))
+
+	env.agent.HandleMessage(context.Background(), testChat, testAdmin, "привет")
+
+	assert.NotContains(t, env.model.requests[0], `\u003cmemory\u003e`)
+	assert.Contains(t, env.model.requests[0], `"cache_control"`)
+}
+
+func TestAgent_ParticipantHasNoMemory(t *testing.T) {
+	env := newProfileEnv(t, ParticipantProfile(), 0, modelReply("end_turn", textBlock("Привет")))
+	env.withMemory("- секрет админа")
+
+	env.agent.HandleMessage(context.Background(), 555, 555, "привет")
+
+	assert.NotContains(t, env.model.requests[0], "секрет админа")
+	assert.NotContains(t, env.model.requests[0], "update_assistant_memory")
+	env.store.AssertNotCalled(t, "GetSetting", mock.Anything, store.SettingAssistantMemory)
 }

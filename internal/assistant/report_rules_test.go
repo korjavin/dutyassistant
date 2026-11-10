@@ -53,7 +53,7 @@ func TestReportRulesTools(t *testing.T) {
 	assert.Contains(t, rules(), "2. В группе")
 
 	// Empty rules remove them all, and that is undoable too.
-	assert.Contains(t, run("update_report_rules", `{"rules":""}`), "removed")
+	assert.Contains(t, run("update_report_rules", `{"rules":""}`), "cleared")
 	assert.Empty(t, rules())
 	run("undo_report_rules", "")
 	assert.Contains(t, rules(), "2. В группе")
@@ -68,4 +68,59 @@ func TestReportRulesTools(t *testing.T) {
 		_, ok := findTool(participantTools, name)
 		assert.False(t, ok, name)
 	}
+}
+
+func TestAssistantMemoryTools(t *testing.T) {
+	ctx := context.Background()
+	st, err := sqlite.New(ctx, ":memory:")
+	require.NoError(t, err)
+	d := deps{store: st}
+	run := func(name, input string) string {
+		t.Helper()
+		tool, ok := findTool(adminTools, name)
+		require.True(t, ok, name)
+		require.False(t, tool.mutating(), "%s must apply without confirmation", name)
+		out, err := tool.runNow(ctx, d, []byte(input))
+		require.NoError(t, err, name)
+		return out
+	}
+	memory := func() string {
+		got, err := st.GetSetting(ctx, store.SettingAssistantMemory)
+		require.NoError(t, err)
+		return got
+	}
+
+	assert.Contains(t, run("get_assistant_memory", ""), "nothing remembered yet")
+	assert.Contains(t, run("undo_assistant_memory", ""), "Nothing to undo")
+
+	assert.Contains(t, run("update_assistant_memory", `{"memory":"- Ваня = Ivan.\n"}`), "Saved")
+	assert.Equal(t, "- Ваня = Ivan.", memory())
+	assert.Equal(t, "- Ваня = Ivan.", run("get_assistant_memory", ""))
+	run("update_assistant_memory", `{"memory":"- Ваня = Ivan.\n- Отвечай короче."}`)
+
+	assert.Contains(t, run("undo_assistant_memory", ""), "Restored")
+	assert.Equal(t, "- Ваня = Ivan.", memory())
+
+	tool, _ := findTool(adminTools, "update_assistant_memory")
+	_, err = tool.runNow(ctx, d, []byte(`{"memory":"`+strings.Repeat("я", MaxAssistantMemoryChars+1)+`"}`))
+	assert.ErrorContains(t, err, "too long")
+	assert.Equal(t, "- Ваня = Ivan.", memory())
+
+	// The memory and the house rules are separate.
+	rules, err := st.GetSetting(ctx, store.SettingReportRules)
+	require.NoError(t, err)
+	assert.Empty(t, rules)
+
+	// Participants can neither read nor change the admin assistant's memory.
+	for _, name := range []string{"get_assistant_memory", "update_assistant_memory", "undo_assistant_memory"} {
+		_, ok := findTool(participantTools, name)
+		assert.False(t, ok, name)
+	}
+}
+
+func TestMemorySystemBlock(t *testing.T) {
+	assert.Empty(t, memorySystemBlock("  \n"))
+	block := memorySystemBlock("- Отвечай короче.")
+	assert.Contains(t, block, "<memory>\n- Отвечай короче.\n</memory>")
+	assert.Contains(t, block, "data-changing tools always need confirmation")
 }
