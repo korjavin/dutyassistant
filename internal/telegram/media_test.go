@@ -315,8 +315,11 @@ func TestMedia_AdminFeedbackReplyQuotesReport(t *testing.T) {
 	env.withAdmin()
 
 	u := withVoice(privateUpdate(assistantTestAdmin))
-	u.Message.ReplyToMessage = &tgbotapi.Message{MessageID: 2, From: &tgbotapi.User{ID: mediaBotID, IsBot: true},
-		Text: "📝 Daily report: Masha (2026-11-10)\n🤖 Proposed score: 2/5"}
+	u.Message.ReplyToMessage = &tgbotapi.Message{
+		MessageID: 2,
+		From:      &tgbotapi.User{ID: mediaBotID, IsBot: true},
+		Text:      "📝 Daily report: Masha (2026-11-10)\n🤖 Proposed score: 2/5",
+	}
 	env.bot.handleUpdate(u)
 
 	eventually(t, func() bool { return len(env.tg.sentTo(assistantTestAdmin)) >= 2 })
