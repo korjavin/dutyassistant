@@ -131,6 +131,7 @@ func newMediaTestBot(t *testing.T, transcript, imageText, modelReply string) *me
 	}))
 	t.Cleanup(model.Close)
 	client := anthropic.NewClient(option.WithAPIKey("k"), option.WithBaseURL(model.URL), option.WithMaxRetries(0))
+	env.store.On("GetSetting", mock.Anything, store.SettingAssistantMemory).Return("", nil).Maybe()
 	env.bot.EnableAssistants(AssistantConfig{Client: &client, Model: "claude-opus-5-5", Store: env.store, Location: time.UTC, ParticipantDailyLimit: 5})
 	return env
 }
@@ -307,4 +308,21 @@ func TestMedia_WithoutReaders(t *testing.T) {
 	env.store.On("GetDailyReport", mock.Anything, int64(5), mock.Anything).Return(nil, nil)
 	env.bot.handleUpdate(withPhoto(privateUpdate(mediaParticipant), "что у меня сегодня?"))
 	eventually(t, func() bool { return strings.Contains(env.lastModelRequest(), "что у меня сегодня?") })
+}
+
+func TestMedia_AdminFeedbackReplyQuotesReport(t *testing.T) {
+	env := newMediaTestBot(t, "Слишком строго, она помогала бабушке", "", "Запомнил.")
+	env.withAdmin()
+
+	u := withVoice(privateUpdate(assistantTestAdmin))
+	u.Message.ReplyToMessage = &tgbotapi.Message{
+		MessageID: 2,
+		From:      &tgbotapi.User{ID: mediaBotID, IsBot: true},
+		Text:      "📝 Daily report: Masha (2026-11-10)\n🤖 Proposed score: 2/5",
+	}
+	env.bot.handleUpdate(u)
+
+	eventually(t, func() bool { return len(env.tg.sentTo(assistantTestAdmin)) >= 2 })
+	req := env.lastModelRequest()
+	assert.Contains(t, req, "(Reply to your message: «📝 Daily report: Masha (2026-11-10)\\n🤖 Proposed score: 2/5») Слишком строго, она помогала бабушке")
 }

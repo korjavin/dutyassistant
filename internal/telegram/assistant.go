@@ -12,6 +12,7 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/korjavin/dutyassistant/internal/assistant"
 	"github.com/korjavin/dutyassistant/internal/store"
+	"github.com/korjavin/dutyassistant/internal/telegram/handlers"
 )
 
 const (
@@ -47,6 +48,7 @@ func (b *Bot) EnableAssistants(cfg AssistantConfig) {
 	admin := base
 	admin.Profile = assistant.AdminProfile()
 	b.adminAssistant = assistant.New(admin)
+	b.handlers.ReportFeedback = true
 
 	if cfg.ParticipantDailyLimit > 0 {
 		participant := base
@@ -80,6 +82,9 @@ func (b *Bot) handleAssistantMessage(m *tgbotapi.Message) (tgbotapi.Chattable, b
 	if strings.TrimSpace(text) == "" {
 		return nil, false
 	}
+	// Feedback often answers a bot message (e.g. a daily report with its
+	// proposed score): give the model that message as context.
+	text = b.replyContext(m) + text
 	reply := func(s string) tgbotapi.Chattable {
 		msg := tgbotapi.NewMessage(m.Chat.ID, s)
 		if group {
@@ -120,6 +125,27 @@ func (b *Bot) handleAssistantMessage(m *tgbotapi.Message) (tgbotapi.Chattable, b
 	slog.Info(fmt.Sprintf("[Assistant] Group mention from %s %d", role, m.From.ID))
 	go agent.HandleGroupMessage(context.Background(), m.Chat.ID, m.From.ID, m.MessageID, name, text)
 	return nil, true
+}
+
+// maxReplyContextRunes caps the quoted bot message in replyContext.
+const maxReplyContextRunes = 1500
+
+// replyContext quotes the bot message m replies to, for the assistant, or
+// returns "" when m replies to nothing of the bot's.
+func (b *Bot) replyContext(m *tgbotapi.Message) string {
+	r := m.ReplyToMessage
+	if r == nil || r.From == nil || b.self.ID == 0 || r.From.ID != b.self.ID {
+		return ""
+	}
+	quoted := r.Text
+	if quoted == "" {
+		quoted = r.Caption
+	}
+	quoted = strings.TrimSpace(quoted)
+	if quoted == "" {
+		return ""
+	}
+	return fmt.Sprintf("(Reply to your message: «%s») ", handlers.TruncateRunes(quoted, maxReplyContextRunes))
 }
 
 // isGroupMention reports whether m was written in the main group and

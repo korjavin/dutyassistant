@@ -35,6 +35,9 @@ type Handlers struct {
 	// admin unscored), Transcriber handles voice messages (nil = text only).
 	ReportAnalyzer ReportAnalyzer
 	Transcriber    SpeechTranscriber
+	// ReportFeedback says the admin assistant is on, so the admin can reply to
+	// a daily report with feedback that the assistant turns into house rules.
+	ReportFeedback bool
 	// ImageReader describes photos so they are handled like text (nil = images ignored).
 	ImageReader ImageReader
 	// FetchFile downloads a received file; nil means from Telegram (tests override it).

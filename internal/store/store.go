@@ -187,6 +187,15 @@ const (
 	SettingReportRulesPrevious = "report_rules_previous"
 )
 
+// Settings keys of the admin assistant's long-term memory (free text the
+// assistant keeps itself: the admin's standing instructions and facts about
+// the family, appended to its system prompt) and the version before the last
+// change, kept for undo.
+const (
+	SettingAssistantMemory         = "assistant_memory"
+	SettingAssistantMemoryPrevious = "assistant_memory_previous"
+)
+
 // Registration request statuses.
 const (
 	RegistrationPending  = "pending"

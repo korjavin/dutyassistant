@@ -28,6 +28,7 @@ func newAssistantTestBot() (*Bot, *mocks.MockStore) {
 // enableTestAssistants turns on both assistants with a client that is never
 // called by these tests.
 func enableTestAssistants(bot *Bot, mockStore *mocks.MockStore, participantLimit int) {
+	mockStore.On("GetSetting", mock.Anything, store.SettingAssistantMemory).Return("", nil).Maybe()
 	client := anthropic.NewClient()
 	bot.EnableAssistants(AssistantConfig{
 		Client: &client, Model: "claude-opus-5-5", Store: mockStore,
@@ -316,4 +317,26 @@ func TestHandleGroupMigration(t *testing.T) {
 	fromMsg.MigrateFromChatID = testGroup
 	assert.True(t, bot.handleGroupMigration(fromMsg))
 	assert.Equal(t, newID, bot.migratedTo)
+}
+
+func TestReplyContext(t *testing.T) {
+	bot, _ := newAssistantTestBot()
+	bot.self = tgbotapi.User{ID: 42, IsBot: true}
+	fromBot := &tgbotapi.User{ID: 42, IsBot: true}
+
+	report := &tgbotapi.Message{From: fromBot, Text: "📝 Daily report: Masha\n🤖 Proposed score: 2/5"}
+	m := &tgbotapi.Message{From: &tgbotapi.User{ID: assistantTestAdmin}, Text: "слишком строго", ReplyToMessage: report}
+	assert.Equal(t, "(Reply to your message: «📝 Daily report: Masha\n🤖 Proposed score: 2/5») ", bot.replyContext(m))
+
+	// A long message is cut; a photo's caption counts.
+	report.Text = strings.Repeat("я", maxReplyContextRunes+10)
+	assert.Contains(t, bot.replyContext(m), strings.Repeat("я", maxReplyContextRunes)+"…»")
+	report.Text, report.Caption = "", "Фото дня"
+	assert.Contains(t, bot.replyContext(m), "«Фото дня»")
+
+	// Replies to someone else, or to nothing, add no context.
+	m.ReplyToMessage = &tgbotapi.Message{From: &tgbotapi.User{ID: 7}, Text: "привет"}
+	assert.Empty(t, bot.replyContext(m))
+	m.ReplyToMessage = nil
+	assert.Empty(t, bot.replyContext(m))
 }
