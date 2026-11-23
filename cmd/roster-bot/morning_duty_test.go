@@ -41,6 +41,9 @@ func (s *morningDutyTestStore) LogNotification(_ context.Context, _ time.Time, _
 	return nil
 }
 
+// newMorningDutyLLM mirrors the messages request and choices[].message.content
+// response from the OpenAI Chat Completions API.
+// https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create
 func newMorningDutyLLM(t *testing.T, status int) (*llm.Client, <-chan string) {
 	t.Helper()
 	prompts := make(chan string, 4)
