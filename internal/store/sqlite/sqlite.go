@@ -650,6 +650,9 @@ func (s *SQLiteStore) GetFutureDuties(ctx context.Context, from time.Time) ([]*s
 		duty.AssignmentType = store.AssignmentType(assignmentTypeStr)
 		duties = append(duties, duty)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("could not read future duties: %w", err)
+	}
 	return duties, nil
 }
 

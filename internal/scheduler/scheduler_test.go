@@ -7,7 +7,54 @@ import (
 	"time"
 
 	"github.com/korjavin/dutyassistant/internal/store"
+	"github.com/stretchr/testify/require"
 )
+
+type failingQueueDecrementStore struct {
+	*mockStore
+	queueErr   error
+	decrements []store.AssignmentType
+}
+
+func (s *failingQueueDecrementStore) DecrementVolunteerQueue(context.Context, int64) error {
+	s.decrements = append(s.decrements, store.AssignmentTypeVoluntary)
+	return s.queueErr
+}
+
+func (s *failingQueueDecrementStore) DecrementAdminQueue(context.Context, int64) error {
+	s.decrements = append(s.decrements, store.AssignmentTypeAdmin)
+	return s.queueErr
+}
+
+func TestAssignDailyDutyReportsQueueErrorWithoutUndoingAssignment(t *testing.T) {
+	ctx := t.Context()
+	today := time.Date(2026, time.March, 30, 0, 0, 0, 0, time.UTC)
+	for _, reason := range []store.AssignmentType{store.AssignmentTypeVoluntary, store.AssignmentTypeAdmin} {
+		t.Run(string(reason), func(t *testing.T) {
+			st := &failingQueueDecrementStore{mockStore: newMockStore(), queueErr: errors.New("queue write failed")}
+			if reason == store.AssignmentTypeVoluntary {
+				st.users[0].VolunteerQueueDays = 1
+			} else {
+				st.users[0].AdminQueueDays = 1
+			}
+			s := NewScheduler(st)
+			duty, queueErr, err := s.assignDailyDuty(ctx, today)
+			require.NoError(t, err)
+			require.ErrorIs(t, queueErr, st.queueErr)
+			require.NotNil(t, duty)
+			require.Equal(t, reason, duty.AssignmentType)
+			persisted, err := st.GetDutyByDate(ctx, today)
+			require.NoError(t, err)
+			require.Same(t, duty, persisted)
+
+			existing, queueErr, err := s.assignDailyDuty(ctx, today)
+			require.NoError(t, err)
+			require.NoError(t, queueErr)
+			require.Same(t, duty, existing)
+			require.Equal(t, []store.AssignmentType{reason}, st.decrements)
+		})
+	}
+}
 
 // mockStore is a mock implementation of the store.Store interface for testing.
 type mockStore struct {
