@@ -76,13 +76,20 @@ func (s *Scheduler) ClearOffDuty(ctx context.Context, userID int64) error {
 // AssignTodaysDuty performs the daily assignment at 07:30 AM Berlin time.
 // Priority: Volunteer queue > Admin queue > Round-robin (with balancing).
 func (s *Scheduler) AssignTodaysDuty(ctx context.Context) (*store.Duty, error) {
+	duty, _, err := s.AssignTodaysDutyWithQueueStatus(ctx)
+	return duty, err
+}
+
+// AssignTodaysDutyWithQueueStatus also reports any queue decrement error after
+// a successful assignment. An existing assignment does not consume a queue day.
+func (s *Scheduler) AssignTodaysDutyWithQueueStatus(ctx context.Context) (duty *store.Duty, queueErr, assignmentErr error) {
 	// Check if vacation mode is enabled
 	isVacation, err := s.store.IsVacationMode(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check vacation mode: %w", err)
+		return nil, nil, fmt.Errorf("failed to check vacation mode: %w", err)
 	}
 	if isVacation {
-		return nil, fmt.Errorf("system is in vacation mode - no duties will be assigned")
+		return nil, nil, fmt.Errorf("system is in vacation mode - no duties will be assigned")
 	}
 
 	now := time.Now()
@@ -91,21 +98,24 @@ func (s *Scheduler) AssignTodaysDuty(ctx context.Context) (*store.Duty, error) {
 
 	// Check if it's past 07:30 AM in Berlin
 	if berlinNow.Hour()*60+berlinNow.Minute() < 7*60+30 {
-		return nil, fmt.Errorf("too early to assign today's duty (before 07:30 AM Berlin time)")
+		return nil, nil, fmt.Errorf("too early to assign today's duty (before 07:30 AM Berlin time)")
 	}
 
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	return s.assignDailyDuty(ctx, today)
+}
 
+func (s *Scheduler) assignDailyDuty(ctx context.Context, today time.Time) (*store.Duty, error, error) {
 	// Check if already assigned
 	existingDuty, err := s.store.GetDutyByDate(ctx, today)
 	if err == nil && existingDuty != nil {
-		return existingDuty, nil
+		return existingDuty, nil, nil
 	}
 
 	// 1. Try volunteer queue first
 	volunteers, err := s.store.GetUsersWithVolunteerQueue(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get volunteers: %w", err)
+		return nil, nil, fmt.Errorf("failed to get volunteers: %w", err)
 	}
 
 	// Filter out off-duty users
@@ -116,17 +126,15 @@ func (s *Scheduler) AssignTodaysDuty(ctx context.Context) (*store.Duty, error) {
 		user := s.selectUserWithBalancing(ctx, volunteers)
 		duty, err := s.assignDuty(ctx, user, today, store.AssignmentTypeVoluntary)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		// Decrement volunteer queue
-		_ = s.store.DecrementVolunteerQueue(ctx, user.ID)
-		return duty, nil
+		return duty, s.store.DecrementVolunteerQueue(ctx, user.ID), nil
 	}
 
 	// 2. Try admin queue
 	adminAssigned, err := s.store.GetUsersWithAdminQueue(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get admin-assigned users: %w", err)
+		return nil, nil, fmt.Errorf("failed to get admin-assigned users: %w", err)
 	}
 
 	// Filter out off-duty users
@@ -137,34 +145,28 @@ func (s *Scheduler) AssignTodaysDuty(ctx context.Context) (*store.Duty, error) {
 		user := s.selectUserWithBalancing(ctx, adminAssigned)
 		duty, err := s.assignDuty(ctx, user, today, store.AssignmentTypeAdmin)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		// Decrement admin queue
-		_ = s.store.DecrementAdminQueue(ctx, user.ID)
-		return duty, nil
+		return duty, s.store.DecrementAdminQueue(ctx, user.ID), nil
 	}
 
 	// 3. Fall back to round-robin
 	allUsers, err := s.store.ListActiveUsers(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get active users: %w", err)
+		return nil, nil, fmt.Errorf("failed to get active users: %w", err)
 	}
 
 	// Filter out off-duty users
 	allUsers = s.filterOffDutyUsers(ctx, allUsers, today)
 
 	if len(allUsers) == 0 {
-		return nil, fmt.Errorf("no available users for duty")
+		return nil, nil, fmt.Errorf("no available users for duty")
 	}
 
 	// Select user with least weighted duty load in last year (excluding admin assignments)
 	user := s.selectRoundRobinUser(ctx, allUsers)
 	duty, err := s.assignDuty(ctx, user, today, store.AssignmentTypeRoundRobin)
-	if err != nil {
-		return nil, err
-	}
-
-	return duty, nil
+	return duty, nil, err
 }
 
 // filterOffDutyUsers removes users who are off-duty on the given date.
