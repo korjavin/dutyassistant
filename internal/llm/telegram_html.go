@@ -102,7 +102,8 @@ func ValidSanitizedTelegramHTML(input string) bool {
 
 		switch name {
 		case "code", "pre":
-			if parent != "" && !(name == "code" && parent == "pre" && between == "") {
+			codeWrapper := name == "code" && parent == "pre" && between == ""
+			if parent != "" && !codeWrapper {
 				return false
 			}
 		default:
