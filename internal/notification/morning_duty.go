@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"html"
-	"strings"
 	"time"
 
 	"github.com/korjavin/dutyassistant/internal/llm"
@@ -111,7 +110,7 @@ Days ahead: %d`, audience, facts.Name, facts.Reason, facts.DaysBehind, facts.Day
 
 	// RefineMessage sanitizes Telegram HTML and returns vanilla on provider errors.
 	refined := client.RefineMessage(ctx, intent, vanilla)
-	if strings.TrimSpace(refined) == "" {
+	if !llm.ValidSanitizedTelegramHTML(refined) {
 		return vanilla
 	}
 	return refined

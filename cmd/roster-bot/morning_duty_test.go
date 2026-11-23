@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -44,7 +45,7 @@ func (s *morningDutyTestStore) LogNotification(_ context.Context, _ time.Time, _
 // newMorningDutyLLM mirrors the messages request and choices[].message.content
 // response from the OpenAI Chat Completions API.
 // https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create
-func newMorningDutyLLM(t *testing.T, status int) (*llm.Client, <-chan string) {
+func newMorningDutyLLM(t *testing.T, status int, reply func(prompt string) string) (*llm.Client, <-chan string) {
 	t.Helper()
 	prompts := make(chan string, 4)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -57,11 +58,18 @@ func newMorningDutyLLM(t *testing.T, status int) (*llm.Client, <-chan string) {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		prompts <- req.Messages[1].Content
+		prompt := req.Messages[1].Content
+		prompts <- prompt
+		content := "<b>Go team!</b> <uhoh> & cheer!"
+		if reply != nil {
+			content = reply(prompt)
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
-		_, err := w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"<b>Go team!</b> <uhoh> & cheer!"}}]}`))
-		assert.NoError(t, err)
+		response := map[string]any{"choices": []any{
+			map[string]any{"message": map[string]string{"role": "assistant", "content": content}},
+		}}
+		assert.NoError(t, json.NewEncoder(w).Encode(response))
 	}))
 	t.Cleanup(server.Close)
 	return llm.NewClient("test-key", server.URL, 5, "test-model", nil), prompts
@@ -115,7 +123,7 @@ func TestRunMorningDutyPersonalizesBothRecipients(t *testing.T) {
 				return duty, db.DecrementVolunteerQueue(ctx, assignee.ID), nil
 			}
 			st := &morningDutyTestStore{MorningDutyReader: db}
-			client, prompts := newMorningDutyLLM(t, http.StatusOK)
+			client, prompts := newMorningDutyLLM(t, http.StatusOK, nil)
 			var recipients []int64
 			send := func(chatID int64, text string) error {
 				recipients = append(recipients, chatID)
@@ -173,7 +181,7 @@ func TestRunMorningDutyFallback(t *testing.T) {
 			var client *llm.Client
 			var prompts <-chan string
 			if tc.llmStatus != 0 {
-				client, prompts = newMorningDutyLLM(t, tc.llmStatus)
+				client, prompts = newMorningDutyLLM(t, tc.llmStatus, nil)
 			}
 			assign := func(context.Context) (*store.Duty, error, error) { return duty, tc.queueErr, nil }
 			var recipients []int64
@@ -198,6 +206,62 @@ func TestRunMorningDutyFallback(t *testing.T) {
 				dmLog = morningDutyNotification{"DM", "FAILED", tc.dmErr.Error()}
 			}
 			assert.Equal(t, []morningDutyNotification{dmLog, {"GROUP", "SUCCESS", ""}}, st.logs)
+		})
+	}
+}
+
+func TestRunMorningDutyFallsBackOnMalformedHTML(t *testing.T) {
+	ctx := t.Context()
+	berlin, err := time.LoadLocation("Europe/Berlin")
+	require.NoError(t, err)
+	db, err := sqlite.New(ctx, ":memory:")
+	require.NoError(t, err)
+	assignee := &store.User{TelegramUserID: 101, FirstName: "Ana & Co", IsActive: true}
+	require.NoError(t, db.CreateUser(ctx, assignee))
+	duty := &store.Duty{
+		UserID: assignee.ID, User: assignee, AssignmentType: store.AssignmentTypeVoluntary,
+		DutyDate: time.Date(2026, time.March, 30, 0, 0, 0, 0, time.UTC),
+	}
+	const (
+		validDM       = "<i><strong>Your turn!</strong></i>"
+		validGroup    = `<a href='https://example.com/?day=1&who=ana'><b>Go Ana!</b></a>`
+		fallbackDM    = "Congratulations, <b>Ana &amp; Co</b>! You're on duty today because of your volunteer request. Thanks for helping with chores!"
+		fallbackGroup = "Today's duty goes to <b>Ana &amp; Co</b> (volunteered). Let's cheer them on!"
+	)
+	for _, tc := range []struct {
+		name              string
+		dm, group         string
+		wantDM, wantGroup string
+	}{
+		{"unclosed DM tag", "<b>Go Ana!", validGroup, fallbackDM, validGroup},
+		{"misnested group tags", validDM, "<b><i>Go Ana!</b></i>", validDM, fallbackGroup},
+		{"balanced nested DM links", `<a href="https://example.com"><a href="https://example.org">Go Ana!</a></a>`, validGroup, fallbackDM, validGroup},
+		{"balanced style within group code", validDM, "<code><b>Go Ana!</b></code>", validDM, fallbackGroup},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			st := &morningDutyTestStore{MorningDutyReader: db}
+			client, prompts := newMorningDutyLLM(t, http.StatusOK, func(prompt string) string {
+				if strings.Contains(prompt, "private Telegram DM") {
+					return tc.dm
+				}
+				assert.Contains(t, prompt, "Telegram group announcement")
+				return tc.group
+			})
+			assign := func(context.Context) (*store.Duty, error, error) { return duty, nil, nil }
+			type sentMessage struct {
+				chatID int64
+				text   string
+			}
+			var sent []sentMessage
+			send := func(chatID int64, text string) error {
+				sent = append(sent, sentMessage{chatID, text})
+				return nil
+			}
+			runMorningDuty(ctx, assign, st, client, send, -200, berlin)
+
+			assert.Equal(t, []sentMessage{{101, tc.wantDM}, {-200, tc.wantGroup}}, sent)
+			assert.Equal(t, []morningDutyNotification{{"DM", "SUCCESS", ""}, {"GROUP", "SUCCESS", ""}}, st.logs)
+			assert.Len(t, prompts, 2)
 		})
 	}
 }

@@ -8,7 +8,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"regexp"
 	"strings"
 	"time"
 
@@ -109,54 +108,6 @@ type chatResponse struct {
 			Content string `json:"content"`
 		} `json:"message"`
 	} `json:"choices"`
-}
-
-var allowedTelegramTagsRegex *regexp.Regexp
-
-func init() {
-	// Telegram supported tags list
-	allowedTags := []string{
-		"b", "strong", "i", "em", "u", "ins", "s", "strike", "del", "code", "pre",
-	}
-
-	var allowRegexParts []string
-	for _, tag := range allowedTags {
-		allowRegexParts = append(allowRegexParts, fmt.Sprintf("</?%s>", tag))
-	}
-	// Special handling for a href - only allow http/https URLs to prevent XSS
-	allowRegexParts = append(allowRegexParts, `<a href="(https?:\/\/[^"]*)">`)
-	allowRegexParts = append(allowRegexParts, `<a href='(https?:\/\/[^']*)'>`)
-	allowRegexParts = append(allowRegexParts, `</a>`)
-	// Special handling for tg-spoiler
-	allowRegexParts = append(allowRegexParts, `<tg-spoiler>`)
-	allowRegexParts = append(allowRegexParts, `</tg-spoiler>`)
-
-	allowPattern := strings.Join(allowRegexParts, "|")
-	allowedTelegramTagsRegex = regexp.MustCompile("(?i)(" + allowPattern + ")")
-}
-
-// SanitizeTelegramHTML ensures that only permitted Telegram HTML tags remain
-// and that any raw `<` or `&` inside text nodes are properly escaped.
-func SanitizeTelegramHTML(input string) string {
-	// Split input by allowed tags
-	parts := allowedTelegramTagsRegex.Split(input, -1)
-	tags := allowedTelegramTagsRegex.FindAllString(input, -1)
-
-	var result strings.Builder
-	for i, part := range parts {
-		// Escape &, <, > in text parts
-		escapedPart := strings.ReplaceAll(part, "&", "&amp;")
-		escapedPart = strings.ReplaceAll(escapedPart, "<", "&lt;")
-		escapedPart = strings.ReplaceAll(escapedPart, ">", "&gt;")
-		result.WriteString(escapedPart)
-
-		// Re-append the allowed tag
-		if i < len(tags) {
-			result.WriteString(tags[i])
-		}
-	}
-
-	return result.String()
 }
 
 // TranslateToEnglish translates the given text to English if it's not already.
